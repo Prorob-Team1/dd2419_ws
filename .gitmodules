@@ -1,0 +1,7 @@
+[submodule "src/robp_robot"]
+	path = src/robp_robot
+	url = https://github.com/KTH-CAS-UAV/robp_robot.git
+	branch = vt26
+[submodule "src/aruco_ros"]
+	path = src/aruco_ros
+	url = https://github.com/KTH-CAS-UAV/aruco_ros.git
