@@ -39,9 +39,9 @@ ros-jazzy-robp-boot-camp-launch = { path = "src/robp_robot/robp_boot_camp/robp_b
 ros-jazzy-robp-interfaces = { path = "src/robp_robot/robp_interfaces" }
 
 # Aruco
-ros-jazzy-aruco = { path = "src/robp_robot/aruco_ros/aruco" }
-ros-jazzy-aruco-msgs = { path = "src/robp_robot/aruco_ros/aruco_msgs" }
-ros-jazzy-aruco-ros = { path = "src/robp_robot/aruco_ros/aruco_ros" }
+ros-jazzy-aruco = { path = "src/aruco_ros/aruco" }
+ros-jazzy-aruco-msgs = { path = "src/aruco_ros/aruco_msgs" }
+ros-jazzy-aruco-ros = { path = "src/aruco_ros/aruco_ros" }
 
 # Boot camp part 1
 ros-jazzy-learning-tf2-py = { path = "src/learning_tf2_py" }
