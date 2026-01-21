@@ -981,7 +981,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/cairo-1.18.4-h5782bbf_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/catkin_pkg-1.1.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/cli11-2.6.0-h5112557_0.conda
-      - conda: https://prefix.dev/conda-forge/win-64/cmake-4.2.1-hdcbee5b_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/cmake-4.2.2-hdcbee5b_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/console_bridge-1.0.2-h5362a0b_1.tar.bz2
       - conda: https://prefix.dev/conda-forge/win-64/cppcheck-2.18.3-py312h9df87ca_1.conda
@@ -1028,7 +1028,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/gz-math7-python-7.5.2-py312hb90da7f_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/gz-utils2-2.2.1-h67408dc_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/harfbuzz-12.2.0-h5f2951f_0.conda
-      - conda: https://prefix.dev/conda-forge/win-64/hdf5-1.14.6-nompi_h89f0904_104.conda
+      - conda: https://prefix.dev/conda-forge/win-64/hdf5-1.14.6-nompi_h89f0904_105.conda
       - conda: https://prefix.dev/conda-forge/win-64/icu-75.1-he0c23c2_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/imath-3.1.12-hbb528cf_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/importlib-metadata-8.7.0-pyhe01879c_1.conda
@@ -1073,7 +1073,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/libjpeg-turbo-3.1.2-hfd05255_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/liblapack-3.11.0-5_hf9ab0e9_mkl.conda
       - conda: https://prefix.dev/conda-forge/win-64/liblapacke-3.11.0-5_h3ae206f_mkl.conda
-      - conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.1-h2466b09_2.conda
+      - conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.2-hfd05255_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/libogg-1.3.5-h2466b09_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/libopencv-4.11.0-qt6_py312h55c5faa_609.conda
       - conda: https://prefix.dev/conda-forge/win-64/libopenvino-2025.0.0-hb1d9b14_3.conda
@@ -1088,10 +1088,10 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/libopenvino-pytorch-frontend-2025.0.0-he0c23c2_3.conda
       - conda: https://prefix.dev/conda-forge/win-64/libopenvino-tensorflow-frontend-2025.0.0-hd51e7bd_3.conda
       - conda: https://prefix.dev/conda-forge/win-64/libopenvino-tensorflow-lite-frontend-2025.0.0-he0c23c2_3.conda
-      - conda: https://prefix.dev/conda-forge/win-64/libopus-1.6-h6a83c73_1.conda
+      - conda: https://prefix.dev/conda-forge/win-64/libopus-1.6.1-h6a83c73_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/libpng-1.6.54-h7351971_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/libprotobuf-5.29.3-hd33f5f0_3.conda
-      - conda: https://prefix.dev/conda-forge/win-64/libraw-0.21.4-h866491b_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/libraw-0.21.5-h345c428_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/librsvg-2.58.4-h5ce5fed_3.conda
       - conda: https://prefix.dev/conda-forge/win-64/libsqlite-3.51.2-hf5d6505_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/libssh2-1.11.1-h9aa295b_0.conda
@@ -1378,23 +1378,23 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
       - conda: https://prefix.dev/conda-forge/win-64/zziplib-0.13.69-h3ca93ac_2.conda
       - conda: src/aruco_ros/aruco
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/aruco_ros/aruco_msgs
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/aruco_ros/aruco_ros
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/detection
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/display_markers
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/learning_tf2_py
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/odometry
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/robp_boot_camp/robp_boot_camp_launch
-        build: h2433df5_0
+        build: ha41a7fa_0
       - conda: src/robp_robot/robp_interfaces
-        build: h2433df5_0
+        build: ha41a7fa_0
 packages:
 - conda: https://prefix.dev/conda-forge/win-64/_libavif_api-1.3.0-h57928b3_2.conda
   sha256: 472aa5e5a97a188c1f01e271a821b5a9dc871e93f7c58cfb7e89bdb6cd926d39
@@ -1826,14 +1826,14 @@ packages:
   license_family: BSD
   size: 17740888
   timestamp: 1765231308407
-- conda: https://prefix.dev/conda-forge/win-64/cmake-4.2.1-hdcbee5b_0.conda
-  sha256: 03d85d6493ad6c410708f243aeb680c491075c89f0cae7e3afab718f27f28967
-  md5: dd8c71fb422275f652743068455e9acd
+- conda: https://prefix.dev/conda-forge/win-64/cmake-4.2.2-hdcbee5b_0.conda
+  sha256: 8d82d8a14c5b966d8d31957f239e107e7bdd01fac7d2dd70e4332d7cc60c7ac0
+  md5: 6e2e78153e4c0657e2800256097f6400
   depends:
   - bzip2 >=1.0.8,<2.0a0
-  - libcurl >=8.17.0,<9.0a0
+  - libcurl >=8.18.0,<9.0a0
   - libexpat >=2.7.3,<3.0a0
-  - liblzma >=5.8.1,<6.0a0
+  - liblzma >=5.8.2,<6.0a0
   - libuv >=1.51.0,<2.0a0
   - libzlib >=1.3.1,<2.0a0
   - ucrt >=10.0.20348.0
@@ -1841,8 +1841,8 @@ packages:
   - zstd >=1.5.7,<1.6.0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 15739640
-  timestamp: 1765230626010
+  size: 15578542
+  timestamp: 1768967772612
 - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
   sha256: ab29d57dc70786c1269633ba3dff20288b81664d3ff8d21af995742e2bb03287
   md5: 962b9857ee8e7018c22f2776ffa0b2d7
@@ -3473,12 +3473,12 @@ packages:
   license_family: BSD
   size: 3292042
   timestamp: 1764771887501
-- conda: https://prefix.dev/conda-forge/win-64/hdf5-1.14.6-nompi_h89f0904_104.conda
-  sha256: cc948149f700033ff85ce4a1854edf6adcb5881391a3df5c40cbe2a793dd9f81
-  md5: 9cc4a5567d46c7fcde99563e86522882
+- conda: https://prefix.dev/conda-forge/win-64/hdf5-1.14.6-nompi_h89f0904_105.conda
+  sha256: 52e5eb039289946a32aee305e6af777d77376dc0adcb2bdcc31633dcc48d21a5
+  md5: c1caaf8a28c0eb3be85566e63a5fcb5a
   depends:
   - libaec >=1.1.4,<2.0a0
-  - libcurl >=8.17.0,<9.0a0
+  - libcurl >=8.18.0,<9.0a0
   - libzlib >=1.3.1,<2.0a0
   - openssl >=3.5.4,<4.0a0
   - ucrt >=10.0.20348.0
@@ -3486,8 +3486,8 @@ packages:
   - vc14_runtime >=14.44.35208
   license: BSD-3-Clause
   license_family: BSD
-  size: 2028777
-  timestamp: 1764771527382
+  size: 2028299
+  timestamp: 1768857717770
 - conda: https://prefix.dev/conda-forge/linux-64/hicolor-icon-theme-0.17-ha770c72_2.tar.bz2
   sha256: 336f29ceea9594f15cc8ec4c45fdc29e10796573c697ee0d57ebb7edd7e92043
   md5: bbf6f174dcd3254e19a2f5d2295ce808
@@ -5443,18 +5443,18 @@ packages:
   license: 0BSD
   size: 92286
   timestamp: 1749230283517
-- conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.1-h2466b09_2.conda
-  sha256: 55764956eb9179b98de7cc0e55696f2eff8f7b83fc3ebff5e696ca358bca28cc
-  md5: c15148b2e18da456f5108ccb5e411446
+- conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.2-hfd05255_0.conda
+  sha256: f25bf293f550c8ed2e0c7145eb404324611cfccff37660869d97abf526eb957c
+  md5: ba0bfd4c3cf73f299ffe46ff0eaeb8e3
   depends:
   - ucrt >=10.0.20348.0
-  - vc >=14.2,<15
-  - vc14_runtime >=14.29.30139
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
   constrains:
-  - xz 5.8.1.*
+  - xz 5.8.2.*
   license: 0BSD
-  size: 104935
-  timestamp: 1749230611612
+  size: 106169
+  timestamp: 1768752763559
 - conda: https://prefix.dev/conda-forge/linux-64/libnghttp2-1.67.0-had1ee68_0.conda
   sha256: a4a7dab8db4dc81c736e9a9b42bdfd97b087816e029e221380511960ac46c690
   md5: b499ce4b026493a13774bcf0f4c33849
@@ -6171,17 +6171,17 @@ packages:
   license_family: BSD
   size: 307977
   timestamp: 1768266217308
-- conda: https://prefix.dev/conda-forge/win-64/libopus-1.6-h6a83c73_1.conda
-  sha256: e2cd72378e79d148fe04c9756149810ff02ddf41dffd91498a08a53d49319051
-  md5: a08bb329690a30b42165124b98b08f19
+- conda: https://prefix.dev/conda-forge/win-64/libopus-1.6.1-h6a83c73_0.conda
+  sha256: c3678f111866235b44fa65265966abae7d90b6387178f1459afaedcee8b4a997
+  md5: 0ed21da5b6e3a0393e05762b3cce2878
   depends:
   - vc >=14.3,<15
   - vc14_runtime >=14.44.35208
   - ucrt >=10.0.20348.0
   license: BSD-3-Clause
   license_family: BSD
-  size: 307422
-  timestamp: 1768266093535
+  size: 307373
+  timestamp: 1768497136248
 - conda: https://prefix.dev/conda-forge/linux-64/libpciaccess-0.18-hb9d3cd8_0.conda
   sha256: 0bd91de9b447a2991e666f284ae8c722ffb1d84acb594dbd0c031bd656fa32b2
   md5: 70e3400cbbfa03e96dcde7fc13e38c7b
@@ -6317,23 +6317,20 @@ packages:
   license: LGPL-2.1-only
   size: 655308
   timestamp: 1744641332489
-- conda: https://prefix.dev/conda-forge/win-64/libraw-0.21.4-h866491b_0.conda
-  sha256: db2cd8a48e5d329eb6a324063daa63eced3761ea42badaed5c685f468695fbd3
-  md5: e5d4bf6388c45045a73d5e58e1364769
+- conda: https://prefix.dev/conda-forge/win-64/libraw-0.21.5-h345c428_0.conda
+  sha256: e8deadcca9dc9371e36778638bb3b3869dc79576a3d2ddfc40b5d92efbf49dbc
+  md5: b2764534789b92698a0aa2d3f7b3e9e7
   depends:
-  - vc >=14.2,<15
-  - vc14_runtime >=14.29.30139
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
   - ucrt >=10.0.20348.0
-  - vc >=14.2,<15
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - libjpeg-turbo >=3.0.0,<4.0a0
   - libzlib >=1.3.1,<2.0a0
-  - lcms2 >=2.17,<3.0a0
-  - jasper >=4.2.5,<5.0a0
+  - libjpeg-turbo >=3.1.2,<4.0a0
+  - jasper >=4.2.8,<5.0a0
+  - lcms2 >=2.18,<3.0a0
   license: LGPL-2.1-only
-  size: 536650
-  timestamp: 1744641254166
+  size: 558269
+  timestamp: 1768379172453
 - conda: https://prefix.dev/conda-forge/linux-64/librsvg-2.58.4-h49af25d_2.conda
   sha256: 475013475a3209c24a82f9e80c545d56ccca2fa04df85952852f3d73caa38ff9
   md5: b9846db0abffb09847e2cb0fec4b4db6
@@ -10467,27 +10464,6 @@ packages:
 - conda: src/aruco_ros/aruco
   name: ros-jazzy-aruco
   version: 5.0.5
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-cv-bridge
-  - eigen
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - python_abi 3.12.* *_cp312
-  - numpy >=1.26.4,<2.0a0
-  license: LicenseRef-MIT
-- conda: src/aruco_ros/aruco
-  name: ros-jazzy-aruco
-  version: 5.0.5
   build: h60d57d3_0
   subdir: osx-arm64
   variants:
@@ -10495,9 +10471,29 @@ packages:
   depends:
   - ros-jazzy-cv-bridge
   - eigen
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  license: LicenseRef-MIT
+- conda: src/aruco_ros/aruco
+  name: ros-jazzy-aruco
+  version: 5.0.5
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-cv-bridge
+  - eigen
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   - numpy >=1.26.4,<2.0a0
   license: LicenseRef-MIT
@@ -10511,33 +10507,11 @@ packages:
   depends:
   - ros-jazzy-cv-bridge
   - eigen
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
   - libstdcxx >=15
-  - python_abi 3.12.* *_cp312
-  - numpy >=1.26.4,<2.0a0
-  license: LicenseRef-MIT
-- conda: src/aruco_ros/aruco_msgs
-  name: ros-jazzy-aruco-msgs
-  version: 5.0.5
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-rosidl-default-runtime
-  - ros-jazzy-geometry-msgs
-  - ros-jazzy-std-msgs
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   - numpy >=1.26.4,<2.0a0
   license: LicenseRef-MIT
@@ -10552,9 +10526,30 @@ packages:
   - ros-jazzy-rosidl-default-runtime
   - ros-jazzy-geometry-msgs
   - ros-jazzy-std-msgs
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  license: LicenseRef-MIT
+- conda: src/aruco_ros/aruco_msgs
+  name: ros-jazzy-aruco-msgs
+  version: 5.0.5
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-rosidl-default-runtime
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-std-msgs
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   - numpy >=1.26.4,<2.0a0
   license: LicenseRef-MIT
@@ -10569,7 +10564,7 @@ packages:
   - ros-jazzy-rosidl-default-runtime
   - ros-jazzy-geometry-msgs
   - ros-jazzy-std-msgs
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
@@ -10577,41 +10572,6 @@ packages:
   - python_abi 3.12.* *_cp312
   - numpy >=1.26.4,<2.0a0
   license: LicenseRef-MIT
-- conda: src/aruco_ros/aruco_ros
-  name: ros-jazzy-aruco-ros
-  version: 5.0.5
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-aruco
-  - ros-jazzy-aruco-msgs
-  - ros-jazzy-cv-bridge
-  - ros-jazzy-geometry-msgs
-  - ros-jazzy-image-transport
-  - ros-jazzy-rclcpp
-  - ros-jazzy-tf2
-  - ros-jazzy-tf2-ros
-  - ros-jazzy-tf2-geometry-msgs
-  - ros-jazzy-sensor-msgs
-  - ros-jazzy-visualization-msgs
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - numpy >=1.26.4,<2.0a0
-  - python_abi 3.12.* *_cp312
-  license: LicenseRef-MIT
-  sources:
-    ros-jazzy-aruco:
-      path: ../aruco
-    ros-jazzy-aruco-msgs:
-      path: ../aruco_msgs
 - conda: src/aruco_ros/aruco_ros
   name: ros-jazzy-aruco-ros
   version: 5.0.5
@@ -10631,7 +10591,7 @@ packages:
   - ros-jazzy-tf2-geometry-msgs
   - ros-jazzy-sensor-msgs
   - ros-jazzy-visualization-msgs
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
   - numpy >=1.26.4,<2.0a0
@@ -10645,6 +10605,40 @@ packages:
 - conda: src/aruco_ros/aruco_ros
   name: ros-jazzy-aruco-ros
   version: 5.0.5
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-aruco
+  - ros-jazzy-aruco-msgs
+  - ros-jazzy-cv-bridge
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-image-transport
+  - ros-jazzy-rclcpp
+  - ros-jazzy-tf2
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-visualization-msgs
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - numpy >=1.26.4,<2.0a0
+  - python_abi 3.12.* *_cp312
+  license: LicenseRef-MIT
+  sources:
+    ros-jazzy-aruco:
+      path: ../aruco
+    ros-jazzy-aruco-msgs:
+      path: ../aruco_msgs
+- conda: src/aruco_ros/aruco_ros
+  name: ros-jazzy-aruco-ros
+  version: 5.0.5
   build: hb0f4dca_0
   subdir: linux-64
   variants:
@@ -10661,7 +10655,7 @@ packages:
   - ros-jazzy-tf2-geometry-msgs
   - ros-jazzy-sensor-msgs
   - ros-jazzy-visualization-msgs
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
@@ -11061,31 +11055,6 @@ packages:
 - conda: src/detection
   name: ros-jazzy-detection
   version: 0.0.0
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - numpy
-  - numpy >=1.26.4,<2.0a0
-  - ros-jazzy-rclpy
-  - ros-jazzy-ros2bag
-  - ros-jazzy-rosbag2
-  - ros-jazzy-sensor-msgs
-  - ros-jazzy-sensor-msgs-py
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - python_abi 3.12.* *_cp312
-  license: LicenseRef-MIT
-- conda: src/detection
-  name: ros-jazzy-detection
-  version: 0.0.0
   build: h60d57d3_0
   subdir: osx-arm64
   variants:
@@ -11098,9 +11067,33 @@ packages:
   - ros-jazzy-rosbag2
   - ros-jazzy-sensor-msgs
   - ros-jazzy-sensor-msgs-py
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  license: LicenseRef-MIT
+- conda: src/detection
+  name: ros-jazzy-detection
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - numpy
+  - numpy >=1.26.4,<2.0a0
+  - ros-jazzy-rclpy
+  - ros-jazzy-ros2bag
+  - ros-jazzy-rosbag2
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-sensor-msgs-py
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/detection
@@ -11118,7 +11111,7 @@ packages:
   - ros-jazzy-rosbag2
   - ros-jazzy-sensor-msgs
   - ros-jazzy-sensor-msgs-py
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
@@ -11128,30 +11121,6 @@ packages:
 - conda: src/display_markers
   name: ros-jazzy-display-markers
   version: 0.0.0
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-aruco-msgs
-  - ros-jazzy-geometry-msgs
-  - ros-jazzy-rclpy
-  - ros-jazzy-tf2-geometry-msgs
-  - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - python_abi 3.12.* *_cp312
-  - numpy >=1.26.4,<2.0a0
-  license: LicenseRef-MIT
-- conda: src/display_markers
-  name: ros-jazzy-display-markers
-  version: 0.0.0
   build: h60d57d3_0
   subdir: osx-arm64
   variants:
@@ -11162,9 +11131,32 @@ packages:
   - ros-jazzy-rclpy
   - ros-jazzy-tf2-geometry-msgs
   - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  license: LicenseRef-MIT
+- conda: src/display_markers
+  name: ros-jazzy-display-markers
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-aruco-msgs
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-rclpy
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-tf2-ros
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   - numpy >=1.26.4,<2.0a0
   license: LicenseRef-MIT
@@ -11181,7 +11173,7 @@ packages:
   - ros-jazzy-rclpy
   - ros-jazzy-tf2-geometry-msgs
   - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
@@ -12658,33 +12650,6 @@ packages:
 - conda: src/learning_tf2_py
   name: ros-jazzy-learning-tf2-py
   version: 0.0.0
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-example-interfaces
-  - ros-jazzy-geometry-msgs
-  - ros-jazzy-laser-geometry
-  - ros-jazzy-rclpy
-  - ros-jazzy-ros2service
-  - ros-jazzy-sensor-msgs
-  - ros-jazzy-tf2-ros
-  - ros-jazzy-tf2-sensor-msgs
-  - numpy
-  - numpy >=1.26.4,<2.0a0
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - python_abi 3.12.* *_cp312
-- conda: src/learning_tf2_py
-  name: ros-jazzy-learning-tf2-py
-  version: 0.0.0
   build: h60d57d3_0
   subdir: osx-arm64
   variants:
@@ -12700,9 +12665,35 @@ packages:
   - ros-jazzy-tf2-sensor-msgs
   - numpy
   - numpy >=1.26.4,<2.0a0
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+- conda: src/learning_tf2_py
+  name: ros-jazzy-learning-tf2-py
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-example-interfaces
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-laser-geometry
+  - ros-jazzy-rclpy
+  - ros-jazzy-ros2service
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-tf2-sensor-msgs
+  - numpy
+  - numpy >=1.26.4,<2.0a0
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
 - conda: src/learning_tf2_py
   name: ros-jazzy-learning-tf2-py
@@ -12722,7 +12713,7 @@ packages:
   - ros-jazzy-tf2-sensor-msgs
   - numpy
   - numpy >=1.26.4,<2.0a0
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
@@ -13275,33 +13266,6 @@ packages:
 - conda: src/odometry
   name: ros-jazzy-odometry
   version: 0.0.0
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-geometry-msgs
-  - ros-jazzy-nav-msgs
-  - numpy
-  - numpy >=1.26.4,<2.0a0
-  - transforms3d
-  - ros-jazzy-robp-interfaces
-  - ros-jazzy-rclpy
-  - ros-jazzy-tf-transformations
-  - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - python_abi 3.12.* *_cp312
-  license: LicenseRef-MIT
-- conda: src/odometry
-  name: ros-jazzy-odometry
-  version: 0.0.0
   build: h60d57d3_0
   subdir: osx-arm64
   variants:
@@ -13316,9 +13280,35 @@ packages:
   - ros-jazzy-rclpy
   - ros-jazzy-tf-transformations
   - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  license: LicenseRef-MIT
+- conda: src/odometry
+  name: ros-jazzy-odometry
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-nav-msgs
+  - numpy
+  - numpy >=1.26.4,<2.0a0
+  - transforms3d
+  - ros-jazzy-robp-interfaces
+  - ros-jazzy-rclpy
+  - ros-jazzy-tf-transformations
+  - ros-jazzy-tf2-ros
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/odometry
@@ -13338,7 +13328,7 @@ packages:
   - ros-jazzy-rclpy
   - ros-jazzy-tf-transformations
   - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
@@ -15665,32 +15655,6 @@ packages:
 - conda: src/robp_boot_camp/robp_boot_camp_launch
   name: ros-jazzy-robp-boot-camp-launch
   version: 1.0.0
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-aruco-ros
-  - ros-jazzy-builtin-interfaces
-  - ros-jazzy-realsense2-description
-  - ros-jazzy-robot-state-publisher
-  - ros-jazzy-ros2launch
-  - ros-jazzy-rviz2
-  - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - python_abi 3.12.* *_cp312
-  - numpy >=1.26.4,<2.0a0
-  license: LicenseRef-MIT
-- conda: src/robp_boot_camp/robp_boot_camp_launch
-  name: ros-jazzy-robp-boot-camp-launch
-  version: 1.0.0
   build: h60d57d3_0
   subdir: osx-arm64
   variants:
@@ -15703,9 +15667,34 @@ packages:
   - ros-jazzy-ros2launch
   - ros-jazzy-rviz2
   - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  license: LicenseRef-MIT
+- conda: src/robp_boot_camp/robp_boot_camp_launch
+  name: ros-jazzy-robp-boot-camp-launch
+  version: 1.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-aruco-ros
+  - ros-jazzy-builtin-interfaces
+  - ros-jazzy-realsense2-description
+  - ros-jazzy-robot-state-publisher
+  - ros-jazzy-ros2launch
+  - ros-jazzy-rviz2
+  - ros-jazzy-tf2-ros
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   - numpy >=1.26.4,<2.0a0
   license: LicenseRef-MIT
@@ -15724,7 +15713,7 @@ packages:
   - ros-jazzy-ros2launch
   - ros-jazzy-rviz2
   - ros-jazzy-tf2-ros
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15
@@ -15735,27 +15724,6 @@ packages:
 - conda: src/robp_robot/robp_interfaces
   name: ros-jazzy-robp-interfaces
   version: 1.0.0
-  build: h2433df5_0
-  subdir: win-64
-  variants:
-    cxx_compiler: vs2019
-    target_platform: win-64
-  depends:
-  - ros-jazzy-rosidl-default-runtime
-  - ros-jazzy-std-msgs
-  - ros2-distro-mutex
-  - ros2-distro-mutex >=0.12.0,<0.13.0a0
-  - vc >=14.1,<15
-  - vc >=14.2,<15
-  - vc14_runtime >=14.16.27033
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - python_abi 3.12.* *_cp312
-  - numpy >=1.26.4,<2.0a0
-  license: LicenseRef-MIT
-- conda: src/robp_robot/robp_interfaces
-  name: ros-jazzy-robp-interfaces
-  version: 1.0.0
   build: h60d57d3_0
   subdir: osx-arm64
   variants:
@@ -15763,9 +15731,29 @@ packages:
   depends:
   - ros-jazzy-rosidl-default-runtime
   - ros-jazzy-std-msgs
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  license: LicenseRef-MIT
+- conda: src/robp_robot/robp_interfaces
+  name: ros-jazzy-robp-interfaces
+  version: 1.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-rosidl-default-runtime
+  - ros-jazzy-std-msgs
+  - ros2-distro-mutex >=0.12,<0.13
+  - ros2-distro-mutex >=0.12.0,<0.13.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   - numpy >=1.26.4,<2.0a0
   license: LicenseRef-MIT
@@ -15779,7 +15767,7 @@ packages:
   depends:
   - ros-jazzy-rosidl-default-runtime
   - ros-jazzy-std-msgs
-  - ros2-distro-mutex
+  - ros2-distro-mutex >=0.12,<0.13
   - ros2-distro-mutex >=0.12.0,<0.13.0a0
   - libgcc >=15
   - libgcc >=15

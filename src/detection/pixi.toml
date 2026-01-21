@@ -10,3 +10,12 @@ version = "*"
 extra-input-globs = [
     "**/*.py",
 ]
+
+[package.host-dependencies]
+ros2-distro-mutex = ">=0.12,<0.13"
+
+[package.build-dependencies]
+ros2-distro-mutex = ">=0.12,<0.13"
+
+[package.run-dependencies]
+ros2-distro-mutex = ">=0.12,<0.13"
