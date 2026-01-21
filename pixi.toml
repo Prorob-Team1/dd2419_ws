@@ -21,6 +21,7 @@ executors_3 = { cmd = "ros2 service call /second_srv example_interfaces/srv/AddT
 
 [dependencies]
 # ROS
+ros2-distro-mutex = ">=0.12,<0.13"
 ros-jazzy-ros2run = ">=0.32.6,<0.33"
 ros-jazzy-rviz2 = ">=14.1.16,<15"
 ros-jazzy-tf2-ros = ">=0.36.15,<0.37"
