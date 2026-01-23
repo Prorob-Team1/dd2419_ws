@@ -2,13 +2,12 @@
 authors = ["Daniel Duberg <danielduberg@gmail.com>"]
 name = "dd2419_ws"
 channels = [
-	"https://prefix.dev/pixi-build-backends",
-	"https://prefix.dev/conda-forge",
-	"https://prefix.dev/robostack-jazzy",
+  "https://prefix.dev/conda-forge",
+  "https://prefix.dev/robostack-jazzy",
 ]
 platforms = [
-  "osx-arm64",
-  "win-64",
+  # "osx-arm64",
+  # "win-64",
   "linux-64",
 ]
 version = "1.0.0"
@@ -21,7 +20,7 @@ executors_3 = { cmd = "ros2 service call /second_srv example_interfaces/srv/AddT
 
 [dependencies]
 # ROS
-ros2-distro-mutex = ">=0.12,<0.13"
+ros2-distro-mutex = ">=0.13,<0.14"
 ros-jazzy-ros2run = ">=0.32.6,<0.33"
 ros-jazzy-ros2interface = ">=0.32.6,<0.33"
 ros-jazzy-rviz2 = ">=14.1.16,<15"
@@ -29,14 +28,23 @@ ros-jazzy-tf2-ros = ">=0.36.15,<0.37"
 ros-jazzy-tf2-tools = ">=0.36.15,<0.37"
 ros-jazzy-turtlesim = ">=1.8.3,<2"
 
+ros-jazzy-usb-cam = ">=0.8.1,<0.9"
+
+# Realsense
+ros-jazzy-realsense2-camera = { path = "src/realsense-ros/realsense2_camera" }
+
 # Course packages
-ros-jazzy-robp-boot-camp-launch = { path = "src/robp_boot_camp/robp_boot_camp_launch" }
-ros-jazzy-robp-interfaces = { path = "src/robp_robot/robp_interfaces" }
+ros-jazzy-robp-boot-camp-launch = { path = "src/robp_boot_camp_launch" }
+ros-jazzy-robp-interfaces = { path = "src/robp_interfaces" }
+ros-jazzy-robp-phidgets = { path = "src/robp_phidgets" }
 
 # Aruco
 ros-jazzy-aruco = { path = "src/aruco_ros/aruco" }
 ros-jazzy-aruco-msgs = { path = "src/aruco_ros/aruco_msgs" }
 ros-jazzy-aruco-ros = { path = "src/aruco_ros/aruco_ros" }
+
+# RPLidar
+ros-jazzy-rplidar-ros = { path = "src/rplidar_ros" }
 
 # Boot camp part 1
 ros-jazzy-learning-tf2-py = { path = "src/learning_tf2_py" }
@@ -48,9 +56,14 @@ ros-jazzy-display-markers = { path = "src/display_markers" }
 # Boot camp part 3
 ros-jazzy-detection = { path = "src/detection" }
 
+# # Phidgets
+# ros-jazzy-libphidget22 = { path = "src/robp_robot/phidgets_drivers/libphidget22" }
+# ros-jazzy-phidgets-api = { path = "src/robp_robot/phidgets_drivers/phidgets_api" }
+# ros-jazzy-phidgets-msgs = { path = "src/robp_robot/phidgets_drivers/phidgets_msgs" }
+
 [activation.env]
 ROS_AUTOMATIC_DISCOVERY_RANGE = "LOCALHOST"
 
-[target.osx.activation.env]
-# Required for the RVIZ2 to properly startup on osx
-RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
+# [target.osx.activation.env]
+# # Required for the RVIZ2 to properly startup on osx
+# RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"

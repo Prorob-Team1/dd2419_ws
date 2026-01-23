@@ -1,6 +1,5 @@
 [package.build.backend]
 channels = [
-  "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 name = "pixi-build-ros"
@@ -12,10 +11,10 @@ extra-input-globs = [
 ]
 
 [package.host-dependencies]
-ros2-distro-mutex = ">=0.12,<0.13"
+ros2-distro-mutex = ">=0.13,<0.14"
 
 [package.build-dependencies]
-ros2-distro-mutex = ">=0.12,<0.13"
+ros2-distro-mutex = ">=0.13,<0.14"
 
 [package.run-dependencies]
-ros2-distro-mutex = ">=0.12,<0.13"
+ros2-distro-mutex = ">=0.13,<0.14"

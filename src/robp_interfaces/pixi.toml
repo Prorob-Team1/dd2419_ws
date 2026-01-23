@@ -7,7 +7,8 @@ version = "*"
 
 [package.build.config]
 extra-input-globs = [
-    "**/*.py",
+    "msg/**/*.msg",
+    "srv/**/*.srv"
 ]
 
 [package.host-dependencies]

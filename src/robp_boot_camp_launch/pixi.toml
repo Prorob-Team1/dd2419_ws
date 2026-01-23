@@ -7,7 +7,10 @@ version = "*"
 
 [package.build.config]
 extra-input-globs = [
-    "**/*.py",
+    "launch/**/*.xml",
+    "launch/**/*.py",
+    "launch/**/*.yaml",
+    "rviz/**/*.rviz",
 ]
 
 [package.host-dependencies]
