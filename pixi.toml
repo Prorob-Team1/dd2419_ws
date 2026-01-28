@@ -16,8 +16,9 @@ preview = ["pixi-build"]
 [tasks]
 #foxglove_server = { cmd = "..." }
 #foxglove_client = { cmd = "... {IP}" args = { IP } }
-flash_arm = { cmd = "platformio run --target upload", cwd = "/home/g5/Documents/PlatformIO/Projects/dd2419" }
+flash_arm = { cmd = "platformio run --target upload", cwd = "PlatformIO/Projects/dd2419" }
 install_udev_rules = { cmd = "sudo mv 99-robp.rules /etc/udev/rules.d/99-robp.rules && echo 'You should reboot the computer now.'" }
+add_user_dialout = { cmd = "sudo adduser $USER dialout && echo 'You should logout and login again for this to take effect.'" }
 install_useful_tools = { cmd = "sudo apt install tmux" }
 install_everything = { depends-on = [
   "install_udev_rules",
