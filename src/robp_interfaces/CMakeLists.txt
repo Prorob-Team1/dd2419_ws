@@ -11,8 +11,10 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 
 set(msg_files
-  "msg/DutyCycles.msg"
-  "msg/Encoders.msg"
+  "msgs/ArmControl.msg"
+  "msgs/ArmFeedback.msg"
+  "msgs/DutyCycles.msg"
+  "msgs/Encoders.msg"
   )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

@@ -1,10 +1,6 @@
 [submodule "src/aruco_ros"]
 	path = src/aruco_ros
 	url = https://github.com/KTH-CAS-UAV/aruco_ros.git
-[submodule "src/robp_boot_camp"]
-	path = src/robp_boot_camp
-	url = https://github.com/KTH-CAS-UAV/robp_boot_camp.git
-	branch = vt26
 [submodule "src/librealsense"]
 	path = src/librealsense
 	url = https://github.com/KTH-CAS-UAV/librealsense.git

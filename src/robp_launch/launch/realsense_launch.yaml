@@ -1,0 +1,42 @@
+%YAML 1.2
+---
+launch:
+  - node:
+      pkg: "realsense2_camera"
+      exec: "realsense2_camera_node"
+      name: "realsense_camera"
+      namespace: "realsense_camera"
+      output: "screen"
+      emulate_tty: true
+      param:
+        - name: "serial_no"
+          value: ""
+        - name: "usb_port_id"
+          value: ""
+        - name: "device_type"
+          value: ""
+        - name: "initial_reset"
+          value: true
+        - name: "accelerate_gpu_with_glsl"
+          value: false
+        - name: "rosbag_filename"
+          value: ""
+        - name: "enable_color"
+          value: true
+        - name: "rgb_camera.color_profile"
+          value: "848,480,15"
+        
+
+
+        - name: "enable_depth"
+          value: true
+        - name: "depth_module.profile"
+          value: "640x480x30"
+        - name: "color_module.profile"
+          value: "640x480x30"
+        - name: "depth_module.emitter_enabled"
+          value: true
+        - name: "depth_module.laser_power"
+          value: 150
+        - name: "depth_module.confidence_threshold"
+          value: 3

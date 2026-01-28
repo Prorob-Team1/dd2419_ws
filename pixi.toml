@@ -14,9 +14,15 @@ version = "1.0.0"
 preview = ["pixi-build"]
 
 [tasks]
-executors_1 = { cmd = "ros2 run learning_tf2_py executors" }
-executors_2 = { cmd = "ros2 service call /first_srv example_interfaces/srv/AddTwoInts" }
-executors_3 = { cmd = "ros2 service call /second_srv example_interfaces/srv/AddTwoInts" }
+#foxglove_server = { cmd = "..." }
+#foxglove_client = { cmd = "... {IP}" args = { IP } }
+flash_arm = { cmd = "platformio run --target upload", cwd = "/home/g5/Documents/PlatformIO/Projects/dd2419" }
+install_udev_rules = { cmd = "sudo mv 99-robp.rules /etc/udev/rules.d/99-robp.rules && echo 'You should reboot the computer now.'" }
+install_useful_tools = { cmd = "sudo apt install tmux" }
+install_everything = { depends-on = [
+  "install_udev_rules",
+  "install_useful_tools",
+] }
 
 [dependencies]
 # ROS
@@ -27,43 +33,67 @@ ros-jazzy-rviz2 = ">=14.1.16,<15"
 ros-jazzy-tf2-ros = ">=0.36.15,<0.37"
 ros-jazzy-tf2-tools = ">=0.36.15,<0.37"
 ros-jazzy-turtlesim = ">=1.8.3,<2"
-
 ros-jazzy-usb-cam = ">=0.8.1,<0.9"
+ros-jazzy-foxglove-bridge = ">=3.2.2,<4"
+ros-jazzy-image-transport-plugins = ">=4.0.6,<5"
+ros-jazzy-rqt-gui = ">=1.6.2,<2"
+ros-jazzy-rqt-common-plugins = ">=1.2.0,<2"
+ros-jazzy-ros2cli = ">=0.32.7,<0.33"
+ros-jazzy-ros2cli-common-extensions = ">=0.3.1,<0.4"
+ros-jazzy-rosidl-cli = ">=4.6.7,<5"
 
-# Realsense
-ros-jazzy-realsense2-camera = { path = "src/realsense-ros/realsense2_camera" }
-
-# Course packages
-ros-jazzy-robp-boot-camp-launch = { path = "src/robp_boot_camp_launch" }
-ros-jazzy-robp-interfaces = { path = "src/robp_interfaces" }
-ros-jazzy-robp-phidgets = { path = "src/robp_phidgets" }
-
-# Aruco
-ros-jazzy-aruco = { path = "src/aruco_ros/aruco" }
-ros-jazzy-aruco-msgs = { path = "src/aruco_ros/aruco_msgs" }
+# Workspace
 ros-jazzy-aruco-ros = { path = "src/aruco_ros/aruco_ros" }
-
-# RPLidar
+ros-jazzy-realsense2-camera = { path = "src/realsense-ros/realsense2_camera" }
 ros-jazzy-rplidar-ros = { path = "src/rplidar_ros" }
 
-# Boot camp part 1
-ros-jazzy-learning-tf2-py = { path = "src/learning_tf2_py" }
+# Course packages
+ros-jazzy-robp-arm = { path = "src/robp_arm" }
+ros-jazzy-robp-autocomplete = { path = "src/robp_autocomplete" }
+ros-jazzy-robp-boot-camp-launch = { path = "src/robp_boot_camp_launch" }
+ros-jazzy-robp-interfaces = { path = "src/robp_interfaces" }
+ros-jazzy-robp-launch = { path = "src/robp_launch" }
+ros-jazzy-robp-phidgets = { path = "src/robp_phidgets" }
 
-# Boot camp part 2
+# Boot camp
+ros-jazzy-learning-tf2-py = { path = "src/learning_tf2_py" }
 ros-jazzy-odometry = { path = "src/odometry" }
 ros-jazzy-display-markers = { path = "src/display_markers" }
-
-# Boot camp part 3
 ros-jazzy-detection = { path = "src/detection" }
 
-# # Phidgets
-# ros-jazzy-libphidget22 = { path = "src/robp_robot/phidgets_drivers/libphidget22" }
-# ros-jazzy-phidgets-api = { path = "src/robp_robot/phidgets_drivers/phidgets_api" }
-# ros-jazzy-phidgets-msgs = { path = "src/robp_robot/phidgets_drivers/phidgets_msgs" }
+# Flashing arm
+pyserial = ">=3.5,<4"
+platformio = ">=6.1.18,<7"
+
+# Other
+argcomplete = ">=3.6.3,<4"
 
 [activation.env]
-ROS_AUTOMATIC_DISCOVERY_RANGE = "LOCALHOST"
+# Works with Linux and macOS
+RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
+ROS_AUTOMATIC_DISCOVERY_RANGE = "LOCALHOST" # SUBNET
+ROS_DOMAIN_ID = "0"                         # Change to group number
 
 # [target.osx.activation.env]
 # # Required for the RVIZ2 to properly startup on osx
 # RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
+
+
+# Install SSH, Tmux, VS Code, Pixi, Foxglove
+
+# sudo adduser $USER dialout
+
+# SSH
+# Install OpenSSH server
+
+# sudo apt update
+# sudo apt upgrade
+# sudo apt install ssh
+
+# Enable SSH Service to Start on Boot
+
+# sudo systemctl enable ssh
+
+# Verify SSH Service Status
+
+# sudo systemctl status ssh

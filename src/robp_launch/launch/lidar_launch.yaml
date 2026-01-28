@@ -1,8 +1,12 @@
+%YAML 1.2
+---
 launch:
   - node:
-      pkg: "sllidar_ros2"
-      exec: "sllidar_node"
-      name: "rplidar"
+      pkg: "rplidar_ros"
+      exec: "rplidar_node"
+      name: "rplidar_node"
+      output: "screen"
+      emulate_tty: true
       param:
         - name: 'channel_type'
           value: 'serial'
@@ -17,6 +21,4 @@ launch:
         - name: 'angle_compensate'
           value: true
         - name: 'scan_mode'
-          value: ''
-      output: "screen"
-      emulate_tty: true
+          value: 'Sensitivity'
