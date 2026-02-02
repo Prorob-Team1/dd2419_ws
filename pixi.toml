@@ -103,4 +103,4 @@ platformio = ">=6.1.18,<7"
 # Works with Linux and macOS
 RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
 ROS_AUTOMATIC_DISCOVERY_RANGE = "SUBNET"  # LOCALHOST, SUBNET
-ROS_DOMAIN_ID = "0"                       # Change to group number
+ROS_DOMAIN_ID = "1"                       # Change to group number
