@@ -24,4 +24,4 @@ launch:
         - name: "scan_frequency"
           value: 10.0
         - name: "scan_mode"
-          value: "Stability" # Legacy, Express, Boost, Sensitivity, Stability
+          value: "" # Legacy, Express, Boost, Sensitivity, Stability
