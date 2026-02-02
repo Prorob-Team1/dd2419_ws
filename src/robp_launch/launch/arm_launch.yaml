@@ -10,6 +10,6 @@ launch:
       emulate_tty: true
       param:
         - name: "device"
-          value: "/dev/robp_arm"
+          value: "/dev/hiwonder_arm"
         - name: "baudrate"
           value: 115200

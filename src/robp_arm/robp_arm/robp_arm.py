@@ -11,7 +11,7 @@ class Arm(Node):
   def __init__(self):
     super().__init__("arm")
 
-    self.ser = serial.Serial("/dev/robp_arm", baudrate=115200)
+    self.ser = serial.Serial("/dev/hiwonder_arm", baudrate=115200)
 
     self.pub = self.create_publisher(ArmFeedback, "/arm/feedback", 10)
     self.sub = self.create_subscription(ArmControl, "/arm/control", self.arm_control, 10)
