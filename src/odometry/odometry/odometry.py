@@ -19,19 +19,18 @@ from geometry_msgs.msg import PoseStamped
 class Odometry(Node):
 
     def __init__(self):
-        super().__init__('odometry')
+        super().__init__("odometry")
 
         # Initialize the transform broadcaster
         self._tf_broadcaster = TransformBroadcaster(self)
 
         # Initialize the path publisher
-        self._path_pub = self.create_publisher(Path, 'path', 10)
+        self._path_pub = self.create_publisher(Path, "path", 10)
         # Store the path here
         self._path = Path()
 
         # Subscribe to encoder topic and call callback function on each recieved message
-        self.create_subscription(
-            Encoders, '/motor/encoders', self.encoder_callback, 10)
+        self.create_subscription(Encoders, "/motor/encoders", self.encoder_callback, 10)
 
         # 2D pose
         self._x = 0.0
@@ -46,27 +45,33 @@ class Odometry(Node):
         Your task is to update the odometry based on the encoder data in 'msg'. You are allowed to add/change things outside this function.
 
         Keyword arguments:
-        msg -- An encoders ROS message. To see more information about it 
+        msg -- An encoders ROS message. To see more information about it
         run 'ros2 interface show robp_interfaces/msg/Encoders' in a terminal.
         """
 
         # The kinematic parameters for the differential configuration
         dt = 50 / 1000
         ticks_per_rev = 48 * 64
-        wheel_radius = 0.0  # TODO: Fill in
-        base = 0.0  # TODO: Fill in
+        wheel_radius = 0.04921  # TODO: Fill in
+        base = 0.3  # TODO: Fill in
 
         # Ticks since last message
         delta_ticks_left = msg.delta_encoder_left
         delta_ticks_right = msg.delta_encoder_right
 
         # TODO: Fill in
+        delta_phi_r = 2 * np.pi * (delta_ticks_right / ticks_per_rev)
+        delta_phi_l = 2 * np.pi * (delta_ticks_left / ticks_per_rev)
 
-        self._x = self._x  # TODO: Fill in
-        self._y = self._y  # TODO: Fill in
-        self._yaw = self._yaw  # TODO: Fill in
-        
-        stamp = None # TODO: Fill in
+        D = 0.5 * wheel_radius * (delta_phi_r + delta_phi_l)
+        delta_theta = wheel_radius * (delta_phi_r - delta_phi_l) / base
+
+        self._x = self._x + D * np.cos(self._yaw)  # TODO: Fill in
+        self._y = self._y + D * np.sin(self._yaw)  # TODO: Fill in
+        self._yaw = self._yaw + delta_theta  # TODO: Fill in
+        self._yaw = np.arctan2(np.sin(self._yaw), np.cos(self._yaw))  # wrap angle
+
+        stamp = msg.header.stamp  # TODO: Fill in
 
         self.broadcast_transform(stamp, self._x, self._y, self._yaw)
         self.publish_path(stamp, self._x, self._y, self._yaw)
@@ -74,7 +79,7 @@ class Odometry(Node):
     def broadcast_transform(self, stamp, x, y, yaw):
         """Takes a 2D pose and broadcasts it as a ROS transform.
 
-        Broadcasts a 3D transform with z, roll, and pitch all zero. 
+        Broadcasts a 3D transform with z, roll, and pitch all zero.
         The transform is stamped with the current time and is between the frames 'odom' -> 'base_link'.
 
         Keyword arguments:
@@ -86,8 +91,8 @@ class Odometry(Node):
 
         t = TransformStamped()
         t.header.stamp = stamp
-        t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
+        t.header.frame_id = "odom"
+        t.child_frame_id = "base_link"
 
         # The robot only exists in 2D, thus we set x and y translation
         # coordinates and set the z coordinate to 0
@@ -118,7 +123,7 @@ class Odometry(Node):
         """
 
         self._path.header.stamp = stamp
-        self._path.header.frame_id = 'odom'
+        self._path.header.frame_id = "odom"
 
         pose = PoseStamped()
         pose.header = self._path.header
@@ -149,5 +154,5 @@ def main():
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
