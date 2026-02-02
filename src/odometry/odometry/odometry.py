@@ -30,7 +30,7 @@ class Odometry(Node):
         self._path = Path()
 
         # Subscribe to encoder topic and call callback function on each recieved message
-        self.create_subscription(Encoders, "/motor/encoders", self.encoder_callback, 10)
+        self.create_subscription(Encoders, "/phidgets/motor/encoders", self.encoder_callback, 10)
 
         # 2D pose
         self._x = 0.0
