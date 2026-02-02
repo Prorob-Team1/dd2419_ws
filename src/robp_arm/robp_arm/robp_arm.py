@@ -11,7 +11,7 @@ class Arm(Node):
   def __init__(self):
     super().__init__("arm")
 
-    self.ser = serial.Serial("/dev/ttyUSB1", baudrate=115200)
+    self.ser = serial.Serial("/dev/robp_arm", baudrate=115200)
 
     self.pub = self.create_publisher(ArmFeedback, "/arm/feedback", 10)
     self.sub = self.create_subscription(ArmControl, "/arm/control", self.arm_control, 10)
@@ -69,44 +69,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-
-
-# ser = serial.Serial('/dev/ttyUSB1', baudrate=115200)
-
-# # ser.read_until("Arm is ready")
-
-# # msg = ""
-# # while msg.find("Arm is ready") == -1:
-
-# # while msg.find("Arduino is ready") == -1:
-
-# # # Reset
-# # action = 3
-# # ser.write(struct.pack('<B', action))
-
-# # time.sleep(3)
-
-# # Move
-# action = 1
-# # angle = [4000, 12000, 3000, 22000, 18000, 12000]
-# # angle = [40, 90, 130, 110, 130, 110]
-# angle = [40, 120, 40, 120, 140, 120]
-# pos_time = [3000, 3000, 3000, 3000, 3000, 3000]
-
-# ser.write(struct.pack('<b', action))
-# ser.write(struct.pack(f'<{len(angle)}f', *angle))
-# ser.write(struct.pack(f'<{len(pos_time)}H', *pos_time))
-
-# # for i in range(len(angle)):
-# #   print(ser.readline())
-
-# # Feedback
-# while True:
-#   action = 2
-#   ser.write(struct.pack('<b', action))
-#   ser.read_until(b"BEGIN FEEDBACK")
-#   data = ser.read_until(b"END FEEDBACK")[:4*6]
-#   data = struct.unpack('<6f', data)
-#   data = [round(x, 2) for x in data]
-#   print(data)
-    

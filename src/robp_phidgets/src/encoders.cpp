@@ -20,7 +20,7 @@ Encoders::Encoders() : Node("encoders")
 		exit(1);
 	}
 
-	pub_ = create_publisher<robp_interfaces::msg::Encoders>("/motor/encoders", 1);
+	pub_ = create_publisher<robp_interfaces::msg::Encoders>("motor/encoders", 1);
 
 	left_  = std::make_unique<Encoder>(this, serial_num_left, hub_port_left, false, 0,
 	                                   std::bind(&Encoders::publish, this));

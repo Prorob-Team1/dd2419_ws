@@ -54,8 +54,8 @@ Spatial::Spatial() : Node("spatial")
 	double cc_t4        = this->declare_parameter("spatial_cc_t4", -0.03942);
 	double cc_t5        = this->declare_parameter("spatial_cc_t5", -0.05673);
 
-	imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("/imu/data_raw", 1);
-	mag_pub_ = this->create_publisher<sensor_msgs::msg::MagneticField>("/imu/mag", 1);
+	imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data_raw", 1);
+	mag_pub_ = this->create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", 1);
 
 	create();
 	assignEventHandlers();
