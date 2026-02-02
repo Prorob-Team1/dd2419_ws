@@ -250,7 +250,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/ncurses-6.5-h2d0b736_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/nspr-4.38-h29cc59b_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/nss-3.118-h445c969_0.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/numpy-2.4.1-py312h33ff503_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/numpy-2.4.2-py312h33ff503_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/ocl-icd-2.3.3-hb9d3cd8_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/opencl-headers-2025.06.13-h5888daf_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/openexr-3.4.4-h40f6f1d_1.conda
@@ -376,6 +376,7 @@ environments:
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-image-transport-5.1.7-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-image-transport-plugins-4.0.6-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-interactive-markers-2.5.5-np2py312h2ed9cc7_14.conda
+      - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-joy-3.3.0-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-kdl-parser-2.11.0-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-keyboard-handler-0.3.1-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-laser-geometry-2.7.2-np2py312h2ed9cc7_14.conda
@@ -513,6 +514,7 @@ environments:
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-rviz-ogre-vendor-14.1.19-np2py312hf3be069_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-rviz-rendering-14.1.19-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-rviz2-14.1.19-np2py312h2ed9cc7_14.conda
+      - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-sdl2-vendor-3.3.0-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-sensor-msgs-5.3.6-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-sensor-msgs-py-5.3.6-np2py312h2ed9cc7_14.conda
       - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-service-msgs-2.0.3-np2py312h2ed9cc7_14.conda
@@ -645,6 +647,8 @@ environments:
       - conda: src/phidgets_drivers/libphidget22
       - conda: src/phidgets_drivers/phidgets_api
       - conda: src/phidgets_drivers/phidgets_msgs
+      - conda: src/rc_control
+        build: hb0f4dca_0
       - conda: src/realsense-ros/realsense2_camera
       - conda: src/realsense-ros/realsense2_camera_msgs
       - conda: src/robp_arm
@@ -844,7 +848,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.5-h5e97a16_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/nspr-4.38-heaf21c2_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/nss-3.118-h1c710a3_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-arm64/numpy-2.4.1-py312he281c53_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/numpy-2.4.2-py312he281c53_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openexr-3.4.4-he0ec429_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openh264-2.6.0-hb5b2745_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openjpeg-2.5.4-hbfb3c88_0.conda
@@ -955,6 +959,7 @@ environments:
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-image-transport-5.1.7-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-image-transport-plugins-4.0.6-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-interactive-markers-2.5.5-np2py312h50b1e4c_14.conda
+      - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-joy-3.3.0-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-kdl-parser-2.11.0-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-keyboard-handler-0.3.1-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-laser-geometry-2.7.2-np2py312h50b1e4c_14.conda
@@ -1091,6 +1096,7 @@ environments:
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-rviz-ogre-vendor-14.1.19-np2py312h8a36be1_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-rviz-rendering-14.1.19-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-rviz2-14.1.19-np2py312h50b1e4c_14.conda
+      - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-sdl2-vendor-3.3.0-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-sensor-msgs-5.3.6-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-sensor-msgs-py-5.3.6-np2py312h50b1e4c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-service-msgs-2.0.3-np2py312h50b1e4c_14.conda
@@ -1192,6 +1198,8 @@ environments:
       - conda: src/learning_tf2_py
         build: h60d57d3_0
       - conda: src/odometry
+        build: h60d57d3_0
+      - conda: src/rc_control
         build: h60d57d3_0
       - conda: src/robp_autocomplete
         build: h60d57d3_0
@@ -1361,7 +1369,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mccabe-0.7.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/mkl-2025.3.0-hac47afa_455.conda
       - conda: https://prefix.dev/conda-forge/noarch/munkres-1.1.4-pyhd8ed1ab_1.conda
-      - conda: https://prefix.dev/conda-forge/win-64/numpy-2.4.1-py312ha72d056_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/numpy-2.4.2-py312ha72d056_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/opencl-headers-2025.06.13-he0c23c2_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/openexr-3.4.4-h3840fac_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/openh264-2.6.0-hb17fa0b_0.conda
@@ -1470,6 +1478,7 @@ environments:
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-image-transport-5.1.7-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-image-transport-plugins-4.0.6-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-interactive-markers-2.5.5-np2py312hf80f32c_14.conda
+      - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-joy-3.3.0-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-kdl-parser-2.11.0-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-keyboard-handler-0.3.1-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-laser-geometry-2.7.2-np2py312hf80f32c_14.conda
@@ -1606,6 +1615,7 @@ environments:
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-rviz-ogre-vendor-14.1.19-np2py312he3920dc_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-rviz-rendering-14.1.19-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-rviz2-14.1.19-np2py312hf80f32c_14.conda
+      - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-sdl2-vendor-3.3.0-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-sensor-msgs-5.3.6-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-sensor-msgs-py-5.3.6-np2py312hf80f32c_14.conda
       - conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-service-msgs-2.0.3-np2py312hf80f32c_14.conda
@@ -1708,6 +1718,8 @@ environments:
       - conda: src/learning_tf2_py
         build: ha41a7fa_0
       - conda: src/odometry
+        build: ha41a7fa_0
+      - conda: src/rc_control
         build: ha41a7fa_0
       - conda: src/robp_autocomplete
         build: ha41a7fa_0
@@ -8463,60 +8475,57 @@ packages:
   license_family: MOZILLA
   size: 1839904
   timestamp: 1763486575227
-- conda: https://prefix.dev/conda-forge/linux-64/numpy-2.4.1-py312h33ff503_0.conda
-  sha256: f6c29a77aa02905c01747fc83d32148673ee2eaa34d4d5d5cb420ecdf6fb5035
-  md5: ba7e6cb06c372eae6f164623e6e06db8
+- conda: https://prefix.dev/conda-forge/linux-64/numpy-2.4.2-py312h33ff503_0.conda
+  sha256: 132fbcb473ac3bafcc1b389bb03642457e6cf99bb17f28d2e301c9eb80d6121e
+  md5: 53e8b7f5fb8ee19e7aa3ba80ced56824
   depends:
   - python
-  - libgcc >=14
   - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
   - libstdcxx >=14
+  - libblas >=3.9.0,<4.0a0
+  - liblapack >=3.9.0,<4.0a0
   - python_abi 3.12.* *_cp312
   - libcblas >=3.9.0,<4.0a0
-  - liblapack >=3.9.0,<4.0a0
-  - libblas >=3.9.0,<4.0a0
   constrains:
   - numpy-base <0a0
   license: BSD-3-Clause
-  license_family: BSD
-  size: 8757015
-  timestamp: 1768085678045
-- conda: https://prefix.dev/conda-forge/osx-arm64/numpy-2.4.1-py312he281c53_0.conda
-  sha256: f28e86ce957cad03881148e81d548edcae9e093f6bab5f56d4e0fec608a0d7f7
-  md5: 9f51075d9ea979c5cbca44ac34b9623f
+  size: 8757604
+  timestamp: 1770020136212
+- conda: https://prefix.dev/conda-forge/osx-arm64/numpy-2.4.2-py312he281c53_0.conda
+  sha256: 69d22ea3c75b54760c825dd3f545394aaf08510d004c456ccb729cbc85c93193
+  md5: 72d56a17c7079ce024c3cd19fa2c89ab
   depends:
   - python
   - __osx >=11.0
-  - libcxx >=19
   - python 3.12.* *_cpython
-  - libcblas >=3.9.0,<4.0a0
+  - libcxx >=19
   - python_abi 3.12.* *_cp312
-  - libblas >=3.9.0,<4.0a0
   - liblapack >=3.9.0,<4.0a0
+  - libcblas >=3.9.0,<4.0a0
+  - libblas >=3.9.0,<4.0a0
   constrains:
   - numpy-base <0a0
   license: BSD-3-Clause
-  license_family: BSD
-  size: 6839209
-  timestamp: 1768085582339
-- conda: https://prefix.dev/conda-forge/win-64/numpy-2.4.1-py312ha72d056_0.conda
-  sha256: 06d2acce4c5cfe230213c4bc62823de3fa032d053f83c93a28478c7b8ee769bc
-  md5: e06f225f5bf5784b3412b21a2a44da72
+  size: 6841512
+  timestamp: 1770020028597
+- conda: https://prefix.dev/conda-forge/win-64/numpy-2.4.2-py312ha72d056_0.conda
+  sha256: 628e1a8f1f67a780d2915233fea373609d771bd5ecb5cdfd1b41943e8b0c5c54
+  md5: b4e46fa707eb0596a04b0c9825c5e2dd
   depends:
   - python
   - vc >=14.3,<15
   - vc14_runtime >=14.44.35208
   - ucrt >=10.0.20348.0
+  - libblas >=3.9.0,<4.0a0
   - python_abi 3.12.* *_cp312
   - libcblas >=3.9.0,<4.0a0
   - liblapack >=3.9.0,<4.0a0
-  - libblas >=3.9.0,<4.0a0
   constrains:
   - numpy-base <0a0
   license: BSD-3-Clause
-  license_family: BSD
-  size: 7163582
-  timestamp: 1768085586766
+  size: 7163893
+  timestamp: 1770020040095
 - conda: https://prefix.dev/conda-forge/linux-64/ocl-icd-2.3.3-hb9d3cd8_0.conda
   sha256: 2254dae821b286fb57c61895f2b40e3571a070910fdab79a948ff703e1ea807b
   md5: 56f8947aa9d5cf37b0b3d43b83f34192
@@ -14298,6 +14307,69 @@ packages:
   license: BSD-3-Clause
   size: 214585
   timestamp: 1769004701832
+- conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-joy-3.3.0-np2py312h2ed9cc7_14.conda
+  sha256: cd86a246354e5b050c55bae04f754bbca58312fa77bdbf3378c3703397d1a3c9
+  md5: ca21b4f43e003d53f985f810121c7b6d
+  depends:
+  - python
+  - ros-jazzy-rclcpp
+  - ros-jazzy-rclcpp-components
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-sdl2-vendor
+  - ros-jazzy-sensor-msgs
+  - ros2-distro-mutex 0.13.* jazzy_*
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libstdcxx >=14
+  - libgcc >=14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: BSD-3-Clause
+  size: 281746
+  timestamp: 1768978691517
+- conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-joy-3.3.0-np2py312h50b1e4c_14.conda
+  sha256: 5d7dce566c1b8e7bb93824883591efc042f41e1f0fc89478b6a877d890f79dc2
+  md5: 1a13fd2e23fbc12d1260e68b33625d03
+  depends:
+  - python
+  - ros-jazzy-rclcpp
+  - ros-jazzy-rclcpp-components
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-sdl2-vendor
+  - ros-jazzy-sensor-msgs
+  - ros2-distro-mutex 0.13.* jazzy_*
+  - __osx >=11.0
+  - libcxx >=18
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - numpy >=1.23,<3
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  size: 214251
+  timestamp: 1769004659235
+- conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-joy-3.3.0-np2py312hf80f32c_14.conda
+  sha256: b2b47517b8fc55441bfa6dc81b7c4f124b172cdfc45f2fbfded21caab0690881
+  md5: 718e6271352efd28f587eb5cb13ee5c9
+  depends:
+  - python
+  - ros-jazzy-rclcpp
+  - ros-jazzy-rclcpp-components
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-sdl2-vendor
+  - ros-jazzy-sensor-msgs
+  - ros2-distro-mutex 0.13.* jazzy_*
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - python_abi 3.12.* *_cp312
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - numpy >=1.23,<3
+  license: BSD-3-Clause
+  size: 185402
+  timestamp: 1768998893816
 - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-kdl-parser-2.11.0-np2py312h2ed9cc7_14.conda
   sha256: cb216c6777e04ae1993b9e65e4169c0e3071a69d08ca655b4e10d30937ed31d0
   md5: cdcf417482aa5451d665eeed7ea2bb73
@@ -16191,6 +16263,63 @@ packages:
   license: BSD-3-Clause
   size: 36342
   timestamp: 1768982311497
+- conda: src/rc_control
+  name: ros-jazzy-rc-control
+  version: 0.0.0
+  build: h60d57d3_0
+  subdir: osx-arm64
+  variants:
+    target_platform: osx-arm64
+  depends:
+  - ros-jazzy-joy
+  - numpy
+  - numpy >=1.23,<3
+  - ros-jazzy-nav-msgs
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libcxx >=21
+  - python_abi 3.12.* *_cp312
+  license: LicenseRef-MIT
+- conda: src/rc_control
+  name: ros-jazzy-rc-control
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-joy
+  - numpy
+  - numpy >=1.23,<3
+  - ros-jazzy-nav-msgs
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - python_abi 3.12.* *_cp312
+  license: LicenseRef-MIT
+- conda: src/rc_control
+  name: ros-jazzy-rc-control
+  version: 0.0.0
+  build: hb0f4dca_0
+  subdir: linux-64
+  variants:
+    target_platform: linux-64
+  depends:
+  - ros-jazzy-joy
+  - numpy
+  - numpy >=1.23,<3
+  - ros-jazzy-nav-msgs
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libgcc >=15
+  - libgcc >=15
+  - libstdcxx >=15
+  - python_abi 3.12.* *_cp312
+  license: LicenseRef-MIT
 - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-rcl-9.2.8-np2py312h2ed9cc7_14.conda
   sha256: 1c7cde7016ad5ad1be6e41ed390bcc5c8ffc4dafacab55bc088a0f8c650aba58
   md5: 06b959e1b92ef2d77470956ccbc7b850
@@ -24292,6 +24421,62 @@ packages:
   license: BSD-3-Clause
   size: 82376790
   timestamp: 1769009316451
+- conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-sdl2-vendor-3.3.0-np2py312h2ed9cc7_14.conda
+  sha256: 8275b74b2fc6afb7f9589ad4a4ed8b50d3eb74e31cbdcf630a964306a900f9fc
+  md5: 3ab0c1334e5d041b95381e363a830727
+  depends:
+  - python
+  - ros-jazzy-ros-workspace
+  - ros2-distro-mutex 0.13.* jazzy_*
+  - sdl2
+  - __glibc >=2.17,<3.0.a0
+  - libstdcxx >=14
+  - libgcc >=14
+  - numpy >=1.23,<3
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - python_abi 3.12.* *_cp312
+  - sdl2 >=2.32.56,<3.0a0
+  license: Apache-2.0
+  size: 27876
+  timestamp: 1768974380182
+- conda: https://prefix.dev/robostack-jazzy/osx-arm64/ros-jazzy-sdl2-vendor-3.3.0-np2py312h50b1e4c_14.conda
+  sha256: 0c027440ce8901405ebd7b3c287d615e20220960f2af50abd9c3a643e2c33e64
+  md5: 3f23c24a9affc7670c9ecf9083ccafbc
+  depends:
+  - python
+  - ros-jazzy-ros-workspace
+  - ros2-distro-mutex 0.13.* jazzy_*
+  - sdl2
+  - libcxx >=18
+  - __osx >=11.0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  - sdl2 >=2.32.56,<3.0a0
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  license: Apache-2.0
+  size: 24162
+  timestamp: 1768943910671
+- conda: https://prefix.dev/robostack-jazzy/win-64/ros-jazzy-sdl2-vendor-3.3.0-np2py312hf80f32c_14.conda
+  sha256: cfe2e39c4f4353c9a1e78b76b03675c54c682ba87ee86d4c5d95160061f9ed5a
+  md5: a692a7d89aad1b7f4700233c31cea11f
+  depends:
+  - python
+  - ros-jazzy-ros-workspace
+  - ros2-distro-mutex 0.13.* jazzy_*
+  - sdl2
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - sdl2 >=2.32.56,<3.0a0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: Apache-2.0
+  size: 20492
+  timestamp: 1768978280497
 - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-sensor-msgs-5.3.6-np2py312h2ed9cc7_14.conda
   sha256: ee0859957992f3910f34fac3254ebdbd71764585472bf9a1fb464a0745e972b0
   md5: 89a7a6e3349f2d78349c7bac2eded259
