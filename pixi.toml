@@ -79,8 +79,12 @@ ros-jazzy-odometry = { path = "src/odometry" }
 ros-jazzy-display-markers = { path = "src/display_markers" }
 ros-jazzy-detection = { path = "src/detection" }
 
+# Milestone 3
+ros-jazzy-rc-control = { path = "src/rc_control" }
+
 # Other
 argcomplete = ">=3.6.3,<4"
+ros-jazzy-joy = ">=3.3.0,<4"
 
 [target.linux-64.dependencies]
 # ROS
