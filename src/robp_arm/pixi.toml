@@ -7,7 +7,7 @@ version = "*"
 
 [package.build.config]
 extra-input-globs = [
-  "robp_arm/**/*.py",
+    "**/*.py",
 ]
 
 [package.host-dependencies]
