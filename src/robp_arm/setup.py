@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'display_markers'
+package_name = 'robp_arm'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'display_markers = display_markers.display_markers:main'
+            'robp_arm = robp_arm.robp_arm:main'
         ],
     },
 )

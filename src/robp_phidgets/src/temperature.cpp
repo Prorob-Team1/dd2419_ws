@@ -18,7 +18,7 @@ Temperature::Temperature() : Node("temperature")
 	double temperature_change_trigger =
 	    this->declare_parameter("temperature_change_trigger", 0.0);
 
-	pub_ = this->create_publisher<sensor_msgs::msg::Temperature>("/imu/temperature", 1);
+	pub_ = this->create_publisher<sensor_msgs::msg::Temperature>("imu/temperature", 1);
 
 	create();
 	assignEventHandlers();

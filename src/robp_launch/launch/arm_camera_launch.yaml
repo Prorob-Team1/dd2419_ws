@@ -5,51 +5,43 @@ launch:
       pkg: "usb_cam"
       exec: "usb_cam_node_exe"
       name: "arm_camera"
-      namespace: "arm_camera"
+      namespace: "arm/camera"
       output: "screen"
       emulate_tty: true
       param:
-        - name: 'video_device'
-          value: '/dev/arm_camera'
-        - name: 'frame_id'
-          value: 'arm_camera_link'
-        - name: 'camera_name'
-          value: 'arm_camera'
-        - name: 'pixel_format'
-          value: 'yuyv'
-        - name: 'framerate'
+        - name: "video_device"
+          value: "/dev/arm_camera"
+        - name: "frame_id"
+          value: "arm_camera_link"
+        - name: "camera_name"
+          value: "arm_camera"
+        - name: "pixel_format"
+          value: "yuyv"
+        - name: "framerate"
           value: 30.0
-        - name: 'image_width'
+        - name: "image_width"
           value: 640
-        - name: 'image_height'
+        - name: "image_height"
           value: 480
-        - name: 'brightness'
+        - name: "brightness"
           value: -1
-        - name: 'contrast'
+        - name: "contrast"
           value: -1
-        - name: 'saturation'
+        - name: "saturation"
           value: -1
-        - name: 'sharpness'
+        - name: "sharpness"
           value: -1
-        - name: 'gain'
+        - name: "gain"
           value: -1
-        - name: 'auto_white_balance'
+        - name: "auto_white_balance"
           value: true
-        - name: 'white_balance'
+        - name: "white_balance"
           value: 4000
-        - name: 'autoexposure'
+        - name: "autoexposure"
           value: true
-        - name: 'exposure'
+        - name: "exposure"
           value: 100
-        - name: 'autofocus'
+        - name: "focus_auto"
           value: false
-        - name: 'focus'
+        - name: "focus"
           value: -1
-  - node:
-      pkg: "topic_tools"
-      exec: "throttle"
-      name: "arm_camera_throttle"
-      namespace: "arm_camera"
-      args: "messages /arm_camera/image_raw 5 /arm_camera/filtered/image_raw"
-      output: "screen"
-      emulate_tty: true

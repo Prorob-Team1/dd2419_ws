@@ -26,7 +26,7 @@ Motors::Motors() : Node("motors")
 	}
 
 	pub_ = this->create_publisher<robp_interfaces::msg::DutyCycles>(
-	    "/motor/current_duty_cycles", 1);
+	    "motor/current_duty_cycles", 1);
 
 	left_  = std::make_unique<Motor>(this, serial_num_left, hub_port_left, false, 0,
 	                                 std::bind(&Motors::publish, this));
@@ -53,7 +53,7 @@ Motors::Motors() : Node("motors")
 	}
 
 	sub_ = this->create_subscription<robp_interfaces::msg::DutyCycles>(
-	    "/motor/duty_cycles", 1,
+	    "motor/duty_cycles", 1,
 	    std::bind(&Motors::dutyCyclesCallback, this, std::placeholders::_1));
 }
 

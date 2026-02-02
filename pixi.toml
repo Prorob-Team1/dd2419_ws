@@ -14,16 +14,39 @@ version = "1.0.0"
 preview = ["pixi-build"]
 
 [tasks]
-#foxglove_server = { cmd = "..." }
-#foxglove_client = { cmd = "... {IP}" args = { IP } }
 flash_arm = { cmd = "platformio run --target upload", cwd = "PlatformIO/Projects/dd2419" }
-install_udev_rules = { cmd = "sudo mv 99-robp.rules /etc/udev/rules.d/99-robp.rules && echo 'You should reboot the computer now.'" }
-add_user_dialout = { cmd = "sudo adduser $USER dialout && echo 'You should logout and login again for this to take effect.'" }
-install_useful_tools = { cmd = "sudo apt install tmux" }
-install_everything = { depends-on = [
-  "install_udev_rules",
-  "install_useful_tools",
-] }
+
+foxglove_server = { cmd = "ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765" }
+
+arm = { cmd = "ros2 launch robp_launch arm_launch.yaml" }
+arm_camera = { cmd = "ros2 launch robp_launch arm_camera_launch.yaml" }
+lidar = { cmd = "ros2 launch robp_launch lidar_launch.yaml" }
+phidgets = { cmd = "ros2 launch robp_launch phidgets_launch.yaml" }
+realsense = { cmd = "ros2 launch robp_launch realsense_launch.yaml" }
+
+[tasks.install_udev_rules]
+cmd = '''
+echo "Copying udev rules" &&
+sudo cp 99-robp.rules /etc/udev/rules.d/99-robp.rules &&
+echo "Restarting udev" &&
+sudo service udev reload &&
+sudo service udev restart &&
+sudo udevadm control --reload &&
+sudo udevadm trigger &&
+echo "Finished"
+'''
+
+[tasks.uninstall_udev_rules]
+cmd = '''
+echo "Removing udev rules" &&
+sudo rm /etc/udev/rules.d/99-robp.rules &&
+echo "Restarting udev" &&
+sudo service udev reload &&
+sudo service udev restart &&
+sudo udevadm control --reload &&
+sudo udevadm trigger &&
+echo "Finished"
+'''
 
 [dependencies]
 # ROS
@@ -68,33 +91,10 @@ platformio = ">=6.1.18,<7"
 
 # Other
 argcomplete = ">=3.6.3,<4"
+ros-jazzy-teleop-twist-joy = ">=2.6.5,<3"
 
 [activation.env]
 # Works with Linux and macOS
 RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
-ROS_AUTOMATIC_DISCOVERY_RANGE = "LOCALHOST" # SUBNET
+ROS_AUTOMATIC_DISCOVERY_RANGE = "SUBNET"    # LOCALHOST, SUBNET
 ROS_DOMAIN_ID = "0"                         # Change to group number
-
-# [target.osx.activation.env]
-# # Required for the RVIZ2 to properly startup on osx
-# RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
-
-
-# Install SSH, Tmux, VS Code, Pixi, Foxglove
-
-# sudo adduser $USER dialout
-
-# SSH
-# Install OpenSSH server
-
-# sudo apt update
-# sudo apt upgrade
-# sudo apt install ssh
-
-# Enable SSH Service to Start on Boot
-
-# sudo systemctl enable ssh
-
-# Verify SSH Service Status
-
-# sudo systemctl status ssh
