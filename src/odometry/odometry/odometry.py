@@ -53,7 +53,7 @@ class Odometry(Node):
         dt = 50 / 1000
         ticks_per_rev = 48 * 64
         wheel_radius = 0.04921  # TODO: Fill in
-        base = 0.3  # TODO: Fill in
+        base = 0.3125 # TODO: Fill in
 
         # Ticks since last message
         delta_ticks_left = msg.delta_encoder_left
