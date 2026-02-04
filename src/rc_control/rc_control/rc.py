@@ -26,13 +26,14 @@ class RC(Node):
         
         self.drive_pub = self.create_publisher(DutyCycles, "/phidgets/motor/duty_cycles", 10)
         
+        self.get_logger().info("RC node initialized")
         
 
     def joy_callback(self, msg: Joy):
         left_ax = msg.axes[1]
         right_ax = msg.axes[4]
         drive_msg = DutyCycles()
-        print(f"{left_ax=}, {right_ax=}")
+        self.get_logger().info(f"{left_ax=}, {right_ax=}")
         drive_msg.duty_cycle_left = left_ax
         drive_msg.duty_cycle_right = right_ax
         drive_msg.header.stamp = msg.header.stamp
