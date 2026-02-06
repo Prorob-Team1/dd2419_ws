@@ -1,0 +1,5 @@
+float32[4] goal_pose [0, 0, 0, 0]
+---
+bool result
+---
+string feedback

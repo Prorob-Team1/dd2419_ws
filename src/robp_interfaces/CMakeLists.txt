@@ -17,8 +17,13 @@ set(msg_files
   "msgs/Encoders.msg"
   )
 
+set(action_files
+  "actions/Navigation.action"
+)
+
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
+  ${action_files}
   DEPENDENCIES std_msgs
 )
 
