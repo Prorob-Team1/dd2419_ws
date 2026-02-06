@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'robp_arm = robp_arm.robp_arm:main'
+            'robp_arm = robp_arm.robp_arm:main',
+            'arm_move_action_server = robp_arm.arm_move_action_server:main',
         ],
     },
 )

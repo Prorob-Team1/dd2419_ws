@@ -17,6 +17,7 @@ set(msg_files
   "msgs/DutyCycles.msg"
   "msgs/Encoders.msg"
   "action/Navigation.action"
+  "action/ArmExecute.action"
   )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
