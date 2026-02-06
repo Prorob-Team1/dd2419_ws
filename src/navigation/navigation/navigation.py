@@ -12,13 +12,14 @@ from tf_transformations import quaternion_from_euler, euler_from_quaternion
 
 from geometry_msgs.msg import TransformStamped
 # from robp_interfaces.actions import Navigation
-from robp_interfaces.msg import Encoders
+from robp_interfaces.msg import Encoders, HelloWorld
+from robp_interfaces.action import Navigation
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from rclpy.action.server import ActionServer, ServerGoalHandle
 
 
-class Navigation(Node):
+class Navigator(Node):
 
     def __init__(self):
         super().__init__("navigation")
@@ -41,7 +42,7 @@ class Navigation(Node):
 
 def main():
     rclpy.init()
-    node = Navigation()
+    node = Navigator()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

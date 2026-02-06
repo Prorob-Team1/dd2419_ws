@@ -19822,6 +19822,7 @@ packages:
   depends:
   - ros-jazzy-rosidl-default-runtime
   - ros-jazzy-std-msgs
+  - ros-jazzy-geometry-msgs
   - numpy
   - numpy >=1.23,<3
   - ros2-distro-mutex >=0.13,<0.14
@@ -19841,6 +19842,7 @@ packages:
   depends:
   - ros-jazzy-rosidl-default-runtime
   - ros-jazzy-std-msgs
+  - ros-jazzy-geometry-msgs
   - numpy
   - numpy >=1.23,<3
   - ros2-distro-mutex >=0.13,<0.14
@@ -19860,6 +19862,7 @@ packages:
   depends:
   - ros-jazzy-rosidl-default-runtime
   - ros-jazzy-std-msgs
+  - ros-jazzy-geometry-msgs
   - numpy
   - numpy >=1.23,<3
   - ros2-distro-mutex >=0.13,<0.14
