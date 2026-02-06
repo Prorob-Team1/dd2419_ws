@@ -1,0 +1,6 @@
+# Command: "pick", "drop", or "lift"
+string command
+---
+bool success
+---
+float32[6] current_position

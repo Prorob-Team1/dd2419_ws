@@ -1,0 +1,47 @@
+launch:
+
+  # Static transform: map -> odom
+  - node:
+      pkg: tf2_ros
+      exec: static_transform_publisher
+      name: map_to_odom
+      args: "0 0 0 0 0 0 map odom"
+
+  # Arm
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/arm_launch.yaml"
+
+  # Arm camera
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/arm_camera_launch.yaml"
+
+  # Lidar
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/lidar_launch.yaml"
+
+  # Phidgets
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/phidgets_launch.yaml"
+
+  # RealSense
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/realsense_launch.yaml"
+
+
+  # Joystick
+  - node:
+      pkg: joy
+      exec: joy_node
+      name: joy_node
+
+  # RC control
+  - node:
+      pkg: rc_control
+      exec: rc2
+      name: rc_control
+
+  # Odometry
+  - node:
+      pkg: odometry
+      exec: odometry
+      name: odometry
