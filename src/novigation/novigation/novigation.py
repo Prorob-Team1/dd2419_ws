@@ -29,8 +29,8 @@ class Navigator(Node):
         super().__init__("navigation")
 
         self.k_distance = 0.5
-        self.k_heading = 1.0
-        self.thresh_distance = 0.1
+        self.k_heading = 2.0
+        self.thresh_distance = 0.01
         self.wheel_base = 0.3
         self.wheel_radius = 0.04921
         self.max_v = 0.5
@@ -48,6 +48,8 @@ class Navigator(Node):
             DutyCycles, "/phidgets/motor/duty_cycles", 10
         )
 
+        self.get_logger().info("Node initialized!")
+
     def navigate_to_pose_callback(self, goal_handle: ServerGoalHandle):
         rate = self.create_rate(20)
         # save the time when called and use it to timeout if the goal takes too long
@@ -55,7 +57,7 @@ class Navigator(Node):
         duration_timeout = Duration(seconds=30)
 
         self.get_logger().info(
-            f"Received navigation goal with pose: {goal_handle.request.pose}"
+            f"Received navigation goal with pose: {goal_handle.request.goal}"
         )
 
         time_elapsed = self.get_clock().now() - time_start
@@ -70,7 +72,7 @@ class Navigator(Node):
                 goal_handle.abort()
                 return Navigation.Result(result=False)
 
-            err_distance, err_heading = self.drive_to_goal(goal_handle.request.pose)
+            err_distance, err_heading = self.drive_to_goal(goal_handle.request.goal)
 
             if err_distance < self.thresh_distance:
                 self.get_logger().info(
@@ -97,8 +99,14 @@ class Navigator(Node):
         except Exception as e:
             self.get_logger().warn(f"Failed to get current pose: {e}")
             return float("inf"), float("inf")
-
-        theta_current = euler_from_quaternion(current_pose.transform.rotation)[2]
+        
+        current_rotation = [
+            current_pose.transform.rotation.x,
+            current_pose.transform.rotation.y,
+            current_pose.transform.rotation.z,
+            current_pose.transform.rotation.w
+        ]
+        theta_current = euler_from_quaternion(current_rotation)[2]
         dx = pose.pose.position.x - current_pose.transform.translation.x
         dy = pose.pose.position.y - current_pose.transform.translation.y
 
@@ -110,6 +118,10 @@ class Navigator(Node):
         # control
         v = self.k_distance * err_distance
         w = self.k_heading * err_heading
+
+        if np.abs(err_heading) > np.pi/4:
+            self.get_logger().error("hello")
+            v = 0
 
         # clamp velocities
         v = np.clip(v, 0.0, self.max_v)
@@ -136,8 +148,8 @@ class Navigator(Node):
             left /= m
             right /= m
 
-        left_duty_cycle = left
-        right_duty_cycle = right
+        left_duty_cycle = left *0.5
+        right_duty_cycle = right *0.5
 
         self.get_logger().info(
             f"Control command - Left wheel: {left_duty_cycle:.2f}, Right wheel: {right_duty_cycle:.2f}"
@@ -159,6 +171,7 @@ def main():
     except KeyboardInterrupt:
         pass
 
+    node.destroy_node()
     rclpy.shutdown()
 
 

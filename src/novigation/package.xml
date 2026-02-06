@@ -1,18 +1,15 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>navigation</name>
+  <name>novigation</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="danieldejonge@t-online.de">dan</maintainer>
+  <maintainer email="Robot@example.com">rob1</maintainer>
   <license>MIT</license>
 
   <depend>geometry_msgs</depend>
-  <depend>nav_msgs</depend>
-  <depend>python3-numpy</depend>
-  <depend>robp_interfaces</depend>
   <depend>rclpy</depend>
-  <depend>tf_transformations</depend>
+  <depend>tf2_geometry_msgs</depend>
   <depend>tf2_ros</depend>
 
   <test_depend>ament_copyright</test_depend>
