@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'navigation'
+package_name = 'novigation'
 
 setup(
     name=package_name,
@@ -13,8 +13,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='dan',
-    maintainer_email='danieldejonge@t-online.de',
+    maintainer='rob1',
+    maintainer_email='Robot@example.com',
     description='TODO: Package description',
     license='MIT',
     extras_require={
@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'navigation = navigation.navigation:main'
+            'novigation = novigation.novigation:main',
+            'dispatcher = novigation.dispatcher:main'
         ],
     },
 )
