@@ -85,6 +85,7 @@ ros-jazzy-detection = { path = "src/detection" }
 
 # Milestone 3
 ros-jazzy-rc-control = { path = "src/rc_control" }
+# ros-jazzy-navigation = { path = "src/navigation" }
 
 # Other
 argcomplete = ">=3.6.3,<4"
