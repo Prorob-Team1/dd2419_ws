@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'novigation = novigation.novigation:main',
-            'dispatcher = novigation.dispatcher:main'
+            'dispatcher = novigation.dispatcher:main',
+            'random_dispatcher = novigation.random_dispatcher:main'
         ],
     },
 )
