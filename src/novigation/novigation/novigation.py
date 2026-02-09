@@ -37,7 +37,6 @@ class Navigator(Node):
         self.max_w = 2 * math.pi / 5
         self.time_out = Duration(seconds=10)
 
-        # create tranform listener
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
@@ -96,15 +95,20 @@ class Navigator(Node):
                 Time(seconds=0),
                 timeout=Duration(seconds=0.1),
             )
+            # if the transform is older than 0.1 seconds, consider it invalid
+            if self.get_clock().now() - current_pose.header.stamp > Duration(  # type: ignore
+                seconds=0.1
+            ):
+                raise Exception("Transform is too old")
         except Exception as e:
             self.get_logger().warn(f"Failed to get current pose: {e}")
             return float("inf"), float("inf")
-        
+
         current_rotation = [
             current_pose.transform.rotation.x,
             current_pose.transform.rotation.y,
             current_pose.transform.rotation.z,
-            current_pose.transform.rotation.w
+            current_pose.transform.rotation.w,
         ]
         theta_current = euler_from_quaternion(current_rotation)[2]
         dx = pose.pose.position.x - current_pose.transform.translation.x
@@ -119,8 +123,8 @@ class Navigator(Node):
         v = self.k_distance * err_distance
         w = self.k_heading * err_heading
 
-        if np.abs(err_heading) > np.pi/4:
-            self.get_logger().error("hello")
+        # spin in place if heading error is too large
+        if np.abs(err_heading) > np.pi / 4:
             v = 0
 
         # clamp velocities
@@ -148,8 +152,8 @@ class Navigator(Node):
             left /= m
             right /= m
 
-        left_duty_cycle = left *0.5
-        right_duty_cycle = right *0.5
+        left_duty_cycle = left * 0.5
+        right_duty_cycle = right * 0.5
 
         self.get_logger().info(
             f"Control command - Left wheel: {left_duty_cycle:.2f}, Right wheel: {right_duty_cycle:.2f}"
