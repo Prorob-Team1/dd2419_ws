@@ -34,7 +34,7 @@ class Detection(Node):
 
         # Subscribe to point cloud
         self.create_subscription(
-            PointCloud2, '/camera/depth/color/points', self.cloud_callback, 10)
+            PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, 10)
 
         self.get_logger().info("Detection node started...")
 
