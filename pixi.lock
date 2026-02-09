@@ -14275,6 +14275,7 @@ packages:
   variants:
     target_platform: osx-arm64
   depends:
+  - ros-jazzy-geometry-msgs
   - numpy
   - numpy >=1.23,<3
   - ros-jazzy-rclpy
@@ -14282,6 +14283,9 @@ packages:
   - ros-jazzy-rosbag2
   - ros-jazzy-sensor-msgs
   - ros-jazzy-sensor-msgs-py
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-visualization-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
   - libcxx >=21
@@ -14297,6 +14301,7 @@ packages:
     cxx_compiler: vs2022
     target_platform: win-64
   depends:
+  - ros-jazzy-geometry-msgs
   - numpy
   - numpy >=1.23,<3
   - ros-jazzy-rclpy
@@ -14304,6 +14309,9 @@ packages:
   - ros-jazzy-rosbag2
   - ros-jazzy-sensor-msgs
   - ros-jazzy-sensor-msgs-py
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-visualization-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
   - vc >=14.3,<15
@@ -14319,6 +14327,7 @@ packages:
   variants:
     target_platform: linux-64
   depends:
+  - ros-jazzy-geometry-msgs
   - numpy
   - numpy >=1.23,<3
   - ros-jazzy-rclpy
@@ -14326,6 +14335,9 @@ packages:
   - ros-jazzy-rosbag2
   - ros-jazzy-sensor-msgs
   - ros-jazzy-sensor-msgs-py
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-visualization-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
   - libgcc >=15
