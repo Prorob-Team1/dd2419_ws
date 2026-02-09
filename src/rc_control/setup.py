@@ -24,8 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'rc = rc_control.rc:main',
-            'rc2 = rc_control.rc2:main'
+            'rc = rc_control.rc:main'
         ],
     },
 )

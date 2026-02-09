@@ -11,19 +11,19 @@ from robp_interfaces.msg import ArmControl, ArmFeedback
 import numpy as np
 
 
-DEFAULT_PICK_POSE = [98.0, 120.0, 70.0, 185.0, 65.0, 120.0]
+DEFAULT_PICK_POSE = [97.0, 120.0, 70.0, 185.0, 65.0, 120.0]
 DEFAULT_PICK_TIME_MS = [4000, 2000, 2000, 2000, 2000, 2000]
 
-DEFAULT_DROP_POSE = [98.0, 120.0, 70.0, 185.0, 65.0, 120.0]
-DEFAULT_DROP_TIME_MS = [10000, 1000, 1000, 1000, 1000, 1000]
+DEFAULT_DROP_POSE = [97.0, 120.0, 70.0, 185.0, 65.0, 120.0]
+DEFAULT_DROP_TIME_MS = [1000, 1000, 1000, 1000, 1000, 1000]
 
-DEFAULT_LIFT_POSE = [98.0, 120.0, 70.0, 185.0, 100.0, 120.0]
+DEFAULT_LIFT_POSE = [97.0, 120.0, 70.0, 105.0, 100.0, 120.0]
 DEFAULT_LIFT_TIME_MS = [1000, 1000, 1000, 1000, 1000, 1000]
 
 OPEN_GRIPPER_TIME_MS = 500 # min must be 500ms?
 OPEN_GRIPPER_POSITION = [30, 120.0]
 
-POSITION_TOLERANCE = 7.0 # degrees
+POSITION_TOLERANCE = 10.0 # degrees
 TIMEOUT_SECONDS = 10
 
 
@@ -54,20 +54,22 @@ class ArmMoveActionServer(Node):
     def _feedback_callback(self, msg: ArmFeedback) -> None:
         self._current_position = list(msg.position)
 
-    def _get_pose_and_time_for_command(self, command: str):
+    def _get_pose(self, command: str):
         "Return (function, timeout_seconds)"
         c = command.strip().lower()
         if c == "pick":
-            return self._pick, max(DEFAULT_PICK_TIME_MS)
+            return self._pick
         if c == "drop":
-            return self._drop, max(DEFAULT_DROP_TIME_MS)
+            return self._drop
         if c == "lift":
-            return self._lift, max(DEFAULT_LIFT_TIME_MS)
-        return None, None
+            return self._lift
+        if c == "lift&pick":
+            return self._pick_and_lift
+        return None
 
     def _execute_callback(self, goal_handle: ServerGoalHandle) -> ArmExecute.Result:
         command = goal_handle.request.command
-        func_to_execute, timeout_ms = self._get_pose_and_time_for_command(command)
+        func_to_execute = self._get_pose(command)
         if func_to_execute is None:
             self.get_logger().error("Unknown command '%s'; use pick, drop, or lift." % command)
             goal_handle.abort()
@@ -157,7 +159,7 @@ class ArmMoveActionServer(Node):
         ctrl = ArmControl()
         ctrl.header.stamp = clock.now().to_msg()
         ctrl.position = drop_pos
-        ctrl.time = _to_uint16_list(OPEN_GRIPPER_TIME_MS * [1, 1, 1, 1, 1, 1])
+        ctrl.time = _to_uint16_list(OPEN_GRIPPER_TIME_MS * [.01, 1, 1, 1, 1, 1])
         self._control_pub.publish(ctrl)
         time_start = clock.now()
         while (clock.now() - time_start) < Duration(seconds=OPEN_GRIPPER_TIME_MS*1.5 / 1000.0):
@@ -193,6 +195,11 @@ class ArmMoveActionServer(Node):
         self.get_logger().error(f"Target position: {DEFAULT_LIFT_POSE}")
         return False
         
+    def _pick_and_lift(self):
+        if not self._pick():
+            return False
+        return self._lift()
+
 
 
 def main(args=None):
