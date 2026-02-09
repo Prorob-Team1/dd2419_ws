@@ -1,10 +1,12 @@
 import rclpy
 from rclpy.action.client import ActionClient
 from rclpy.node import Node
+from action_msgs.msg import GoalStatus
 
 from robp_interfaces.action import Navigation
 from geometry_msgs.msg import PoseStamped
 import numpy as np
+import time
 
 
 class RandomDispatcher(Node):
@@ -69,8 +71,8 @@ class RandomDispatcher(Node):
             response = future.result()
             result = response.result
 
-            if result.success:
-                self.get_logger().info("Navigation goal succeeded!")
+            if response.status == GoalStatus.STATUS_SUCCEEDED:
+                self.get_logger().info(f"Navigation goal succeeded! {result}")
             else:
                 self.get_logger().error(
                     f"Navigation goal failed with status: {response.status}"
