@@ -11,6 +11,7 @@ from tf_transformations import quaternion_from_euler, euler_from_quaternion
 
 from geometry_msgs.msg import TransformStamped
 from robp_interfaces.msg import Encoders, DutyCycles
+from robp_interfaces.action import ArmExecute
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 import time
@@ -27,6 +28,10 @@ class RC(Node):
         self.drive_pub = self.create_publisher(DutyCycles, "/phidgets/motor/duty_cycles", 10)
         
         self.get_logger().info("RC node initialized")
+
+        self.was_pressed = [0] * 11
+
+        self.arm_client = rclpy.action.ActionClient(self, ArmExecute, "arm_execute")
         
 
     def joy_callback(self, msg: Joy):
@@ -38,6 +43,32 @@ class RC(Node):
         drive_msg.duty_cycle_right = right_ax
         drive_msg.header.stamp = msg.header.stamp
         self.drive_pub.publish(drive_msg)
+        self.handle_button_presses(list(msg.buttons))
+
+    def handle_button_presses(self, buttons: list):
+        if buttons[0]: # A
+            if not self.was_pressed[0]:
+                # Pick & Lift
+                command = ArmExecute.Goal()
+                command.command = "pick" 
+                self.arm_client.send_goal_async(command)
+        if buttons[1]: # B
+            if not self.was_pressed[1]:
+                command = ArmExecute.Goal()
+                command.command = "drop" 
+                self.arm_client.send_goal_async(command)
+        if buttons[2]: # X
+            if not self.was_pressed[2]:
+                command = ArmExecute.Goal()
+                command.command = "lift&pick" 
+                self.arm_client.send_goal_async(command)
+        if buttons[3]: # Y
+            if not self.was_pressed[3]:
+                command = ArmExecute.Goal()
+                command.command = "lift"
+                self.arm_client.send_goal_async(command)
+
+        self.was_pressed = buttons
 
 def main():
     rclpy.init()
