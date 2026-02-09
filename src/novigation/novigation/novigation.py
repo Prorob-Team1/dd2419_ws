@@ -30,7 +30,7 @@ class Navigator(Node):
 
         self.k_distance = 0.5
         self.k_heading = 2.0
-        self.thresh_distance = 0.01
+        self.thresh_distance = 0.05
         self.wheel_base = 0.3
         self.wheel_radius = 0.04921
         self.max_v = 0.5
@@ -124,7 +124,7 @@ class Navigator(Node):
             v = 0
 
         # clamp velocities
-        v = np.clip(v, 0.0, self.max_v)
+        v = np.clip(v, 0.05, self.max_v)
         w = np.clip(w, -self.max_w, self.max_w)
         self.control_wheels(v, w)
 

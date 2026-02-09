@@ -10,6 +10,7 @@ class Dispatcher(Node):
     def __init__(self):
         super().__init__('dispatcher_action_client')
         self._action_client = ActionClient(self, Navigation, 'point_navigation')
+        self.get_logger().info("Starting dispatcher")
 
     def send_goal(self, order):
         goal_pose = PoseStamped()
