@@ -23,7 +23,7 @@ arm_camera = { cmd = "ros2 launch robp_launch arm_camera_launch.yaml" }
 lidar = { cmd = "ros2 launch robp_launch lidar_launch.yaml" }
 phidgets = { cmd = "ros2 launch robp_launch phidgets_launch.yaml" }
 realsense = { cmd = "ros2 launch robp_launch realsense_launch.yaml" }
-
+detection = { cmd = "ros2 run detection detection" }
 joy = { cmd = "ros2 run joy joy_node" }
 rc_control = { cmd = "ros2 run rc_control rc" }
 odometry = { cmd = "ros2 run odometry odometry" }

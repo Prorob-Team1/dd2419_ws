@@ -34,7 +34,7 @@ class Detection(Node):
 
         # Subscribe to point cloud
         self.create_subscription(
-            PointCloud2, '/camera/camera/depth/color/points', self.cloud_callback, 10)
+            PointCloud2, '/realsense/depth/color/points', self.cloud_callback, 10)
 
         self.get_logger().info("Detection node started...")
 
@@ -125,7 +125,7 @@ class Detection(Node):
                 self.publish_marker(p_map, name, color_rgb, marker_type)
 
             except TransformException as e:
-
+                print("Could not transform")
                 pass
 
     def publish_marker(self, point_stamped, ns, color, marker_type=Marker.CUBE):
