@@ -45,3 +45,9 @@ launch:
       pkg: odometry
       exec: odometry
       name: odometry
+
+# Odometry
+  - node:
+      pkg: novigation
+      exec: novigation
+      name: novigation

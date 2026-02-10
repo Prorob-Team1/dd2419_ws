@@ -14,7 +14,7 @@ class RandomDispatcher(Node):
     def __init__(self):
         super().__init__("random_dispatcher")
         self._action_client = ActionClient(self, Navigation, "point_navigation")
-        self.square_size = 2.0
+        self.square_size = 1.5
         self.min_x = -self.square_size / 2
         self.max_x = self.square_size / 2
         self.min_y = -self.square_size / 2

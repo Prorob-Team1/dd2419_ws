@@ -36,3 +36,11 @@ Running the rosbag:
 Static transform for the lidar:
 
     pixi run ros2 run tf2_ros static_transform_publisher --frame-id base_link --child-frame-id lidar_link
+
+
+## Milestone 1
+pixi run ros2 launch robp_launch basics_launch.yaml
+pixi run ros2 launch robp_launch static_transform_launch.yaml
+pixi run ros2 run novigation random_dispatcher
+pixi run ros2 run detection detection
+pixi run ros2 run robp_arm arm_move_action_server
