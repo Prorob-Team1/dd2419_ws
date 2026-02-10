@@ -96,7 +96,8 @@ class Navigator(Node):
                 timeout=Duration(seconds=0.1),
             )
             # if the transform is older than 0.1 seconds, consider it invalid
-            if self.get_clock().now() - current_pose.header.stamp > Duration(  # type: ignore
+            transform_time = Time.from_msg(current_pose.header.stamp)
+            if self.get_clock().now() - transform_time > Duration(
                 seconds=0.1
             ):
                 raise Exception("Transform is too old")
