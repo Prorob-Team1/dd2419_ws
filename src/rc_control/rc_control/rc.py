@@ -32,17 +32,20 @@ class RC(Node):
         self.was_pressed = [0] * 11
 
         self.arm_client = rclpy.action.ActionClient(self, ArmExecute, "arm_execute")
+
+        self.activate_driving = False
         
 
     def joy_callback(self, msg: Joy):
         left_ax = msg.axes[1]
         right_ax = msg.axes[4]
         drive_msg = DutyCycles()
-        self.get_logger().info(f"{left_ax=}, {right_ax=}")
+        # self.get_logger().info(f"{left_ax=}, {right_ax=}")
         drive_msg.duty_cycle_left = left_ax
         drive_msg.duty_cycle_right = right_ax
         drive_msg.header.stamp = msg.header.stamp
-        self.drive_pub.publish(drive_msg)
+        if self.activate_driving:
+            self.drive_pub.publish(drive_msg)
         self.handle_button_presses(list(msg.buttons))
 
     def handle_button_presses(self, buttons: list):
