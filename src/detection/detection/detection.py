@@ -19,6 +19,7 @@ from sensor_msgs.msg import PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 from geometry_msgs.msg import PointStamped
 from visualization_msgs.msg import Marker
+from rclpy.executors import MultiThreadedExecutor
 
 class Detection(Node):
 
@@ -115,7 +116,7 @@ class Detection(Node):
 
             try:
 
-                trans = self.tf_buffer.lookup_transform('map', header.frame_id, header.stamp)
+                trans = self.tf_buffer.lookup_transform('map', header.frame_id, header.stamp, timeout=Duration(seconds=0.1))
                 p_map = tf2_geometry_msgs.do_transform_point(p, trans)
 
 
@@ -135,13 +136,14 @@ class Detection(Node):
         marker.id = 0
         marker.type = marker_type
         marker.action = Marker.ADD
+        marker.lifetime = Duration(seconds=1)
 
         marker.pose.position = point_stamped.point
         marker.pose.orientation.w = 1.0
 
-        marker.scale.x = 0.2
-        marker.scale.y = 0.2
-        marker.scale.z = 0.2
+        marker.scale.x = 0.05
+        marker.scale.y = 0.05
+        marker.scale.z = 0.05
 
         marker.color.r = float(color[0])
         marker.color.g = float(color[1])
@@ -154,8 +156,10 @@ class Detection(Node):
 def main():
     rclpy.init()
     node = Detection()
+    executor = MultiThreadedExecutor(num_threads=2)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     rclpy.shutdown()
