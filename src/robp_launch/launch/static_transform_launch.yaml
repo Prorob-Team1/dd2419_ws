@@ -1,0 +1,23 @@
+%YAML 1.2
+---
+launch:
+
+  # BASE TO LIDAR
+  - node:
+      pkg: "tf2_ros"
+      exec: "static_transform_publisher"
+      name: "base_to_lidar"
+      args: "0 0.0825 0.15 0 0 0 base_link lidar_link"
+      output: "screen"
+
+  # BASE TO REALSENSE
+  - node:
+      pkg: "tf2_ros"
+      exec: "static_transform_publisher"
+      name: "base_to_realsense"
+      args: "0.08987 0.0175 0.10456 0 0 0 base_link realsense_camera_link"
+      output: "screen"
+
+  # BASE TO ARM 
+
+  
