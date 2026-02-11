@@ -48,6 +48,7 @@ class Odometry(Node):
         # imu psoe
         self._yaw_imu = 0.0
         self._last_imu_stamp = None
+        self.w_z_bias = 3e-6 # ! subject to change, likely not a static bias
 
     def encoder_delta(self, msg: Encoders) -> tuple[int, int]:
         if self.last_encoder_left is None or self.last_encoder_right is None:
@@ -63,7 +64,8 @@ class Odometry(Node):
         if self._last_imu_stamp is None:
             self._last_imu_stamp = msg.header.stamp
             return
-        w_z = msg.orientation.z
+        w_z = msg.angular_velocity.z - self.w_z_bias
+        
         # integrate angular velocity to get yaw
         dt = Time.from_msg(msg.header.stamp) - Time.from_msg(self._last_imu_stamp)
         yaw = self._yaw_imu + w_z * dt.nanoseconds / 1e9
@@ -107,9 +109,9 @@ class Odometry(Node):
         stamp = msg.header.stamp  # TODO: Fill in
 
         # log the difference between imu and encoder yaw for debugging
-        self.get_logger().debug(
-            f"IMU yaw: {self._yaw_imu}, Encoder yaw: {self._yaw}, Difference: {self._yaw_imu - self._yaw}"
-        )
+        #self.get_logger().info(
+        #    f"IMU yaw: {self._yaw_imu}, Encoder yaw: {self._yaw}, Difference: {self._yaw_imu - self._yaw}"
+        #)
 
         self.broadcast_transform(stamp, self._x, self._y, self._yaw)
         self.publish_path(stamp, self._x, self._y, self._yaw)
