@@ -30,12 +30,27 @@ class Odometry(Node):
         self._path = Path()
 
         # Subscribe to encoder topic and call callback function on each recieved message
-        self.create_subscription(Encoders, "/phidgets/motor/encoders", self.encoder_callback, 10)
+        self.create_subscription(
+            Encoders, "/phidgets/motor/encoders", self.encoder_callback, 10
+        )
 
         # 2D pose
         self._x = 0.0
         self._y = 0.0
         self._yaw = 0.0
+
+        self.last_encoder_left = None
+        self.last_encoder_right = None
+
+    def encoder_delta(self, msg: Encoders) -> tuple[int, int]:
+        if self.last_encoder_left is None or self.last_encoder_right is None:
+            delta_left, delta_right = msg.delta_encoder_left, msg.delta_encoder_right
+        else:
+            delta_left = msg.encoder_left - self.last_encoder_left
+            delta_right = msg.encoder_right - self.last_encoder_right
+        self.last_encoder_left = msg.encoder_left
+        self.last_encoder_right = msg.encoder_right
+        return delta_left, delta_right
 
     def encoder_callback(self, msg: Encoders):
         """Takes encoder readings and updates the odometry.
@@ -53,11 +68,10 @@ class Odometry(Node):
         dt = 50 / 1000
         ticks_per_rev = 48 * 64
         wheel_radius = 0.04921  # TODO: Fill in
-        base = 0.3125 # TODO: Fill in
+        base = 0.3125  # TODO: Fill in
 
         # Ticks since last message
-        delta_ticks_left = msg.delta_encoder_left
-        delta_ticks_right = msg.delta_encoder_right
+        delta_ticks_left, delta_ticks_right = self.encoder_delta(msg)
 
         # TODO: Fill in
         delta_phi_r = 2 * np.pi * (delta_ticks_right / ticks_per_rev)
