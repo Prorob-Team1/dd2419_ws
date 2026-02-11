@@ -14,6 +14,8 @@ from geometry_msgs.msg import TransformStamped
 from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
+from sensor_msgs.msg import Imu
+from rclpy.time import Time
 
 
 class Odometry(Node):
@@ -33,6 +35,7 @@ class Odometry(Node):
         self.create_subscription(
             Encoders, "/phidgets/motor/encoders", self.encoder_callback, 10
         )
+        self.create_subscription(Imu, "/phidgets/imu/data_raw", self.imu_callback, 10)
 
         # 2D pose
         self._x = 0.0
@@ -41,6 +44,10 @@ class Odometry(Node):
 
         self.last_encoder_left = None
         self.last_encoder_right = None
+
+        # imu psoe
+        self._yaw_imu = 0.0
+        self._last_imu_stamp = None
 
     def encoder_delta(self, msg: Encoders) -> tuple[int, int]:
         if self.last_encoder_left is None or self.last_encoder_right is None:
@@ -51,6 +58,18 @@ class Odometry(Node):
         self.last_encoder_left = msg.encoder_left
         self.last_encoder_right = msg.encoder_right
         return delta_left, delta_right
+
+    def imu_callback(self, msg: Imu):
+        if self._last_imu_stamp is None:
+            self._last_imu_stamp = msg.header.stamp
+            return
+        w_z = msg.orientation.z
+        # integrate angular velocity to get yaw
+        dt = Time.from_msg(msg.header.stamp) - Time.from_msg(self._last_imu_stamp)
+        yaw = self._yaw_imu + w_z * dt.nanoseconds / 1e9
+        # wrap angle to [-pi, pi]
+        self._yaw_imu = np.arctan2(np.sin(yaw), np.cos(yaw))
+        self._last_imu_stamp = msg.header.stamp
 
     def encoder_callback(self, msg: Encoders):
         """Takes encoder readings and updates the odometry.
@@ -86,6 +105,11 @@ class Odometry(Node):
         self._yaw = np.arctan2(np.sin(self._yaw), np.cos(self._yaw))  # wrap angle
 
         stamp = msg.header.stamp  # TODO: Fill in
+
+        # log the difference between imu and encoder yaw for debugging
+        self.get_logger().debug(
+            f"IMU yaw: {self._yaw_imu}, Encoder yaw: {self._yaw}, Difference: {self._yaw_imu - self._yaw}"
+        )
 
         self.broadcast_transform(stamp, self._x, self._y, self._yaw)
         self.publish_path(stamp, self._x, self._y, self._yaw)
