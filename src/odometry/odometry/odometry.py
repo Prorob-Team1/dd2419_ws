@@ -17,6 +17,8 @@ from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Imu
 from rclpy.time import Time
 
+from collections import deque
+
 
 class Odometry(Node):
 
@@ -45,10 +47,14 @@ class Odometry(Node):
         self.last_encoder_left = None
         self.last_encoder_right = None
 
+
         # imu psoe
         self._yaw_imu = 0.0
         self._last_imu_stamp = None
         self.w_z_bias = 3e-6 # ! subject to change, likely not a static bias
+        self._yaw_imu_queue = deque()
+
+        self.get_logger().info("Odometry node started")
 
     def encoder_delta(self, msg: Encoders) -> tuple[int, int]:
         if self.last_encoder_left is None or self.last_encoder_right is None:
@@ -60,11 +66,32 @@ class Odometry(Node):
         self.last_encoder_right = msg.encoder_right
         return delta_left, delta_right
 
+    def interpolate_yaw(self, encoder_msg_stamp):
+        if len(self._yaw_imu_queue) < 1:
+            return 0 
+        t_enc = Time.from_msg(encoder_msg_stamp).nanoseconds
+        # maybe there's a faster way to do this lookup (binary search maybe?)
+        for i in range(len(self._yaw_imu_queue)):
+            try:
+                if self._yaw_imu_queue[i][0] == t_enc:
+                    return self._yaw_imu_queue[i][1] # return the reading directly
+                if self._yaw_imu_queue[i][0] < t_enc and self._yaw_imu_queue[i+1][0] > t_enc:
+                    # interpolate
+                    t_prev =  self._yaw_imu_queue[i][0]
+                    t_next =  self._yaw_imu_queue[i+1][0]
+                    yaw_prev =  self._yaw_imu_queue[i][1]
+                    yaw_next =  self._yaw_imu_queue[i+1][1]  
+                    alpha = (t_enc - t_prev)/(t_next - t_enc)
+                    return yaw_prev + alpha*(yaw_next-yaw_prev)
+            except IndexError:
+                pass 
+        return self._yaw_imu_queue[-1][1] # don't bother extrapolating, just return the latest reading (we can add extrapolation later if we really want it)
+
     def imu_callback(self, msg: Imu):
         if self._last_imu_stamp is None:
             self._last_imu_stamp = msg.header.stamp
             return
-        w_z = msg.angular_velocity.z - self.w_z_bias
+        w_z = -(msg.angular_velocity.z - self.w_z_bias)
         
         # integrate angular velocity to get yaw
         dt = Time.from_msg(msg.header.stamp) - Time.from_msg(self._last_imu_stamp)
@@ -72,6 +99,10 @@ class Odometry(Node):
         # wrap angle to [-pi, pi]
         self._yaw_imu = np.arctan2(np.sin(yaw), np.cos(yaw))
         self._last_imu_stamp = msg.header.stamp
+
+        self._yaw_imu_queue.append((Time.from_msg(msg.header.stamp).nanoseconds, self._yaw_imu))
+        if len(self._yaw_imu_queue) > 20: # is this queue size enough?
+            self._yaw_imu_queue.popleft()
 
     def encoder_callback(self, msg: Encoders):
         """Takes encoder readings and updates the odometry.
@@ -88,8 +119,8 @@ class Odometry(Node):
         # The kinematic parameters for the differential configuration
         dt = 50 / 1000
         ticks_per_rev = 48 * 64
-        wheel_radius = 0.04921  # TODO: Fill in
-        base = 0.3125  # TODO: Fill in
+        wheel_radius = 0.04921 # TODO: Fill in
+        base = 0.3135  # TODO: Fill in
 
         # Ticks since last message
         delta_ticks_left, delta_ticks_right = self.encoder_delta(msg)
@@ -99,12 +130,13 @@ class Odometry(Node):
         delta_phi_l = 2 * np.pi * (delta_ticks_left / ticks_per_rev)
 
         D = 0.5 * wheel_radius * (delta_phi_r + delta_phi_l)
-        delta_theta = wheel_radius * (delta_phi_r - delta_phi_l) / base
+        #delta_theta = wheel_radius * (delta_phi_r - delta_phi_l) / base
 
         self._x = self._x + D * np.cos(self._yaw)  # TODO: Fill in
         self._y = self._y + D * np.sin(self._yaw)  # TODO: Fill in
-        self._yaw = self._yaw + delta_theta  # TODO: Fill in
-        self._yaw = np.arctan2(np.sin(self._yaw), np.cos(self._yaw))  # wrap angle
+        #self._yaw = self._yaw + delta_theta  # TODO: Fill in
+        #self._yaw = np.arctan2(np.sin(self._yaw), np.cos(self._yaw))  # wrap angle
+        self._yaw = self.interpolate_yaw(msg.header.stamp)
 
         stamp = msg.header.stamp  # TODO: Fill in
 
@@ -115,6 +147,8 @@ class Odometry(Node):
 
         self.broadcast_transform(stamp, self._x, self._y, self._yaw)
         self.publish_path(stamp, self._x, self._y, self._yaw)
+
+        self._last_encoder_stamp = stamp
 
     def broadcast_transform(self, stamp, x, y, yaw):
         """Takes a 2D pose and broadcasts it as a ROS transform.
