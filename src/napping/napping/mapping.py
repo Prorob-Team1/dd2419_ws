@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Pose:
+class Pose2D:
     x: float
     y: float
     angle: float
@@ -64,9 +64,11 @@ class Mapper(Node):
         self.map_file = self.map_dir / "map_1_1.csv"
 
         self.workspace: list[Point] = []
-        self.start_pose: Pose = Pose(0.0, 0.0, 0.0)
-        self.given_boxes: list[Pose] = []
-        self.given_objects: list[Pose] = []
+        self.start_pose: Pose2D = Pose2D(0.0, 0.0, 0.0)
+        self.given_boxes: list[Pose2D] = []
+        self.given_objects: list[Pose2D] = []
+
+        self.object_candidates: list[ObjectCandidate] = []
 
         # self.startup_timer = self.create_timer(0.0, self.startup)
         self.startup()
@@ -91,13 +93,13 @@ class Mapper(Node):
                 x = float(row["x"].strip()) / 100.0
                 y = float(row["y"].strip()) / 100.0
                 angle = float(row["angle"].strip())
-                objects.append((obj_type, Pose(x, y, angle)))
+                objects.append((obj_type, Pose2D(x, y, angle)))
                 if obj_type == "S":
-                    self.start_pose = Pose(x, y, angle)
+                    self.start_pose = Pose2D(x, y, angle)
                 elif obj_type == "B":
-                    self.given_boxes.append(Pose(x, y, angle))
+                    self.given_boxes.append(Pose2D(x, y, angle))
                 elif obj_type == "O":
-                    self.given_objects.append(Pose(x, y, angle))
+                    self.given_objects.append(Pose2D(x, y, angle))
                 else:
                     raise ValueError(f"Unknown object type '{obj_type}' in map file")
         return objects
