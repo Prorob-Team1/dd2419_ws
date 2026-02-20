@@ -173,6 +173,19 @@ Visualization Manager:
         Value: /occupancy_grid_updates
       Use Timestamp: false
       Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Marker
+      Namespaces:
+        object_candidates: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /object_candidate_markers
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -234,10 +247,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.0697968006134033
+      Pitch: 0.7997968196868896
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.1453967094421387
+      Yaw: 3.135396718978882
     Saved: ~
 Window Geometry:
   Displays:

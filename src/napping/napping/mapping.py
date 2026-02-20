@@ -1,6 +1,7 @@
 import rclpy
 import rclpy.duration
 from rclpy.node import Node
+from rclpy.time import Time
 
 import rclpy.time
 from tf2_ros.buffer import Buffer
@@ -13,12 +14,16 @@ from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from nav_msgs.msg import Path, OccupancyGrid
+from robp_interfaces.msg import ObjectCandidateMsg, ObjectCandidateArrayMsg
 
 import numpy as np
 import csv
 import json
 from pathlib import Path
 from dataclasses import dataclass
+from enum import Enum
+import math
+import uuid
 
 
 @dataclass
@@ -36,13 +41,40 @@ class Pose2D:
 
 @dataclass
 class ObjectSize:
-    width: float
-    length: float
-    height: float
+    x: float
+    y: float
+    z: float
 
 
-BOX_SIZE = ObjectSize(width=24, length=16, height=3)
-CUBE_SIZE = ObjectSize(width=3, length=3, height=3)
+class ObjectClassification(Enum):
+    CUBE_RED = "CUBE_R"
+    CUBE_BLUE = "CUBE_B"
+    CUBE_GREEN = "CUBE_G"
+    CUBE_WOOD = "CUBE_W"
+    CUBE_UNKNOWN = "CUBE_U"  # special case: given object without known color
+    BOX = "BOX"
+
+
+@dataclass
+class ObjectCandidate:
+    class_: ObjectClassification
+    avg_pose: Pose2D
+    log_prob: float
+    count: int
+    last_seen: Time
+    id: str
+
+
+@dataclass
+class ObjectDetection:
+    class_: ObjectClassification
+    pose: Pose2D
+    confidence: float
+    time: Time
+
+
+BOX_SIZE = ObjectSize(x=0.24, y=0.16, z=0.1)
+CUBE_SIZE = ObjectSize(x=0.03, y=0.03, z=0.03)
 
 
 class Mapper(Node):
@@ -60,6 +92,12 @@ class Mapper(Node):
             10,
         )
         self.map_pub = self.create_publisher(OccupancyGrid, "/occupancy_grid", 10)
+        self.object_pub = self.create_publisher(
+            ObjectCandidateArrayMsg, "/object_candidates", 10
+        )
+        self.object_marker_pub = self.create_publisher(
+            Marker, "/object_candidate_markers", 10
+        )
 
         # Periodic timer for simulating dynamic transform publishing
         # self.tf_timer = self.create_timer(0.05, self.publish_tf_map2odom)
@@ -78,12 +116,19 @@ class Mapper(Node):
         self.map_padding = [1, 1, 1.3, 1.2]
         self.occupancy_grid: OccupancyGrid
 
-        # self.object_candidates: list[ObjectCandidate] = []
+        self.object_candidates: list[ObjectCandidate] = []
+        self.object_confidence_threshold = 0.8
 
         self.startup()
+
+        # publishers
         self.timer = self.create_timer(1.0, self.publish_map)
         self.marker_timer = self.create_timer(
             5.0, self.publish_workspace_perimeter_marker
+        )
+        self.object_timer = self.create_timer(0.1, self.publish_objects)
+        self.candidate_display_timer = self.create_timer(
+            0.1, self.display_object_candidates
         )
 
     def startup(self):
@@ -94,6 +139,7 @@ class Mapper(Node):
         )
         self.publish_workspace_perimeter_marker()
         self.publish_tf_map2odom()
+        self.create_inital_object_candidates()
         self.occupancy_grid = self.create_occupancy_grid()
 
     def parse_map_file(self, file: Path):
@@ -276,6 +322,137 @@ class Mapper(Node):
         if self.occupancy_grid is not None:
             self.occupancy_grid.header.stamp = self.get_clock().now().to_msg()
             self.map_pub.publish(self.occupancy_grid)
+
+    def create_inital_object_candidates(self):
+        for box in self.given_boxes:
+            self.object_candidates.append(
+                ObjectCandidate(
+                    class_=ObjectClassification.BOX,
+                    avg_pose=box,
+                    log_prob=np.inf,
+                    count=1,
+                    last_seen=self.get_clock().now(),
+                    id=str(uuid.uuid4()),
+                )
+            )
+        for obj in self.given_objects:
+            self.object_candidates.append(
+                ObjectCandidate(
+                    class_=ObjectClassification.CUBE_UNKNOWN,
+                    avg_pose=obj,
+                    log_prob=np.inf,
+                    count=1,
+                    last_seen=self.get_clock().now(),
+                    id=str(uuid.uuid4()),
+                )
+            )
+
+    def publish_objects(self):
+        msg = ObjectCandidateArrayMsg()
+        msg.header.frame_id = "map"
+        msg.header.stamp = self.get_clock().now().to_msg()
+        for candidate in self.object_candidates:
+            if (
+                DetectionMapper.log_odds_to_probability(candidate.log_prob)
+                > self.object_confidence_threshold
+            ):
+                obj_msg = ObjectCandidateMsg()
+                obj_msg.class_name = candidate.class_.value
+                obj_msg.pose.position.x = candidate.avg_pose.x
+                obj_msg.pose.position.y = candidate.avg_pose.y
+                q = quaternion_from_euler(0, 0, candidate.avg_pose.angle)
+                obj_msg.pose.orientation.x = q[0]
+                obj_msg.pose.orientation.y = q[1]
+                obj_msg.pose.orientation.z = q[2]
+                obj_msg.pose.orientation.w = q[3]
+                obj_msg.confidence = DetectionMapper.log_odds_to_probability(
+                    candidate.log_prob
+                )
+                msg.candidates.append(obj_msg)  # type: ignore
+        self.object_pub.publish(msg)
+
+    def display_object_candidates(self):
+        # use rviz markers
+        for candidate in self.object_candidates:
+            if (
+                DetectionMapper.log_odds_to_probability(candidate.log_prob)
+                > self.object_confidence_threshold
+            ):
+                marker = Marker()
+                marker.header.frame_id = "map"
+                marker.header.stamp = self.get_clock().now().to_msg()
+                marker.ns = "object_candidates"
+                marker.id = hash(candidate.id) & 0x7FFFFFFF
+                marker.type = Marker.CUBE
+                marker.action = Marker.ADD
+                marker.pose.position.x = candidate.avg_pose.x
+                marker.pose.position.y = candidate.avg_pose.y
+                marker.pose.position.z = 0.01
+                q = quaternion_from_euler(0, 0, candidate.avg_pose.angle)
+                marker.pose.orientation.x = q[0]
+                marker.pose.orientation.y = q[1]
+                marker.pose.orientation.z = q[2]
+                marker.pose.orientation.w = q[3]
+                if candidate.class_ == ObjectClassification.BOX:
+                    marker.scale.x = BOX_SIZE.x
+                    marker.scale.y = BOX_SIZE.y
+                    marker.scale.z = BOX_SIZE.z
+                    marker.color.r = 1.0
+                    marker.color.g = 0.5
+                    marker.color.b = 0.0
+                    marker.color.a = 0.8
+                else:
+                    marker.scale.x = CUBE_SIZE.x
+                    marker.scale.y = CUBE_SIZE.y
+                    marker.scale.z = CUBE_SIZE.z
+                    if candidate.class_ == ObjectClassification.CUBE_RED:
+                        marker.color.r = 1.0
+                        marker.color.g = 0.0
+                        marker.color.b = 0.0
+                    elif candidate.class_ == ObjectClassification.CUBE_BLUE:
+                        marker.color.r = 0.0
+                        marker.color.g = 0.0
+                        marker.color.b = 1.0
+                    elif candidate.class_ == ObjectClassification.CUBE_GREEN:
+                        marker.color.r = 0.0
+                        marker.color.g = 1.0
+                        marker.color.b = 0.0
+                    elif candidate.class_ == ObjectClassification.CUBE_WOOD:
+                        # yellow
+                        marker.color.r = 1.0
+                        marker.color.g = 1.0
+                        marker.color.b = 0.0
+                    else:
+                        # unknown magenta
+                        marker.color.r = 1.0
+                        marker.color.g = 0.0
+                        marker.color.b = 1.0
+
+                    marker.color.a = 1.0
+
+                self.get_logger().info(
+                    f"Publishing marker for candidate: class={candidate.class_}"
+                )
+                self.object_marker_pub.publish(marker)
+
+
+class DetectionMapper:
+    def __init__(self, node: Mapper, merge_threshold=0.1):
+        self.node = node
+        self.merge_threshold = merge_threshold
+        self.log_prob_increase = 0.2
+        self.log_prob_decrease = 0.1
+        self.log_prob_init = self.probability_to_log_odds(0.5)
+
+    @staticmethod
+    def probability_to_log_odds(p):
+        return math.log(p / (1 - p))
+
+    @staticmethod
+    def log_odds_to_probability(l):
+        if l == np.inf:
+            return 1.0
+        return 1 - (1 / (1 + math.exp(l)))
 
 
 def main():
