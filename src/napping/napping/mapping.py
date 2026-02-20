@@ -75,6 +75,7 @@ class Mapper(Node):
 
         self.declare_parameter("resolution", 0.03)
         self.resolution: float = self.get_parameter("resolution").value  # type: ignore
+        self.map_padding = [1, 1, 1.3, 1.2]
         self.occupancy_grid: OccupancyGrid
 
         # self.object_candidates: list[ObjectCandidate] = []
@@ -211,11 +212,10 @@ class Mapper(Node):
         min_y, max_y = min(ys), max(ys)
 
         # Add padding
-        padding = 0.5  # meters
-        min_x -= padding
-        min_y -= padding
-        max_x += padding
-        max_y += padding
+        min_x -= self.map_padding[0]
+        min_y -= self.map_padding[1]
+        max_x += self.map_padding[2]
+        max_y += self.map_padding[3]
 
         # Calculate grid dimensions
         width = int((max_x - min_x) / self.resolution) + 1
