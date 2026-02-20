@@ -14,7 +14,12 @@ from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from nav_msgs.msg import Path, OccupancyGrid
-from robp_interfaces.msg import ObjectCandidateMsg, ObjectCandidateArrayMsg
+from robp_interfaces.msg import (
+    ObjectCandidateMsg,
+    ObjectCandidateArrayMsg,
+    ObjectDetectionMsg,
+    ObjectDetectionArrayMsg,
+)
 
 import numpy as np
 import csv
@@ -57,20 +62,12 @@ class ObjectClassification(Enum):
 
 @dataclass
 class ObjectCandidate:
-    class_: ObjectClassification
+    classification: ObjectClassification
     avg_pose: Pose2D
     log_prob: float
     count: int
     last_seen: Time
     id: str
-
-
-@dataclass
-class ObjectDetection:
-    class_: ObjectClassification
-    pose: Pose2D
-    confidence: float
-    time: Time
 
 
 BOX_SIZE = ObjectSize(x=0.24, y=0.16, z=0.1)
@@ -86,6 +83,12 @@ class Mapper(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = StaticTransformBroadcaster(self)
+        self.detection_sub = self.create_subscription(
+            ObjectDetectionArrayMsg,
+            "/object_detections",
+            self.detection_callback,
+            10,
+        )
         self.workspace_pub = self.create_publisher(
             Marker,
             "/geofence",
@@ -118,6 +121,8 @@ class Mapper(Node):
 
         self.object_candidates: list[ObjectCandidate] = []
         self.object_confidence_threshold = 0.8
+        self.object_max_candidates = 100
+        self.detection_mapper = DetectionMapper(self)
 
         self.startup()
 
@@ -327,8 +332,8 @@ class Mapper(Node):
         for box in self.given_boxes:
             self.object_candidates.append(
                 ObjectCandidate(
-                    class_=ObjectClassification.BOX,
-                    avg_pose=box,
+                    classification=ObjectClassification.BOX,
+                    avg_pose=Pose2D(box.x, box.y, box.angle),
                     log_prob=np.inf,
                     count=1,
                     last_seen=self.get_clock().now(),
@@ -338,8 +343,8 @@ class Mapper(Node):
         for obj in self.given_objects:
             self.object_candidates.append(
                 ObjectCandidate(
-                    class_=ObjectClassification.CUBE_UNKNOWN,
-                    avg_pose=obj,
+                    classification=ObjectClassification.CUBE_UNKNOWN,
+                    avg_pose=Pose2D(obj.x, obj.y, obj.angle),
                     log_prob=np.inf,
                     count=1,
                     last_seen=self.get_clock().now(),
@@ -357,7 +362,7 @@ class Mapper(Node):
                 > self.object_confidence_threshold
             ):
                 obj_msg = ObjectCandidateMsg()
-                obj_msg.class_name = candidate.class_.value
+                obj_msg.class_name = candidate.classification.value
                 obj_msg.pose.position.x = candidate.avg_pose.x
                 obj_msg.pose.position.y = candidate.avg_pose.y
                 q = quaternion_from_euler(0, 0, candidate.avg_pose.angle)
@@ -393,7 +398,7 @@ class Mapper(Node):
                 marker.pose.orientation.y = q[1]
                 marker.pose.orientation.z = q[2]
                 marker.pose.orientation.w = q[3]
-                if candidate.class_ == ObjectClassification.BOX:
+                if candidate.classification == ObjectClassification.BOX:
                     marker.scale.x = BOX_SIZE.x
                     marker.scale.y = BOX_SIZE.y
                     marker.scale.z = BOX_SIZE.z
@@ -405,19 +410,19 @@ class Mapper(Node):
                     marker.scale.x = CUBE_SIZE.x
                     marker.scale.y = CUBE_SIZE.y
                     marker.scale.z = CUBE_SIZE.z
-                    if candidate.class_ == ObjectClassification.CUBE_RED:
+                    if candidate.classification == ObjectClassification.CUBE_RED:
                         marker.color.r = 1.0
                         marker.color.g = 0.0
                         marker.color.b = 0.0
-                    elif candidate.class_ == ObjectClassification.CUBE_BLUE:
+                    elif candidate.classification == ObjectClassification.CUBE_BLUE:
                         marker.color.r = 0.0
                         marker.color.g = 0.0
                         marker.color.b = 1.0
-                    elif candidate.class_ == ObjectClassification.CUBE_GREEN:
+                    elif candidate.classification == ObjectClassification.CUBE_GREEN:
                         marker.color.r = 0.0
                         marker.color.g = 1.0
                         marker.color.b = 0.0
-                    elif candidate.class_ == ObjectClassification.CUBE_WOOD:
+                    elif candidate.classification == ObjectClassification.CUBE_WOOD:
                         # yellow
                         marker.color.r = 1.0
                         marker.color.g = 1.0
@@ -430,10 +435,10 @@ class Mapper(Node):
 
                     marker.color.a = 1.0
 
-                self.get_logger().info(
-                    f"Publishing marker for candidate: class={candidate.class_}"
-                )
                 self.object_marker_pub.publish(marker)
+
+    def detection_callback(self, msg: ObjectDetectionArrayMsg):
+        self.detection_mapper.process_object_detections(msg)
 
 
 class DetectionMapper:
@@ -452,7 +457,110 @@ class DetectionMapper:
     def log_odds_to_probability(l):
         if l == np.inf:
             return 1.0
-        return 1 - (1 / (1 + math.exp(l)))
+        if l == -np.inf:
+            return 0.0
+        return 1.0 / (1.0 + math.exp(-l))
+
+    def process_object_detections(self, msg: ObjectDetectionArrayMsg):
+        for detection in msg.detections:
+            detection: ObjectDetectionMsg
+            best_match = None
+            min_dist = self.merge_threshold
+            # check if close to any candidate aleady. If yes then update candidate
+            for i, candidate in enumerate(self.node.object_candidates):
+                same_class = detection.class_name == candidate.classification.value
+                unknown_class = (
+                    candidate.classification == ObjectClassification.CUBE_UNKNOWN
+                )
+                if not (same_class or unknown_class):
+                    continue
+
+                dist = np.linalg.norm(
+                    [
+                        detection.pose.position.x - candidate.avg_pose.x,
+                        detection.pose.position.y - candidate.avg_pose.y,
+                    ]
+                )
+                if dist < min_dist:
+                    min_dist = dist
+                    best_match = candidate
+            _, _, yaw = euler_from_quaternion(
+                [
+                    detection.pose.orientation.x,
+                    detection.pose.orientation.y,
+                    detection.pose.orientation.z,
+                    detection.pose.orientation.w,
+                ]
+            )
+
+            if best_match is not None:
+                best_match.count += 1
+                best_match.avg_pose.x += (
+                    detection.pose.position.x - best_match.avg_pose.x
+                ) / best_match.count
+                best_match.avg_pose.y += (
+                    detection.pose.position.y - best_match.avg_pose.y
+                ) / best_match.count
+
+                angle_diff = (yaw - best_match.avg_pose.angle + math.pi) % (
+                    2 * math.pi
+                ) - math.pi
+                best_match.avg_pose.angle += angle_diff / best_match.count
+
+                # increase confidence (log odds) by a fixed amount (e.g. 0.5)
+                best_match.log_prob += self.log_prob_increase
+                best_match.last_seen = Time.from_msg(detection.header.stamp)
+                # TODO: this is dependent on a single detection, should be changed in the future
+                if (
+                    best_match.classification.value
+                    == ObjectClassification.CUBE_UNKNOWN.value
+                ):
+                    best_match.classification = ObjectClassification(
+                        detection.class_name
+                    )
+
+            else:
+                self.add_object_candidate(
+                    ObjectCandidate(
+                        classification=ObjectClassification(detection.class_name),
+                        avg_pose=Pose2D(
+                            detection.pose.position.x,
+                            detection.pose.position.y,
+                            yaw,
+                        ),
+                        log_prob=self.log_prob_init,
+                        count=1,
+                        last_seen=Time.from_msg(detection.header.stamp),
+                        id=str(uuid.uuid4()),
+                    )
+                )
+
+    def add_object_candidate(self, candidate: ObjectCandidate):
+        if len(self.node.object_candidates) >= self.node.object_max_candidates:
+            # remove lowest confidence candidate that is more than 10 seconds old
+            now = self.node.get_clock().now()
+            old_candidates = [
+                c
+                for c in self.node.object_candidates
+                if (now - c.last_seen).nanoseconds > 10 * 1e9
+            ]
+            if old_candidates:
+                worst_candidate = min(old_candidates, key=lambda c: c.log_prob)
+                self.node.object_candidates.remove(worst_candidate)
+            else:
+                worst_candidate = min(
+                    self.node.object_candidates, key=lambda c: c.log_prob
+                )
+                self.node.object_candidates.remove(worst_candidate)
+            self.node.get_logger().info(
+                f"Had to remove candidate {worst_candidate.id} to make room for new candidate"
+            )
+        # add new candidate
+        self.node.object_candidates.append(candidate)
+        self.node.get_logger().info(
+            f"Added new candidate {candidate.id} with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
+        )
+        assert len(self.node.object_candidates) <= self.node.object_max_candidates
 
 
 def main():
