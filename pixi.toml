@@ -87,6 +87,8 @@ ros-jazzy-detection = { path = "src/detection" }
 ros-jazzy-rc-control = { path = "src/rc_control" }
 ros-jazzy-novigation = { path = "src/novigation" }
 ros-jazzy-napping = { path = "src/napping" }
+ros-jazzy-brian = { path = "src/brian" }
+
 
 # Other
 argcomplete = ">=3.6.3,<4"
