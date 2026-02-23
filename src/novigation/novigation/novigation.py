@@ -15,51 +15,56 @@ from robp_interfaces.msg import DutyCycles, ObjectCandidateArrayMsg
 from nav_msgs.msg import Path
 from std_msgs.msg import Empty
 
+from tf2_ros import TransformListener, Buffer
+from tf_transformations import euler_from_quaternion
+
+from robp_interfaces.msg import DutyCycles
+from nav_msgs.msg import Path
+
 
 class Navigator(Node):
 
     def __init__(self):
         super().__init__("navigation")
 
-      
-        self.lookahead_distance = 0.5
-        self.target_speed = 0.3
-        self.goal_tolerance = 0.05
-        self.max_off_path_distance = 0.5
+        # Pure pursuit parameters
+        self.declare_parameter('lookahead_distance', 0.3)
+        self.declare_parameter('target_speed', 0.3)
+        self.declare_parameter('goal_tolerance', 0.1)
+        self.declare_parameter('max_off_path_distance', 0.5)
 
-       
+        self.lookahead_distance = self.get_parameter('lookahead_distance').value
+        self.target_speed = self.get_parameter('target_speed').value
+        self.goal_tolerance = self.get_parameter('goal_tolerance').value
+        self.max_off_path_distance = self.get_parameter('max_off_path_distance').value
+
+        # Robot constants
         self.wheel_base = 0.3
         self.wheel_radius = 0.04921
         self.max_v = 0.5
         self.max_w = 2 * math.pi / 5
 
-      
-        self.path = None
-        self.path_idx = 0  # Current progress along path
-        self.aligning = False
-        self._backup_steps_remaining = 0
-        self._object_candidates = []
+        # State
+        self.path = None  # List of (x, y) waypoints
+        self.path_idx = 0  # Current progress along path (never goes backwards)
+        self.aligning = False  # Initial rotation phase before driving
 
-        
+        # TF
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
+        # Subscribe to planned path
         self.create_subscription(Path, '/planned_path', self.path_callback, 10)
-        self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
-        self.create_subscription(ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10)
 
-       
+        # Motor publisher
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
         )
 
-      
+        # Control loop at 20Hz
         self.create_timer(0.05, self.control_loop)
 
         self.get_logger().info("Pure pursuit navigator initialized")
-
-    def candidates_callback(self, msg: ObjectCandidateArrayMsg):
-        self._object_candidates = msg.candidates
 
     def path_callback(self, msg: Path):
         if len(msg.poses) < 2:
@@ -69,42 +74,19 @@ class Navigator(Node):
         self.path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         self.path_idx = 0
         self.aligning = True
-
-        if self._near_object_candidate(radius=0.6):
-            self._backup_steps_remaining = 15
-            self.get_logger().info('Object candidate nearby, backing up before following path')
-
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
-
-    def cancel_callback(self, _msg: Empty):
-        self.get_logger().info("Navigation cancelled")
-        self.path = None
-        self._backup_steps_remaining = 0
-        self.control_wheels(0.0, 0.0)
-
-    def _near_object_candidate(self, radius=0.6):
-        if not self._object_candidates:
-            return False
-        pose = self.get_robot_pose()
-        if pose is None:
-            return False
-        rx, ry, _ = pose
-        for candidate in self._object_candidates:
-            dx = candidate.pose.position.x - rx
-            dy = candidate.pose.position.y - ry
-            if math.hypot(dx, dy) < radius:
-                return True
-        return False
 
     def get_robot_pose(self):
         """Get robot (x, y, theta) from TF."""
         try:
             t = self.tf_buffer.lookup_transform(
                 "map", "base_link",
+            t = self.tf_buffer.lookup_transform(
+                "map", "base_link",
                 Time(seconds=0),
                 timeout=Duration(seconds=0.1),
             )
-            
+            # Check freshness
             transform_time = Time.from_msg(t.header.stamp)
             if self.get_clock().now() - transform_time > Duration(seconds=0.5):
                 return None
@@ -124,13 +106,6 @@ class Navigator(Node):
             return None
 
     def control_loop(self):
-        if self._backup_steps_remaining > 0:
-            self.control_wheels(-0.1, 0.0)
-            self._backup_steps_remaining -= 1
-            if self._backup_steps_remaining == 0:
-                self.get_logger().info('Backup complete, starting path following')
-            return
-
         if self.path is None:
             return
 
@@ -141,7 +116,7 @@ class Navigator(Node):
         rx, ry, rtheta = pose
         path = self.path
 
-        # Initial alignmenn
+        # Initial alignment: spin in place to face the path direction
         if self.aligning:
             # Compute direction to a point a bit ahead on the path
             look_idx = min(len(path) - 1, 5)
@@ -155,7 +130,7 @@ class Navigator(Node):
                 self.aligning = False
                 self.get_logger().info("Aligned, starting pure pursuit")
             else:
-                w = 3.0 * heading_err
+                w = 2.0 * heading_err
                 w = max(-self.max_w, min(w, self.max_w))
                 self.get_logger().info(
                     f"Aligning: err={math.degrees(heading_err):.1f}° w={w:.2f}",
@@ -164,7 +139,7 @@ class Navigator(Node):
                 self.control_wheels(0.0, w)
                 return
 
-        # Advance path_idx
+        # Advance path_idx forward only
         while self.path_idx < len(path) - 1:
             px, py = path[self.path_idx + 1]
             if math.hypot(px - rx, py - ry) < math.hypot(
@@ -217,24 +192,24 @@ class Navigator(Node):
         alpha = math.atan2(dy, dx) - rtheta
         alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
 
-        # slow down near goal
+        # Speed: slow down near goal
         speed = self.target_speed
         slowdown_dist = 0.5
         if dist_to_goal < slowdown_dist:
-            speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
+            speed = max(0.05, self.target_speed * (dist_to_goal / slowdown_dist))
 
-        # When heading is very off
+        # Proportional spin when heading is very off, otherwise pure pursuit
         if abs(alpha) > math.pi / 2:
-            
+            # Large heading error: spin in place proportionally
             v = 0.0
-            w = 2.0 * alpha  
+            w = 2.0 * alpha  # proportional gain
         else:
-            #Pure pursuit 
+            # Pure pursuit curvature
             kappa = 2.0 * math.sin(alpha) / ld
             v = speed
             w = speed * kappa
 
-        
+        # Clamp
         v = max(0.0, min(v, self.max_v))
         w = max(-self.max_w, min(w, self.max_w))
 
@@ -247,7 +222,7 @@ class Navigator(Node):
         self.control_wheels(v, w)
 
     def control_wheels(self, v: float, w: float):
-        
+        # Convert to wheel speeds
         left_speed = (v - (w * self.wheel_base / 2)) / self.wheel_radius
         right_speed = (v + (w * self.wheel_base / 2)) / self.wheel_radius
 
@@ -255,7 +230,7 @@ class Navigator(Node):
             self.max_v + self.max_w * self.wheel_base / 2
         ) / self.wheel_radius
 
-        
+        # Convert range to -1 to 1 for duty cycle
         left = left_speed / max_wheel_speed
         right = right_speed / max_wheel_speed
 
