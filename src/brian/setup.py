@@ -24,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "brain = brian.brain:main",
+            "dummy_server = brian.dummy_server:main",
         ],
     },
 )

@@ -22,6 +22,7 @@ set(msg_files
   "msgs/ObjectDetectionArrayMsg.msg"
   "action/Navigation.action"
   "action/ArmExecute.action"
+  "action/DummyAction.action"
   )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
