@@ -17,8 +17,8 @@ class TestMapPublisher(Node):
         super().__init__('test_map_publisher')
 
         # Parameters
-        self.declare_parameter('workspace_file', '/home/robot/dd2419_ws/src/novigation/novigation/workspace_1.csv')
-        self.declare_parameter('map_file', '/home/robot/dd2419_ws/src/novigation/novigation/map_1_1.csv')
+        self.declare_parameter('workspace_file', '/home/rob1/dd2419_ws/src/novigation/novigation/workspace_1.csv')
+        self.declare_parameter('map_file', '/home/rob1/dd2419_ws/src/novigation/novigation/map_1_1.csv')
         self.declare_parameter('csv_scale', 0.01)  # CSV units to meters (cm -> m)
         self.declare_parameter('resolution', 0.03)  # Grid cell size in meters
         self.declare_parameter('obstacle_radius', 3)  # Grid cells around obstacles
