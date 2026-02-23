@@ -37,22 +37,6 @@ class Brain(Node):
         super().__init__("brain")
         self.tick_period = 0.1
 
-        # self.root = py_trees.composites.Sequence("Root", memory=False)
-        # self.create_timer(self.tick_period, self.root.tick_once)
-
-        """
-        self._dummy_action_client = ActionClient(self, DummyAction, "dummy")
-        while not self._dummy_action_client.wait_for_server(timeout_sec=5.0):
-            self.get_logger().info("Waiting for dummy action server...")
-
-        self._dummy_action_client.wait_for_server()
-        goal = DummyAction.Goal(succeed=False)
-        send_goal_future = self._dummy_action_client.send_goal_async(
-            goal, feedback_callback=self.dummy_feedback_callback
-        )
-        send_goal_future.add_done_callback(self.dummy_goal_response_callback)
-        """
-
         # Tree stuff
 
         # Conditions
@@ -166,36 +150,6 @@ class Brain(Node):
             memory = False
         )
 
-    def dummy_feedback_callback(self, feedback_msg):
-        self.get_logger().info(f"Feedback: {feedback_msg.feedback.status}")
-
-    def dummy_goal_response_callback(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.get_logger().info("Goal rejected")
-            return
-        self.get_logger().info("Goal accepted")
-        result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(self.dummy_result_callback)
-
-    def dummy_result_callback(self, future):
-        result = future.result().result
-        self.get_logger().info(f"Result received: success={result}")
-        self.get_logger().info(f"Result: success={result.success}")
-
-        try:
-            response = future.result()
-            result = response.result
-
-            if response.status == GoalStatus.STATUS_SUCCEEDED:
-                self.get_logger().info(f"Action goal succeeded! {result}")
-            else:
-                self.get_logger().error(
-                    f"Action goal failed with status: {response.status}"
-                )
-
-        except Exception as e:
-            self.get_logger().error(f"Action goal failed: {e}")
 
 
 class CubePickedUpCondition(Behaviour):
@@ -315,23 +269,22 @@ class DummyB(Behaviour):
 
             if response.status == GoalStatus.STATUS_SUCCEEDED:
                 self.node.get_logger().info(f"{self.name}: Action goal succeeded! {result}")
-                status = Status.SUCCESS
+                self.current_status = Status.SUCCESS
             else:
                 self.node.get_logger().error(
                     f"{self.name}: Action goal failed with status: {response.status}"
                 )
-                status = Status.FAILURE
+                self.current_status = Status.FAILURE
             
             self.goal_handle = None
 
         except Exception as e:
             self.node.get_logger().error(f"{self.name}: Action goal failed: {e}")
-            status = Status.FAILURE
+            self.current_status = Status.FAILURE
 
-        self.current_status = status
-        self.update_postcondition(status)
+        self.update_postcondition()
 
-    def update_postcondition(self, status):
+    def update_postcondition(self):
         pass
 
 
@@ -339,8 +292,8 @@ class ExploreB(DummyB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, True, node.explore_client)
     
-    def update_postcondition(self, status):
-        if status == Status.SUCCESS:
+    def update_postcondition(self):
+        if self.current_status == Status.SUCCESS:
             self.node.cube_found = True
         else:
             self.node.cube_found = False
@@ -350,8 +303,8 @@ class Nav2CubeB(DummyB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, True, node.nav_client)
 
-    def update_postcondition(self, status):
-        if status == Status.SUCCESS:
+    def update_postcondition(self):
+        if self.current_status == Status.SUCCESS:
             self.node.in_pickup_range = True
         else:
             self.node.in_pickup_range = False
@@ -361,8 +314,8 @@ class Nav2BoxB(DummyB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, True, node.nav_client)
 
-    def update_postcondition(self, status):
-        if status == Status.SUCCESS:
+    def update_postcondition(self):
+        if self.current_status == Status.SUCCESS:
             self.node.in_dropoff_range = True
         else:
             self.node.in_dropoff_range = False
@@ -372,8 +325,8 @@ class GrabCubeB(DummyB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, True, node.arm_client)
 
-    def update_postcondition(self, status):
-        if status == Status.SUCCESS:
+    def update_postcondition(self):
+        if self.current_status == Status.SUCCESS:
             self.node.cube_in_gripper = True
         else:
             self.node.cube_in_gripper = False
@@ -384,8 +337,8 @@ class ReleaseCubeB(DummyB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, False, node.arm_client)
 
-    def update_postcondition(self, status):
-        if status == Status.SUCCESS:
+    def update_postcondition(self):
+        if self.current_status == Status.SUCCESS:
             self.node.cube_in_gripper = False
             self.node.cube_found = False
             self.node.in_pickup_range = False
