@@ -13,7 +13,7 @@ from geometry_msgs.msg import Point
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
-from nav_msgs.msg import Path, OccupancyGrid
+from nav_msgs.msg import OccupancyGrid
 from robp_interfaces.msg import (
     ObjectCandidateMsg,
     ObjectCandidateArrayMsg,
@@ -23,7 +23,6 @@ from robp_interfaces.msg import (
 
 import numpy as np
 import csv
-import json
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
