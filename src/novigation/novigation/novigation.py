@@ -27,41 +27,35 @@ class Navigator(Node):
     def __init__(self):
         super().__init__("navigation")
 
-        # Pure pursuit parameters
-        self.declare_parameter('lookahead_distance', 0.5)
-        self.declare_parameter('target_speed', 0.3)
-        self.declare_parameter('goal_tolerance', 0.05)
-        self.declare_parameter('max_off_path_distance', 0.5)
+      
+        self.lookahead_distance = 0.5
+        self.target_speed = 0.3
+        self.goal_tolerance = 0.05
+        self.max_off_path_distance = 0.5
 
-        self.lookahead_distance = self.get_parameter('lookahead_distance').value
-        self.target_speed = self.get_parameter('target_speed').value
-        self.goal_tolerance = self.get_parameter('goal_tolerance').value
-        self.max_off_path_distance = self.get_parameter('max_off_path_distance').value
-
-        # Robot constants
+       
         self.wheel_base = 0.3
         self.wheel_radius = 0.04921
         self.max_v = 0.5
         self.max_w = 2 * math.pi / 5
 
-        # State
-        self.path = None  # List of (x, y) waypoints
-        self.path_idx = 0  # Current progress along path (never goes backwards)
-        self.aligning = False  # Initial rotation phase before driving
+      
+        self.path = None  
+        self.path_idx = 0  # Current progress along path
+        self.aligning = False 
 
-        # TF
+        
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
-        # Subscribe to planned path
         self.create_subscription(Path, '/planned_path', self.path_callback, 10)
 
-        # Motor publisher
+       
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
         )
 
-        # Control loop at 20Hz
+      
         self.create_timer(0.05, self.control_loop)
 
         self.get_logger().info("Pure pursuit navigator initialized")
@@ -86,7 +80,7 @@ class Navigator(Node):
                 Time(seconds=0),
                 timeout=Duration(seconds=0.1),
             )
-            # Check freshness
+            
             transform_time = Time.from_msg(t.header.stamp)
             if self.get_clock().now() - transform_time > Duration(seconds=0.5):
                 return None
@@ -116,7 +110,7 @@ class Navigator(Node):
         rx, ry, rtheta = pose
         path = self.path
 
-        # Initial alignment: spin in place to face the path direction
+        # Initial alignmenn
         if self.aligning:
             # Compute direction to a point a bit ahead on the path
             look_idx = min(len(path) - 1, 5)
@@ -139,7 +133,7 @@ class Navigator(Node):
                 self.control_wheels(0.0, w)
                 return
 
-        # Advance path_idx forward only
+        # Advance path_idx
         while self.path_idx < len(path) - 1:
             px, py = path[self.path_idx + 1]
             if math.hypot(px - rx, py - ry) < math.hypot(
@@ -192,24 +186,24 @@ class Navigator(Node):
         alpha = math.atan2(dy, dx) - rtheta
         alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
 
-        # Speed: slow down near goal
+        # slow down near goal
         speed = self.target_speed
         slowdown_dist = 0.5
         if dist_to_goal < slowdown_dist:
             speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
 
-        # Proportional spin when heading is very off, otherwise pure pursuit
+        # When heading is very off
         if abs(alpha) > math.pi / 2:
-            # Large heading error: spin in place proportionally
+            
             v = 0.0
-            w = 2.0 * alpha  # proportional gain
+            w = 2.0 * alpha  
         else:
-            # Pure pursuit curvature
+            #Pure pursuit 
             kappa = 3.0 * math.sin(alpha) / ld
             v = speed
             w = speed * kappa
 
-        # Clamp
+        
         v = max(0.0, min(v, self.max_v))
         w = max(-self.max_w, min(w, self.max_w))
 
@@ -222,7 +216,7 @@ class Navigator(Node):
         self.control_wheels(v, w)
 
     def control_wheels(self, v: float, w: float):
-        # Convert to wheel speeds
+        
         left_speed = (v - (w * self.wheel_base / 2)) / self.wheel_radius
         right_speed = (v + (w * self.wheel_base / 2)) / self.wheel_radius
 
@@ -230,7 +224,7 @@ class Navigator(Node):
             self.max_v + self.max_w * self.wheel_base / 2
         ) / self.wheel_radius
 
-        # Convert range to -1 to 1 for duty cycle
+        
         left = left_speed / max_wheel_speed
         right = right_speed / max_wheel_speed
 

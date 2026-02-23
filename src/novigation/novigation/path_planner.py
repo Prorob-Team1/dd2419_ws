@@ -26,7 +26,7 @@ class PathPlannerNode(Node):
         self.declare_parameter('map_topic', '/map')
         self.declare_parameter('planning_timeout', 5.0)
 
-        # TF
+        
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
@@ -39,14 +39,14 @@ class PathPlannerNode(Node):
             10
         )
 
-        # Publisher
+       
         self.path_pub = self.create_publisher(
             Path,
             '/planned_path',
             10
         )
 
-        # Action Server
+        
         self._action_server = ActionServer(
             self,
             Navigation,
@@ -60,7 +60,7 @@ class PathPlannerNode(Node):
         self.get_logger().info('Path Planner Node initialized')
 
     def get_pose_from_tf(self):
-        """Get current robot pose from TF as a PoseStamped."""
+        
         try:
             t = self.tf_buffer.lookup_transform(
                 'map', 'base_link',
@@ -104,7 +104,6 @@ class PathPlannerNode(Node):
         return GoalResponse.ACCEPT
 
     def cancel_callback(self, goal_handle):
-        """Called when client requests to cancel the goal."""
         self.get_logger().info('Received cancel request')
         return CancelResponse.ACCEPT
 
@@ -122,11 +121,8 @@ class PathPlannerNode(Node):
         feedback_msg.feedback = 'Starting path planning'
         goal_handle.publish_feedback(feedback_msg)
 
-        # ===============================================
-        # YOUR A* IMPLEMENTATION GOES HERE
-        # ===============================================
         try:
-            # Get current pose from TF
+            
             current_pose = self.get_pose_from_tf()
             if current_pose is None:
                 self.get_logger().error('Cannot get robot pose from TF')
@@ -135,13 +131,13 @@ class PathPlannerNode(Node):
                 result.result = False
                 return result
 
-            # Convert poses to grid coordinates
+            
             start_grid = self.world_to_grid(current_pose)
             goal_grid = self.world_to_grid(goal_pose)
 
             self.get_logger().info(f'Planning from {start_grid} to {goal_grid}')
 
-            # Publish progress feedback
+         
             feedback_msg.feedback = 'Computing A* path...'
             goal_handle.publish_feedback(feedback_msg)
 
@@ -161,14 +157,14 @@ class PathPlannerNode(Node):
             # Convert grid path back to world coordinates
             path_world = self.grid_path_to_world(path_grid)
 
-            # Publish feedback
+      
             feedback_msg.feedback = f'Path found with {len(path_world)} waypoints'
             goal_handle.publish_feedback(feedback_msg)
 
-            # Publish path for visualization
+            
             self.publish_path(path_world, goal_pose.header.frame_id)
 
-            # Check if goal was cancelled during execution
+           
             if goal_handle.is_cancel_requested:
                 goal_handle.canceled()
                 self.get_logger().info('Goal canceled')
@@ -176,7 +172,6 @@ class PathPlannerNode(Node):
                 result.result = False
                 return result
 
-            # Success!
             goal_handle.succeed()
 
         except Exception as e:
@@ -186,7 +181,7 @@ class PathPlannerNode(Node):
             result.result = False
             return result
 
-        # Return result
+       
         result = Navigation.Result()
         result.result = True
         self.get_logger().info('Path planning completed successfully')
@@ -194,8 +189,7 @@ class PathPlannerNode(Node):
 
     def astar_search(self, start, goal):
         """
-        A* with Euclidean distance heuristic.
-        Optimized: inlined neighbor/free checks, precomputed move costs, math.sqrt.
+        A* with euclidean distance heuristic.
         """
         if self.map_data is None:
             self.get_logger().error('No map data available for A*')
@@ -207,7 +201,6 @@ class PathPlannerNode(Node):
 
         goal_r, goal_c = goal
 
-        # Precomputed 8-connected directions with move costs
         SQRT2 = 1.4142135623730951
         directions = (
             (-1, -1, SQRT2), (-1, 0, 1.0), (-1, 1, SQRT2),
@@ -245,7 +238,7 @@ class PathPlannerNode(Node):
                     continue
 
                 cell_cost = map_data[nr * width + nc]
-                if cell_cost == 100:  # Hard obstacle
+                if cell_cost == 100:  
                     continue
 
                 nb = (nr, nc)
@@ -272,64 +265,10 @@ class PathPlannerNode(Node):
             current = came_from[current]
             path.append(current)
 
-        path.reverse()  # Path was built backwards
+        path.reverse() 
         return path
 
-    def smooth_path(self, path):
-        """
-        Line-of-sight path smoothing.
-        Skips intermediate waypoints when a straight line is obstacle-free.
-        """
-        if len(path) <= 2:
-            return path
-
-        width = self.map_data.info.width
-        map_data = self.map_data.data
-
-        smoothed = [path[0]]
-        current = 0
-
-        while current < len(path) - 1:
-            # Try to skip as far ahead as possible
-            farthest = current + 1
-            for candidate in range(len(path) - 1, current + 1, -1):
-                if self.line_of_sight(path[current], path[candidate], width, map_data):
-                    farthest = candidate
-                    break
-            smoothed.append(path[farthest])
-            current = farthest
-
-        return smoothed
-
-    def line_of_sight(self, p0, p1, width, map_data):
-        """
-        Bresenham line check — returns True if all cells on the line are free.
-        """
-        r0, c0 = p0
-        r1, c1 = p1
-
-        dr = abs(r1 - r0)
-        dc = abs(c1 - c0)
-        sr = 1 if r1 > r0 else -1
-        sc = 1 if c1 > c0 else -1
-        err = dr - dc
-
-        r, c = r0, c0
-        while True:
-            if map_data[r * width + c] != 0:
-                return False
-            if r == r1 and c == c1:
-                break
-            e2 = 2 * err
-            if e2 > -dc:
-                err -= dc
-                r += sr
-            if e2 < dr:
-                err += dr
-                c += sc
-
-        return True
-
+   
     def is_valid_goal(self, goal_pose: PoseStamped) -> bool:
         if self.map_data is None:
             return False
@@ -348,7 +287,7 @@ class PathPlannerNode(Node):
         idx = row * width + col
         cell_value = self.map_data.data[idx]
 
-        # 0 = free, 100 = occupied, -1 = unknown
+    
         if cell_value != 0:
             self.get_logger().warn(f'Goal {goal_grid} not free (value={cell_value})')
             return False
@@ -356,31 +295,20 @@ class PathPlannerNode(Node):
         return True
 
     def world_to_grid(self, pose: PoseStamped) -> tuple:
-        """Args:
-            pose: PoseStamped in world frame
-
-        Returns:
-            (row, col) tuple in grid coordinates
-        """
         if self.map_data is None:
             return (0, 0)
 
-        # Get map parameters
+ 
         resolution = self.map_data.info.resolution
         origin_x = self.map_data.info.origin.position.x
         origin_y = self.map_data.info.origin.position.y
 
-        # Convert to grid
         col = int((pose.pose.position.x - origin_x) / resolution)
         row = int((pose.pose.position.y - origin_y) / resolution)
 
         return (row, col)
 
     def grid_to_world(self, row: int, col: int) -> tuple:
-        """
-        Returns:
-            (x, y) tuple in world frame (meters)
-        """
         if self.map_data is None:
             return (0.0, 0.0)
 
@@ -394,13 +322,6 @@ class PathPlannerNode(Node):
         return (x, y)
 
     def grid_path_to_world(self, grid_path: list) -> list:
-        """
-        Args:
-            grid_path: List of (row, col) tuples
-
-        Returns:
-            List of (x, y) tuples in world frame
-        """
         world_path = []
         for row, col in grid_path:
             x, y = self.grid_to_world(row, col)
@@ -408,9 +329,7 @@ class PathPlannerNode(Node):
         return world_path
 
     def publish_path(self, path_world: list, frame_id: str):
-        """
-        Publish path for visualization in RViz.
-        """
+    
         path_msg = Path()
         path_msg.header.frame_id = frame_id
         path_msg.header.stamp = self.get_clock().now().to_msg()

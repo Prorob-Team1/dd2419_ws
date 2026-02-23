@@ -4,7 +4,6 @@ from nav_msgs.msg import OccupancyGrid
 from robp_interfaces.msg import ObjectCandidateArrayMsg
 
 import numpy as np
-from math import sqrt
 
 
 
@@ -18,7 +17,6 @@ class MapInflator(Node):
 
       
         self.inflation_radius_m = 0.175
-        self.cost_inflation_radius_m = 0.35
 
         self.base_grid = None    
         self.candidates = []     
@@ -101,26 +99,7 @@ class MapInflator(Node):
                 inflated |= shifted
         grid[inflated] = 100
 
-        cost_radius_cells = int(self.cost_inflation_radius_m / resolution)
-        for dr in range(-cost_radius_cells, cost_radius_cells + 1):
-            for dc in range(-cost_radius_cells, cost_radius_cells + 1):
-                dist = sqrt(dr * dr + dc * dc)
-                if dist > cost_radius_cells or dist == 0:
-                    continue
-                shifted = np.roll(inflated, (dr, dc), axis=(0, 1))
-                if dr > 0:
-                    shifted[:dr, :] = False
-                elif dr < 0:
-                    shifted[dr:, :] = False
-                if dc > 0:
-                    shifted[:, :dc] = False
-                elif dc < 0:
-                    shifted[:, dc:] = False
-                cost = int(90 * (1.0 - dist / cost_radius_cells))
-               
-                update_mask = shifted & ~inflated & (grid >= 0) & (grid < cost)
-                grid[update_mask] = cost
-
+        
         out = OccupancyGrid()
         out.header.frame_id = self.base_grid.header.frame_id
         out.header.stamp = self.get_clock().now().to_msg()
