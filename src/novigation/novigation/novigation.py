@@ -21,9 +21,9 @@ class Navigator(Node):
         super().__init__("navigation")
 
         # Pure pursuit parameters
-        self.declare_parameter('lookahead_distance', 0.3)
+        self.declare_parameter('lookahead_distance', 0.5)
         self.declare_parameter('target_speed', 0.3)
-        self.declare_parameter('goal_tolerance', 0.1)
+        self.declare_parameter('goal_tolerance', 0.05)
         self.declare_parameter('max_off_path_distance', 0.5)
 
         self.lookahead_distance = self.get_parameter('lookahead_distance').value
@@ -121,7 +121,7 @@ class Navigator(Node):
                 self.aligning = False
                 self.get_logger().info("Aligned, starting pure pursuit")
             else:
-                w = 2.0 * heading_err
+                w = 3.0 * heading_err
                 w = max(-self.max_w, min(w, self.max_w))
                 self.get_logger().info(
                     f"Aligning: err={math.degrees(heading_err):.1f}° w={w:.2f}",
@@ -187,7 +187,7 @@ class Navigator(Node):
         speed = self.target_speed
         slowdown_dist = 0.5
         if dist_to_goal < slowdown_dist:
-            speed = max(0.05, self.target_speed * (dist_to_goal / slowdown_dist))
+            speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
 
         # Proportional spin when heading is very off, otherwise pure pursuit
         if abs(alpha) > math.pi / 2:
@@ -196,7 +196,7 @@ class Navigator(Node):
             w = 2.0 * alpha  # proportional gain
         else:
             # Pure pursuit curvature
-            kappa = 2.0 * math.sin(alpha) / ld
+            kappa = 3.0 * math.sin(alpha) / ld
             v = speed
             w = speed * kappa
 
