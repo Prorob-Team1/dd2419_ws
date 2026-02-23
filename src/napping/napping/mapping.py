@@ -14,6 +14,8 @@ from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from nav_msgs.msg import OccupancyGrid
+from napping.fov_tracking import FOVUpdater
+
 from robp_interfaces.msg import (
     ObjectCandidateMsg,
     ObjectCandidateArrayMsg,
@@ -122,11 +124,13 @@ class Mapper(Node):
         self.object_confidence_threshold = 0.8
         self.object_max_candidates = 100
         self.detection_mapper = DetectionMapper(self)
+        self.fov_updater = FOVUpdater(self.tf_buffer, logger=self.get_logger())
 
         self.startup()
 
         # publishers
-        self.timer = self.create_timer(1.0, self.publish_map)
+        self.timer = self.create_timer(0.5, self.publish_oocupancy_map)
+        self.fov_trace_timer = self.create_timer(0.1, self.apply_fov_trace)
         self.marker_timer = self.create_timer(
             5.0, self.publish_workspace_perimeter_marker
         )
@@ -305,7 +309,7 @@ class Mapper(Node):
             p1x, p1y = p2x, p2y
 
         # Mark free cells inside workspace
-        grid[inside] = 0
+        grid[inside] = -1  # unknown
         msg = OccupancyGrid()
         msg.header.frame_id = "map"
         msg.info.resolution = self.resolution
@@ -322,7 +326,13 @@ class Mapper(Node):
 
         return msg
 
-    def publish_map(self):
+    def apply_fov_trace(self):
+        # TODO: instead of passing occupancy_grid which always needs to be converted to numpy array,
+        # we should pass the numpy array directly and only convert back to OccupancyGrid when publishing
+        if self.occupancy_grid is not None:
+            self.fov_updater.apply(self.occupancy_grid)
+
+    def publish_oocupancy_map(self):
         if self.occupancy_grid is not None:
             self.occupancy_grid.header.stamp = self.get_clock().now().to_msg()
             self.map_pub.publish(self.occupancy_grid)
@@ -565,7 +575,7 @@ class DetectionMapper:
 def main():
     rclpy.init()
     node = Mapper()
-    executor = SingleThreadedExecutor()
+    executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(node)
     try:
         executor.spin()

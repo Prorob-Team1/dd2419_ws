@@ -24,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mapping = napping.mapping:main",
+            "fov_tracking = napping.fov_tracking:main",
         ],
     },
 )
