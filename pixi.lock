@@ -685,6 +685,8 @@ environments:
       - conda: src/learning_tf2_py
         build: hb0f4dca_0
       - conda: src/librealsense
+      - conda: src/napping
+        build: hb0f4dca_0
       - conda: src/novigation
         build: hb0f4dca_0
       - conda: src/odometry
@@ -1298,6 +1300,8 @@ environments:
         build: h60d57d3_0
       - conda: src/learning_tf2_py
         build: h60d57d3_0
+      - conda: src/napping
+        build: h60d57d3_0
       - conda: src/novigation
         build: h60d57d3_0
       - conda: src/odometry
@@ -1877,6 +1881,8 @@ environments:
       - conda: src/display_markers
         build: ha41a7fa_0
       - conda: src/learning_tf2_py
+        build: ha41a7fa_0
+      - conda: src/napping
         build: ha41a7fa_0
       - conda: src/novigation
         build: ha41a7fa_0
@@ -16746,6 +16752,78 @@ packages:
   license: BSD-3-Clause
   size: 81708
   timestamp: 1768997953387
+- conda: src/napping
+  name: ros-jazzy-napping
+  version: 0.0.0
+  build: h60d57d3_0
+  subdir: osx-arm64
+  variants:
+    target_platform: osx-arm64
+  depends:
+  - ros-jazzy-robp-interfaces
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-rclpy
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-nav-msgs
+  - ros-jazzy-visualization-msgs
+  - ros-jazzy-tf-transformations
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libcxx >=21
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
+- conda: src/napping
+  name: ros-jazzy-napping
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-robp-interfaces
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-rclpy
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-nav-msgs
+  - ros-jazzy-visualization-msgs
+  - ros-jazzy-tf-transformations
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
+- conda: src/napping
+  name: ros-jazzy-napping
+  version: 0.0.0
+  build: hb0f4dca_0
+  subdir: linux-64
+  variants:
+    target_platform: linux-64
+  depends:
+  - ros-jazzy-robp-interfaces
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-rclpy
+  - ros-jazzy-tf2-geometry-msgs
+  - ros-jazzy-tf2-ros
+  - ros-jazzy-nav-msgs
+  - ros-jazzy-visualization-msgs
+  - ros-jazzy-tf-transformations
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libgcc >=15
+  - libgcc >=15
+  - libstdcxx >=15
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
 - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-nav-msgs-5.3.6-np2py312h2ed9cc7_14.conda
   sha256: 22dfe512aae9adb3d125f324a0fa5c31a74d8518a728c714778fbc1c9e0faa1a
   md5: f7f9f73ec85a7d89b47d6eb13415c486
