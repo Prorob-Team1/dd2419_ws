@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
+from math import sqrt
 import csv
 from pathlib import Path
 
@@ -21,12 +22,14 @@ class TestMapPublisher(Node):
         self.declare_parameter('csv_scale', 0.01)  # CSV units to meters (cm -> m)
         self.declare_parameter('resolution', 0.03)  # Grid cell size in meters
         self.declare_parameter('obstacle_radius', 3)  # Grid cells around obstacles
+        self.declare_parameter('inflation_radius', 10)  # Grid cells of cost inflation
 
         workspace_file = self.get_parameter('workspace_file').value
         map_file = self.get_parameter('map_file').value
         self.csv_scale = self.get_parameter('csv_scale').value
         self.resolution = self.get_parameter('resolution').value
         self.obstacle_radius = self.get_parameter('obstacle_radius').value
+        self.inflation_radius = self.get_parameter('inflation_radius').value
 
         # Load data
         self.workspace_polygon = self.load_workspace(workspace_file)
@@ -176,6 +179,26 @@ class TestMapPublisher(Node):
                         c = col + dc
                         if 0 <= r < height and 0 <= c < width:
                             grid[r, c] = 100
+
+        # Costmap inflation
+        occupied = (grid == 100)
+        inf_r = self.inflation_radius
+        for row in range(height):
+            for col in range(width):
+                if not occupied[row, col]:
+                    continue
+                for dr in range(-inf_r, inf_r + 1):
+                    for dc in range(-inf_r, inf_r + 1):
+                        r = row + dr
+                        c = col + dc
+                        if r < 0 or r >= height or c < 0 or c >= width:
+                            continue
+                        dist = sqrt(dr * dr + dc * dc)
+                        if dist > inf_r or dist == 0:
+                            continue
+                        cost = int(99 * (1.0 - dist / inf_r))
+                        if grid[r, c] < cost and grid[r, c] != 100:
+                            grid[r, c] = cost
 
         # Create OccupancyGrid message
         msg = OccupancyGrid()
