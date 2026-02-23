@@ -25,9 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'path_planner = novigation.path_planner:main',
-            'test_map_publisher = novigation.test_map_publisher:main',
-            'test_pose_publisher = novigation.test_pose_publisher:main',
-            'test_goal_sender = novigation.test_goal_sender:main',
+            'goal_receiver = novigation.test_goal_sender:main',
+            'map_inflator = novigation.map_inflator:main',
             'sim_robot = novigation.sim_robot:main',
             'novigation = novigation.novigation:main',
 
