@@ -26,7 +26,7 @@ launch:
         - name: "enable_color"
           value: true
         - name: "rgb_camera.color_profile"
-          value: "848,480,6"
+          value: "848,480,15"
         - name: "rgb_camera.color_format"
           value: "RGB8"
         - name: "rgb_camera.enable_auto_exposure"
@@ -40,7 +40,7 @@ launch:
         - name: "enable_infra2"
           value: false
         - name: "depth_module.depth_profile"
-          value: "848,480,6"
+          value: "848,480,15"
         - name: "depth_module.depth_format"
           value: "Z16"
         - name: "depth_module.infra_profile"
@@ -90,7 +90,9 @@ launch:
         - name: "unite_imu_method"
           value: 0
         - name: "clip_distance"
-          value: -2
+          value: 0.2
+        - name: "json_file_path"
+          value: "$(find-pkg-share robp_launch)/config/HighAccuracyPreset.json"
         - name: "angular_velocity_cov"
           value: 0.01
         - name: "linear_accel_cov"
