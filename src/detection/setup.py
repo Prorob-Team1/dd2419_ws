@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'detection = detection.detection:main'
+            'detection = detection.detection:main',
+            'pointcloud_filter = detection.pointcloud_filter:main'
         ],
     },
 )
