@@ -244,14 +244,15 @@ class PathPlannerNode(Node):
                 if nr < 0 or nr >= height or nc < 0 or nc >= width:
                     continue
 
-                if map_data[nr * width + nc] != 0:
+                cell_cost = map_data[nr * width + nc]
+                if cell_cost == 100:  # Hard obstacle
                     continue
 
                 nb = (nr, nc)
                 if nb in closed_set:
                     continue
 
-                tentative_g = cur_g + cost
+                tentative_g = cur_g + cost + cell_cost * 0.05
 
                 if nb not in g_score or tentative_g < g_score[nb]:
                     came_from[nb] = current
