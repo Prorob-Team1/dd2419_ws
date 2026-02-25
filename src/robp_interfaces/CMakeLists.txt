@@ -23,6 +23,7 @@ set(msg_files
   "action/Navigation.action"
   "action/ArmExecute.action"
   "action/DummyAction.action"
+  "srvs/GetGoal.srv"
   )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
