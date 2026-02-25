@@ -32,6 +32,10 @@ from action_msgs.msg import GoalStatus
 from robp_interfaces.action import DummyAction
 
 
+EXPLORE_GOAL = 0
+CUBE_GOAL = 1
+BOX_GOAL = 2
+
 class Brain(Node):
 
     def __init__(self):
@@ -49,10 +53,9 @@ class Brain(Node):
         #self.cube_released = False
 
         # Normal clients
-        self.explore_client = self.create_client(GetGoal, "explore_goal")
+        self.goal_client = self.create_client(GetGoal, "get_goal")
 
         # Action clients
-
         self.nav_client = ActionClient(self, DummyAction, "dummy")
 
         self.arm_client = ActionClient(self, DummyAction, "dummy")
@@ -104,6 +107,7 @@ class Brain(Node):
         )
 
         # Right subtree (release cube)
+        """
         nav_to_box_sequence = Sequence(
             name = "Nav to Box Sequence",
             children = [
@@ -112,12 +116,12 @@ class Brain(Node):
             ],
             memory = True # this could be a problem if we decide on a box the somehow becomes unreachable
         )
-
+        """
         box_in_drop_off_range_fallback = Selector(
             name = "Box in Range Fallback",
             children = [
                 BoxInDropOffRangeCondition(self),
-                nav_to_box_sequence
+                Nav2BoxB(self) # nav_to_box_sequence
             ],
             memory = False
         )
@@ -290,11 +294,11 @@ class DummyB(Behaviour):
 
 class Nav2GoalB(Behaviour):
 
-    def __init__(self, node: Brain, name, get_goal_client):
+    def __init__(self, node: Brain, name, goal_type):
         super().__init__(name)
         self.node = node
         self.nav_goal_handle = None
-        self.goal_client = get_goal_client
+        self.goal_type = goal_type
         self.current_status = Status.RUNNING
 
     def update(self):
@@ -309,9 +313,9 @@ class Nav2GoalB(Behaviour):
 
     def initialise(self):
         self.current_status = Status.RUNNING
-        self.node.get_logger().info(f"{self.name}: Sent request for an exploration goal")
-        self.goal_client.wait_for_service()
-        goal_request = self.goal_client.call_async(GetGoal.Request())
+        self.node.get_logger().info(f"{self.name}: Sent goal request")
+        self.node.goal_client.wait_for_service()
+        goal_request = self.node.goal_client.call_async(GetGoal.Request(goal_type=self.goal_type))
         goal_request.add_done_callback(self.goal_request_callback)
 
     def goal_request_callback(self, future):
@@ -373,7 +377,7 @@ class Nav2GoalB(Behaviour):
 
 class ExploreB(Nav2GoalB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, node.explore_client)
+        super().__init__(node, __class__.__name__, EXPLORE_GOAL)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
@@ -382,9 +386,9 @@ class ExploreB(Nav2GoalB):
             self.node.cube_found = False
         return 
 
-class Nav2CubeB(DummyB):
+class Nav2CubeB(Nav2GoalB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, True, node.nav_client)
+        super().__init__(node, __class__.__name__, CUBE_GOAL)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
@@ -393,9 +397,9 @@ class Nav2CubeB(DummyB):
             self.node.in_pickup_range = False
         return 
 
-class Nav2BoxB(DummyB):
+class Nav2BoxB(Nav2GoalB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, True, node.nav_client)
+        super().__init__(node, __class__.__name__, BOX_GOAL)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
