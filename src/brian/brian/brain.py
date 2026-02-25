@@ -19,6 +19,7 @@ from rclpy.duration import Duration
 # from robp_interfaces.actions import Navigation
 from robp_interfaces.msg import Encoders, DutyCycles
 from robp_interfaces.action import Navigation
+from robp_interfaces.srv import GetGoal
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from rclpy.action.client import ActionClient
@@ -47,9 +48,10 @@ class Brain(Node):
         self.in_dropoff_range = False
         #self.cube_released = False
 
-        # Action clients
+        # Normal clients
+        self.explore_client = self.create_client(GetGoal, "explore_goal")
 
-        self.explore_client = ActionClient(self, DummyAction, "dummy")
+        # Action clients
 
         self.nav_client = ActionClient(self, DummyAction, "dummy")
 
@@ -149,7 +151,6 @@ class Brain(Node):
             ],
             memory = False
         )
-
 
 
 class CubePickedUpCondition(Behaviour):
@@ -287,11 +288,93 @@ class DummyB(Behaviour):
     def update_postcondition(self):
         pass
 
+class Nav2GoalB(Behaviour):
 
-class ExploreB(DummyB):
+    def __init__(self, node: Brain, name, get_goal_client):
+        super().__init__(name)
+        self.node = node
+        self.nav_goal_handle = None
+        self.goal_client = get_goal_client
+        self.current_status = Status.RUNNING
+
+    def update(self):
+        #self.logger.info(f"{self.name}: Checking feedback")
+        return self.current_status
+
+    def terminate(self, new_status):
+        if self.nav_goal_handle is not None:
+            self.node.get_logger().info(f"{self.name}: Interrupted, status: ")
+            self.nav_goal_handle.cancel_goal_async()
+
+
+    def initialise(self):
+        self.current_status = Status.RUNNING
+        self.node.get_logger().info(f"{self.name}: Sent request for an exploration goal")
+        self.goal_client.wait_for_service()
+        goal_request = self.goal_client.call_async(GetGoal.Request())
+        goal_request.add_done_callback(self.goal_request_callback)
+
+    def goal_request_callback(self, future):
+        response = future.result()
+        if response.yaw == 0 and response.x == 0 and response.y == 0:
+            self.node.get_logger().error(f"{self.name}: Recieved a bogus goal, something is wrong")
+            self.current_status = Status.FAILURE
+            return
+        
+        goal = Navigation.Goal()
+        goal.goal.pose.position.z = response.x
+        goal.goal.pose.position.y = response.y
+        goal.goal.pose.orientation.z = quaternion_from_euler(0.0,0.0,response.yaw)[2]
+
+        self.node.nav_client.wait_for_server()
+        nav_request_future = self.node.nav_client.send_goal_async(
+            DummyAction.Goal(succeed=True), feedback_callback=self.nav_feedback_callback # this is where we typically send a nav goal
+        )
+        nav_request_future.add_done_callback(self.nav_goal_response_callback)
+
+    def nav_feedback_callback(self, feedback_msg):
+        pass
+        #self.node.get_logger().info(f"{self.name}: Feedback: {feedback_msg.feedback.status}")
+
+    def nav_goal_response_callback(self, future):
+        self.nav_goal_handle = future.result()
+        if not self.nav_goal_handle.accepted:
+            self.node.get_logger().info(f"{self.name}: Navigation goal rejected")
+            self.current_status = Status.FAILURE
+            return
+        self.node.get_logger().info(f"{self.name}: Navigation goal accepted")
+        result_future = self.nav_goal_handle.get_result_async()
+        result_future.add_done_callback(self.nav_done_callback)
+        
+    def nav_done_callback(self, future):
+        try:
+            response = future.result()
+            result = response.result
+
+            if response.status == GoalStatus.STATUS_SUCCEEDED:
+                self.node.get_logger().info(f"{self.name}: Navigation to goal succeeded! {result}")
+                self.current_status = Status.SUCCESS
+            else:
+                self.node.get_logger().error(
+                    f"{self.name}: Navigation failed with status: {response.status}"
+                )
+                self.current_status = Status.FAILURE
+            
+            self.nav_goal_handle = None
+
+        except Exception as e:
+            self.node.get_logger().error(f"{self.name}: Navigation failed: {e}")
+            self.current_status = Status.FAILURE
+        
+        self.update_postcondition()
+
+    def update_postcondition(self):
+        pass
+
+class ExploreB(Nav2GoalB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, True, node.explore_client)
-    
+        super().__init__(node, __class__.__name__, node.explore_client)
+
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
             self.node.cube_found = True
