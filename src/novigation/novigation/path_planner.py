@@ -16,6 +16,7 @@ from math import sqrt
 import heapq
 
 
+
 class PathPlannerNode(Node):
   
 
@@ -134,6 +135,17 @@ class PathPlannerNode(Node):
             
             start_grid = self.world_to_grid(current_pose)
             goal_grid = self.world_to_grid(goal_pose)
+
+            snapped = self.find_nearest_free_cell(goal_grid, start_grid)
+            if snapped is None:
+                self.get_logger().warn('No free cell found near goal')
+                goal_handle.abort()
+                result = Navigation.Result()
+                result.result = False
+                return result
+            if snapped != goal_grid:
+                self.get_logger().info(f'Goal {goal_grid} is inside obstacle, snapped to {snapped}')
+                goal_grid = snapped
 
             self.get_logger().info(f'Planning from {start_grid} to {goal_grid}')
 
@@ -278,21 +290,37 @@ class PathPlannerNode(Node):
         width = self.map_data.info.width
         height = self.map_data.info.height
 
-        # Check if within map bounds
         if row < 0 or row >= height or col < 0 or col >= width:
             self.get_logger().warn(f'Goal {goal_grid} out of bounds')
             return False
 
-       
-        idx = row * width + col
-        cell_value = self.map_data.data[idx]
-
-    
-        if cell_value != 0:
-            self.get_logger().warn(f'Goal {goal_grid} not free (value={cell_value})')
-            return False
-
         return True
+
+    def find_nearest_free_cell(self, goal, start):
+        "If goal is occupied it walks a straight line from the goal towards current pose until it hits a free cel "
+    
+        width = self.map_data.info.width
+        height = self.map_data.info.height
+        map_data = self.map_data.data
+
+        if map_data[goal[0] * width + goal[1]] == 0:
+            return goal
+
+        gr, gc = goal
+        sr, sc = start
+        dr = sr - gr
+        dc = sc - gc
+        steps = max(abs(dr), abs(dc))
+        
+
+        for i in range(1, steps + 1):
+            nr = gr + round(dr * i / steps)
+            nc = gc + round(dc * i / steps)
+            if 0 <= nr < height and 0 <= nc < width:
+                if map_data[nr * width + nc] == 0:
+                    return (nr, nc)
+
+        return None
 
     def world_to_grid(self, pose: PoseStamped) -> tuple:
         if self.map_data is None:
