@@ -249,7 +249,7 @@ class Brain(Node):
         self.goal_provider = GoalProvider(self)
 
         # Action clients
-        self.nav_client = ActionClient(self, DummyAction, "dummy")
+        self.nav_client = ActionClient(self, Navigation, "plan_path")
 
         self.arm_client = ActionClient(self, DummyAction, "dummy")
 
@@ -569,11 +569,15 @@ class Nav2GoalB(Behaviour):
         goal = Navigation.Goal()
         goal.goal.pose.position.x = x
         goal.goal.pose.position.y = y
-        goal.goal.pose.orientation.z = quaternion_from_euler(0.0,0.0,yaw)[2]
+        q = quaternion_from_euler(0.0,0.0,yaw)
+        goal.goal.pose.orientation.z = q[2]
+        goal.goal.pose.orientation.w = q[3]
+        goal.goal.header.frame_id = "map"
+        goal.goal.header.stamp = self.node.get_clock().now().to_msg()
 
         self.node.nav_client.wait_for_server()
         nav_request_future = self.node.nav_client.send_goal_async(
-            DummyAction.Goal(succeed=True), feedback_callback=self.nav_feedback_callback
+            goal, feedback_callback=self.nav_feedback_callback
         )
         nav_request_future.add_done_callback(self.nav_goal_response_callback)
 
