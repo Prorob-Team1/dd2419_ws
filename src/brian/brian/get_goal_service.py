@@ -171,7 +171,7 @@ class GetGoalService(Node):
 
     def get_robot_pose(self):
         stamp = self.map.header.stamp
-        from_frame_rel = self.map.header.frame_id
+        from_frame_rel = "map"
         to_frame_rel = "base_link"
         try:
             tf = self.tf_buffer.lookup_transform(
@@ -213,30 +213,32 @@ class GetGoalService(Node):
         grid_x = (robot_x - self.map.info.origin.position.x) / self.map.info.resolution
         grid_y = (robot_y - self.map.info.origin.position.y) / self.map.info.resolution
         # Clamp to map bounds
-        grid_x = int(min(grid_x, self.map.info.width-1))
-        grid_y = int(min(grid_y, self.map.info.height-1))
+        grid_col = int(min(grid_x, self.map.info.width-1))
+        grid_row = int(min(grid_y, self.map.info.height-1))
 
         frontiers = np.array(self.find_frontiers(map))
-        if len(frontiers) == 0:
+        if frontiers.size == 0:
             self.get_logger().warning("No frontiers available, returning fallback goal")
             return robot_x, robot_y, robot_yaw
         # Find the closest unseen frontier cell (from the robot)
         # Calculate euclidean distance from robot position to each frontier cell
-        rs = np.sum(([grid_x, grid_y] - frontiers)**2, axis=1)
-        # Select frontier cell with minimum distance that's further away than 0.5 m
+        # Note: frontiers is (row, col) but grid coords are (col, row), so swap
+        rs = np.sum(([grid_row, grid_col] - frontiers)**2, axis=1)
+        # remove frontier cells with distance less than 0.5m away
         mask = (rs > 0.5/self.map.info.resolution)
-        rs = rs[mask]
+        #rs = rs[mask]
         frontiers = frontiers[mask]
-        if len(frontiers) == 0:
+        if frontiers.size == 0:
             self.get_logger().warning("No distant frontiers available, returning fallback goal")
             return robot_x, robot_y, robot_yaw
-        (x,y) = np.random.choice(frontiers) # frontiers[np.argmin(rs)]
+        # choose a random frontier index rather than passing a 2D array directly
+        idx = np.random.choice(len(frontiers))
+        row, col = frontiers[idx]  # frontiers is (row, col) format
         # Convert back from grid coordinates to world coordinates (x, y)
-        x = x * self.map.info.resolution + self.map.info.origin.position.x
-        y = y * self.map.info.resolution + self.map.info.origin.position.y
+        x = col * self.map.info.resolution + self.map.info.origin.position.x
+        y = row * self.map.info.resolution + self.map.info.origin.position.y
         # Calculate target yaw by computing atan2 angle from robot to frontier goal
-        yaw = np.atan2(y - robot_y, x - robot_x) - robot_yaw
-        yaw = yaw % (2 * np.pi)
+        yaw = np.atan2(y - robot_y, x - robot_x)
         # TODO: If the selected frontier is outside the perimeter, they should be moved to the perimeter 
         # edge and we should also make sure the heading is perpendicular to the perimeter edge (facing out)
         self.get_logger().info(f"Sending goal at ({x=},{y=},{yaw=})")
@@ -290,8 +292,7 @@ class GetGoalService(Node):
         robot_x, robot_y, robot_yaw = robot_pose
 
         # TODO: maybe make it so we always approach boxes from their "wide" side instead, not sure if that should be done here or by the path planner
-        yaw = np.atan2(y - robot_y, x - robot_x) - robot_yaw
-        yaw = yaw % (2 * np.pi)
+        yaw = np.atan2(y - robot_y, x - robot_x)
 
         self.get_logger().info(f"Sending goal at ({x=},{y=},{yaw=})")
         return x, y, yaw

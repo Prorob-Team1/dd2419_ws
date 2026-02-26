@@ -167,7 +167,7 @@ class Brain(Node):
         # check if valid cube candidate exists, handles the postcondition of "cube found"
         for candidate in msg.candidates:
             candidate: ObjectCandidateMsg
-            if candidate.confidence > 0.8 and candidate.class_name != "BOX":
+            if candidate.confidence > 0.8 and (candidate.class_name != "BOX" and candidate.class_name != "CUBE_U"):
                 self.cube_found = True
                 return
             
@@ -311,12 +311,13 @@ class DummyB(Behaviour):
 
 class Nav2GoalB(Behaviour):
 
-    def __init__(self, node: Brain, name, goal_type):
+    def __init__(self, node: Brain, name, goal_type, done_status=Status.SUCCESS):
         super().__init__(name)
         self.node = node
         self.nav_goal_handle = None
         self.goal_type = goal_type
         self.current_status = Status.RUNNING
+        self.done_status = done_status
 
     def update(self):
         #self.logger.info(f"{self.name}: Checking feedback")
@@ -374,7 +375,7 @@ class Nav2GoalB(Behaviour):
 
             if response.status == GoalStatus.STATUS_SUCCEEDED:
                 self.node.get_logger().info(f"{self.name}: Navigation to goal succeeded! {result}")
-                self.current_status = Status.SUCCESS
+                self.current_status = self.done_status
             else:
                 self.node.get_logger().error(
                     f"{self.name}: Navigation failed with status: {response.status}"
@@ -394,7 +395,7 @@ class Nav2GoalB(Behaviour):
 
 class ExploreB(Nav2GoalB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, EXPLORE_GOAL)
+        super().__init__(node, __class__.__name__, EXPLORE_GOAL, Status.FAILURE)
 
 class Nav2CubeB(Nav2GoalB):
     def __init__(self, node: Brain):
@@ -432,7 +433,7 @@ class GrabCubeB(DummyB):
 
 class ReleaseCubeB(DummyB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, False, node.arm_client)
+        super().__init__(node, __class__.__name__, True, node.arm_client)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
