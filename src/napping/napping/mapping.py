@@ -82,6 +82,7 @@ class Mapper(Node):
         super().__init__("mapper")
         self.get_logger().info("Mapper node started")
 
+        self.occupancy_callback_group = MutuallyExclusiveCallbackGroup()
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = StaticTransformBroadcaster(self)
@@ -130,8 +131,14 @@ class Mapper(Node):
         self.startup()
 
         # publishers
-        self.occupancy_pub_timer = self.create_timer(0.5, self.publish_occupancy_map)
-        self.fov_trace_timer = self.create_timer(0.1, self.apply_fov_trace)
+        self.occupancy_pub_timer = self.create_timer(
+            0.5,
+            self.publish_occupancy_map,
+            callback_group=self.occupancy_callback_group,
+        )
+        self.fov_trace_timer = self.create_timer(
+            0.2, self.apply_fov_trace, callback_group=self.occupancy_callback_group
+        )
         self.marker_timer = self.create_timer(
             5.0, self.publish_workspace_perimeter_marker
         )
