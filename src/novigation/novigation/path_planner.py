@@ -156,8 +156,7 @@ class PathPlannerNode(Node):
             feedback_msg.feedback = 'Navigating...'
             goal_handle.publish_feedback(feedback_msg)
 
-            goal_x = goal_pose.pose.position.x
-            goal_y = goal_pose.pose.position.y
+            goal_x, goal_y = self.grid_to_world(goal_grid[0], goal_grid[1])
             rate = self.create_rate(10)
 
             while rclpy.ok():
