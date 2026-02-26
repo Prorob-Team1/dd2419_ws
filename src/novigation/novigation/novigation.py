@@ -13,6 +13,7 @@ from tf_transformations import euler_from_quaternion
 
 from robp_interfaces.msg import DutyCycles
 from nav_msgs.msg import Path
+from std_msgs.msg import Empty
 
 
 class Navigator(Node):
@@ -42,6 +43,7 @@ class Navigator(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
         self.create_subscription(Path, '/planned_path', self.path_callback, 10)
+        self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
 
        
         self.motor_pub = self.create_publisher(
@@ -62,6 +64,11 @@ class Navigator(Node):
         self.path_idx = 0
         self.aligning = True
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
+
+    def cancel_callback(self, _msg: Empty):
+        self.get_logger().info("Navigation cancelled")
+        self.path = None
+        self.control_wheels(0.0, 0.0)
 
     def get_robot_pose(self):
         """Get robot (x, y, theta) from TF."""
