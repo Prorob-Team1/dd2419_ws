@@ -92,6 +92,12 @@ class Mapper(Node):
             self.detection_callback,
             10,
         )
+        self.pick_up_sub = self.create_subscription(
+            ObjectCandidateArrayMsg,
+            "/caught_cubes",
+            self.picked_up_callback,
+            10,
+        )
         self.workspace_pub = self.create_publisher(
             Marker,
             "/geofence",
@@ -393,6 +399,7 @@ class Mapper(Node):
                     candidate.log_prob
                 )
                 obj_msg.picked_up = candidate.picked_up
+                obj_msg.id = candidate.id
                 msg.candidates.append(obj_msg)  # type: ignore
         self.object_pub.publish(msg)
 
@@ -460,6 +467,11 @@ class Mapper(Node):
     def detection_callback(self, msg: ObjectDetectionArrayMsg):
         self.detection_mapper.process_object_detections(msg)
 
+    def picked_up_callback(self, msg: ObjectCandidateArrayMsg):
+        for candidate in self.object_candidates:
+            for picked in msg.candidates:
+                if candidate.id == picked.id:
+                    candidate.picked_up = True
 
 class DetectionMapper:
     def __init__(self, node: Mapper, merge_threshold=0.1):

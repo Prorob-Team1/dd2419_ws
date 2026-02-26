@@ -392,7 +392,7 @@ class Brain(Node):
         self.cube_found = False
         for candidate in msg.candidates:
             candidate: ObjectCandidateMsg
-            if candidate.confidence > 0.8:
+            if candidate.picked_up == False or candidate.class_name == "BOX":
                 valid_candidates.append(candidate)
                 if candidate.class_name != "BOX":
                     self.cube_found = True
