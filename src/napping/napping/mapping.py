@@ -69,6 +69,7 @@ class ObjectCandidate:
     count: int
     last_seen: Time
     id: str
+    picked_up: bool
 
 
 BOX_SIZE = ObjectSize(x=0.24, y=0.16, z=0.1)
@@ -347,6 +348,7 @@ class Mapper(Node):
                     count=1,
                     last_seen=self.get_clock().now(),
                     id=str(uuid.uuid4()),
+                    picked_up=False,
                 )
             )
         for obj in self.given_objects:
@@ -358,6 +360,7 @@ class Mapper(Node):
                     count=1,
                     last_seen=self.get_clock().now(),
                     id=str(uuid.uuid4()),
+                    picked_up=False,
                 )
             )
 
@@ -382,6 +385,7 @@ class Mapper(Node):
                 obj_msg.confidence = DetectionMapper.log_odds_to_probability(
                     candidate.log_prob
                 )
+                obj_msg.picked_up = candidate.picked_up
                 msg.candidates.append(obj_msg)  # type: ignore
         self.object_pub.publish(msg)
 
@@ -504,20 +508,22 @@ class DetectionMapper:
 
             if best_match is not None:
                 best_match.count += 1
-                best_match.avg_pose.x += (
-                    detection.pose.position.x - best_match.avg_pose.x
-                ) / best_match.count
-                best_match.avg_pose.y += (
-                    detection.pose.position.y - best_match.avg_pose.y
-                ) / best_match.count
+                if not best_match.log_prob == np.inf:  # no update for known objects
+                    best_match.avg_pose.x += (
+                        detection.pose.position.x - best_match.avg_pose.x
+                    ) / best_match.count
+                    best_match.avg_pose.y += (
+                        detection.pose.position.y - best_match.avg_pose.y
+                    ) / best_match.count
 
-                angle_diff = (yaw - best_match.avg_pose.angle + math.pi) % (
-                    2 * math.pi
-                ) - math.pi
-                best_match.avg_pose.angle += angle_diff / best_match.count
+                    angle_diff = (yaw - best_match.avg_pose.angle + math.pi) % (
+                        2 * math.pi
+                    ) - math.pi
+                    best_match.avg_pose.angle += angle_diff / best_match.count
 
-                # increase confidence (log odds) by a fixed amount (e.g. 0.5)
-                best_match.log_prob += self.log_prob_increase
+                    # increase confidence (log odds) by a fixed amount (e.g. 0.5)
+                    # TODO: scale with confidence of detection
+                    best_match.log_prob += self.log_prob_increase
                 best_match.last_seen = Time.from_msg(detection.header.stamp)
                 # TODO: this is dependent on a single detection, should be changed in the future
                 if (
@@ -541,6 +547,7 @@ class DetectionMapper:
                         count=1,
                         last_seen=Time.from_msg(detection.header.stamp),
                         id=str(uuid.uuid4()),
+                        picked_up=False,
                     )
                 )
 
