@@ -303,7 +303,7 @@ class PathPlannerNode(Node):
         height = self.map_data.info.height
         map_data = self.map_data.data
 
-        if map_data[goal[0] * width + goal[1]] == 0:
+        if map_data[goal[0] * width + goal[1]] != 100:
             return goal
 
         gr, gc = goal
@@ -317,7 +317,7 @@ class PathPlannerNode(Node):
             nr = gr + round(dr * i / steps)
             nc = gc + round(dc * i / steps)
             if 0 <= nr < height and 0 <= nc < width:
-                if map_data[nr * width + nc] == 0:
+                if map_data[nr * width + nc] != 100:
                     return (nr, nc)
 
         return None
