@@ -129,7 +129,7 @@ class Mapper(Node):
         self.startup()
 
         # publishers
-        self.timer = self.create_timer(0.5, self.publish_oocupancy_map)
+        self.occupancy_pub_timer = self.create_timer(0.5, self.publish_occupancy_map)
         self.fov_trace_timer = self.create_timer(0.1, self.apply_fov_trace)
         self.marker_timer = self.create_timer(
             5.0, self.publish_workspace_perimeter_marker
@@ -332,7 +332,7 @@ class Mapper(Node):
         if self.occupancy_grid is not None:
             self.fov_updater.apply(self.occupancy_grid)
 
-    def publish_oocupancy_map(self):
+    def publish_occupancy_map(self):
         if self.occupancy_grid is not None:
             self.occupancy_grid.header.stamp = self.get_clock().now().to_msg()
             self.map_pub.publish(self.occupancy_grid)

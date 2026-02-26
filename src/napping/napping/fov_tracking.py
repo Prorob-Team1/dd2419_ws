@@ -38,7 +38,7 @@ class FOVUpdater:
         self,
         tf_buffer: Buffer,
         logger=None,
-        # TODO: These might cahgne dynamically based on occlusion
+        # TODO: These might change dynamically based on occlusion
         opening_angle: float = math.radians(80),
         r_min: float = 0.2,
         r_max: float = 1.5,
@@ -61,7 +61,7 @@ class FOVUpdater:
             )
         except Exception as e:
             if self.logger:
-                self.logger.warn(
+                self.logger.warning(
                     f"FOV TF lookup failed: {e}", throttle_duration_sec=5.0
                 )
             return False
@@ -93,10 +93,10 @@ class FOVUpdater:
         width = occupancy_grid.info.width
         height = occupancy_grid.info.height
 
-        gx0 = max(0, int((min_x - origin_x) / res))
-        gy0 = max(0, int((min_y - origin_y) / res))
-        gx1 = min(width - 1, int((max_x - origin_x) / res))
-        gy1 = min(height - 1, int((max_y - origin_y) / res))
+        gx0 = max(0, int(math.floor((min_x - origin_x) / res)))
+        gy0 = max(0, int(math.floor((min_y - origin_y) / res)))
+        gx1 = min(width - 1, int(math.floor((max_x - origin_x) / res)))
+        gy1 = min(height - 1, int(math.floor((max_y - origin_y) / res)))
 
         if gx0 > gx1 or gy0 > gy1:
             return True  # trapezoid outside map — not an error
