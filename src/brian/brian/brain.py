@@ -343,7 +343,7 @@ class Nav2GoalB(Behaviour):
             return
         
         goal = Navigation.Goal()
-        goal.goal.pose.position.z = response.x
+        goal.goal.pose.position.x = response.x
         goal.goal.pose.position.y = response.y
         goal.goal.pose.orientation.z = quaternion_from_euler(0.0,0.0,response.yaw)[2]
 
