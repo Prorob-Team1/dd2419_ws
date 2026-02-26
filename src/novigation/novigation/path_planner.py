@@ -1,7 +1,10 @@
+import threading
+
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.time import Time
 from rclpy.duration import Duration
 
@@ -11,23 +14,25 @@ from robp_interfaces.action import Navigation
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path, OccupancyGrid
 from geometry_msgs.msg import PoseStamped as PathPose
+from std_msgs.msg import Empty
 
 from math import sqrt
 import heapq
 
 
-
 class PathPlannerNode(Node):
-  
 
     def __init__(self):
         super().__init__('path_planner')
 
-        
         self.declare_parameter('map_topic', '/map')
         self.declare_parameter('planning_timeout', 5.0)
 
-        
+        self.goal_tolerance = 0.05
+
+        self._active_goal_handle = None
+        self._goal_lock = threading.Lock()
+
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
@@ -40,14 +45,9 @@ class PathPlannerNode(Node):
             10
         )
 
-       
-        self.path_pub = self.create_publisher(
-            Path,
-            '/planned_path',
-            10
-        )
+        self.path_pub = self.create_publisher(Path, '/planned_path', 10)
+        self.cancel_pub = self.create_publisher(Empty, '/cancel_navigation', 10)
 
-        
         self._action_server = ActionServer(
             self,
             Navigation,
@@ -60,8 +60,12 @@ class PathPlannerNode(Node):
 
         self.get_logger().info('Path Planner Node initialized')
 
+    def _clear_active_handle(self, goal_handle):
+        with self._goal_lock:
+            if self._active_goal_handle is goal_handle:
+                self._active_goal_handle = None
+
     def get_pose_from_tf(self):
-        
         try:
             t = self.tf_buffer.lookup_transform(
                 'map', 'base_link',
@@ -84,18 +88,16 @@ class PathPlannerNode(Node):
         self.get_logger().info('Map received', once=True)
 
     def goal_callback(self, goal_request):
-        
         self.get_logger().info('Received goal request')
 
         if self.get_pose_from_tf() is None:
-            self.get_logger().warn('No current pose available (TF lookup failed), rejecting goal')
+            self.get_logger().warn('No current pose available, rejecting goal')
             return GoalResponse.REJECT
 
         if self.map_data is None:
             self.get_logger().warn('No map data available, rejecting goal')
             return GoalResponse.REJECT
 
-        # Validate goal position
         goal_pose = goal_request.goal
         if not self.is_valid_goal(goal_pose):
             self.get_logger().warn('Invalid goal position, rejecting')
@@ -109,30 +111,24 @@ class PathPlannerNode(Node):
         return CancelResponse.ACCEPT
 
     async def execute_callback(self, goal_handle):
-        """
-        Main execution callback - computes the path using A*.
-        """
+        with self._goal_lock:
+            if self._active_goal_handle is not None and self._active_goal_handle.is_active:
+                self.get_logger().info('Preempting previous goal')
+                self._active_goal_handle.abort()
+            self._active_goal_handle = goal_handle
+
         self.get_logger().info('Executing path planning...')
 
-        # Get goal from request
         goal_pose = goal_handle.request.goal
-
-        # Publish feedback
         feedback_msg = Navigation.Feedback()
-        feedback_msg.feedback = 'Starting path planning'
-        goal_handle.publish_feedback(feedback_msg)
 
         try:
-            
             current_pose = self.get_pose_from_tf()
             if current_pose is None:
                 self.get_logger().error('Cannot get robot pose from TF')
                 goal_handle.abort()
-                result = Navigation.Result()
-                result.result = False
-                return result
+                return self._make_result(False)
 
-            
             start_grid = self.world_to_grid(current_pose)
             goal_grid = self.world_to_grid(goal_pose)
 
@@ -140,71 +136,73 @@ class PathPlannerNode(Node):
             if snapped is None:
                 self.get_logger().warn('No free cell found near goal')
                 goal_handle.abort()
-                result = Navigation.Result()
-                result.result = False
-                return result
+                return self._make_result(False)
             if snapped != goal_grid:
-                self.get_logger().info(f'Goal {goal_grid} is inside obstacle, snapped to {snapped}')
+                self.get_logger().info(f'Goal snapped from {goal_grid} to {snapped}')
                 goal_grid = snapped
 
             self.get_logger().info(f'Planning from {start_grid} to {goal_grid}')
 
-         
-            feedback_msg.feedback = 'Computing A* path...'
-            goal_handle.publish_feedback(feedback_msg)
-
-          
             path_grid = self.astar_search(start_grid, goal_grid)
-
-            if path_grid is not None:
-                self.get_logger().info(f'Path found with {len(path_grid)} grid waypoints')
-
             if path_grid is None:
-                self.get_logger().warn('No path found!')
+                self.get_logger().warn('No path found')
                 goal_handle.abort()
-                result = Navigation.Result()
-                result.result = False
-                return result
+                return self._make_result(False)
 
-            # Convert grid path back to world coordinates
+            self.get_logger().info(f'Path found with {len(path_grid)} grid cells')
             path_world = self.grid_path_to_world(path_grid)
-
-      
-            feedback_msg.feedback = f'Path found with {len(path_world)} waypoints'
-            goal_handle.publish_feedback(feedback_msg)
-
-            
             self.publish_path(path_world, goal_pose.header.frame_id)
 
-           
-            if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
-                self.get_logger().info('Goal canceled')
-                result = Navigation.Result()
-                result.result = False
-                return result
+            feedback_msg.feedback = 'Navigating...'
+            goal_handle.publish_feedback(feedback_msg)
 
-            goal_handle.succeed()
+            goal_x = goal_pose.pose.position.x
+            goal_y = goal_pose.pose.position.y
+            rate = self.create_rate(10)
+
+            while rclpy.ok():
+                if not goal_handle.is_active:
+                    self.get_logger().info('Goal preempted by newer goal')
+                    return self._make_result(False)
+
+                if goal_handle.is_cancel_requested:
+                    self.cancel_pub.publish(Empty())
+                    goal_handle.canceled()
+                    self._clear_active_handle(goal_handle)
+                    self.get_logger().info('Goal cancelled')
+                    return self._make_result(False)
+
+                current = self.get_pose_from_tf()
+                if current is not None:
+                    dx = current.pose.position.x - goal_x
+                    dy = current.pose.position.y - goal_y
+                    dist = sqrt(dx * dx + dy * dy)
+                    feedback_msg.feedback = f'dist_to_goal={dist:.2f}'
+                    goal_handle.publish_feedback(feedback_msg)
+                    if dist < self.goal_tolerance:
+                        goal_handle.succeed()
+                        self._clear_active_handle(goal_handle)
+                        self.get_logger().info('Goal reached')
+                        return self._make_result(True)
+
+                rate.sleep()
 
         except Exception as e:
-            self.get_logger().error(f'Path planning failed: {str(e)}')
-            goal_handle.abort()
-            result = Navigation.Result()
-            result.result = False
-            return result
+            self.get_logger().error(f'Path planning failed: {e}')
+            if goal_handle.is_active:
+                goal_handle.abort()
+            self._clear_active_handle(goal_handle)
+            return self._make_result(False)
 
-       
+        return self._make_result(False)
+
+    def _make_result(self, success):
         result = Navigation.Result()
-        result.result = True
-        self.get_logger().info('Path planning completed successfully')
+        result.result = success
         return result
 
     def astar_search(self, start, goal):
-        """
-        A* with euclidean distance heuristic.
-        """
         if self.map_data is None:
-            self.get_logger().error('No map data available for A*')
             return None
 
         width = self.map_data.info.width
@@ -233,7 +231,7 @@ class PathPlannerNode(Node):
             _, _, current = heapq.heappop(open_set)
 
             if current == goal:
-                return self.reconstruct_path(came_from, current)
+                return self._reconstruct_path(came_from, current)
 
             if current in closed_set:
                 continue
@@ -250,7 +248,7 @@ class PathPlannerNode(Node):
                     continue
 
                 cell_cost = map_data[nr * width + nc]
-                if cell_cost == 100:  
+                if cell_cost == 100:
                     continue
 
                 nb = (nr, nc)
@@ -266,39 +264,29 @@ class PathPlannerNode(Node):
                     heapq.heappush(open_set, (f, counter, nb))
                     counter += 1
 
-        self.get_logger().warn('A* search failed: No path to goal')
+        self.get_logger().warn('A* found no path to goal')
         return None
 
-    def reconstruct_path(self, came_from, current):
-      
+    def _reconstruct_path(self, came_from, current):
         path = [current]
-
         while current in came_from:
             current = came_from[current]
             path.append(current)
-
-        path.reverse() 
+        path.reverse()
         return path
 
-   
     def is_valid_goal(self, goal_pose: PoseStamped) -> bool:
         if self.map_data is None:
             return False
-        goal_grid = self.world_to_grid(goal_pose)
-        row, col = goal_grid
-
+        row, col = self.world_to_grid(goal_pose)
         width = self.map_data.info.width
         height = self.map_data.info.height
-
         if row < 0 or row >= height or col < 0 or col >= width:
-            self.get_logger().warn(f'Goal {goal_grid} out of bounds')
+            self.get_logger().warn(f'Goal ({row}, {col}) out of bounds')
             return False
-
         return True
 
     def find_nearest_free_cell(self, goal, start):
-        "If goal is occupied it walks a straight line from the goal towards current pose until it hits a free cel "
-    
         width = self.map_data.info.width
         height = self.map_data.info.height
         map_data = self.map_data.data
@@ -311,7 +299,6 @@ class PathPlannerNode(Node):
         dr = sr - gr
         dc = sc - gc
         steps = max(abs(dr), abs(dc))
-        
 
         for i in range(1, steps + 1):
             nr = gr + round(dr * i / steps)
@@ -325,39 +312,27 @@ class PathPlannerNode(Node):
     def world_to_grid(self, pose: PoseStamped) -> tuple:
         if self.map_data is None:
             return (0, 0)
-
- 
         resolution = self.map_data.info.resolution
         origin_x = self.map_data.info.origin.position.x
         origin_y = self.map_data.info.origin.position.y
-
         col = int((pose.pose.position.x - origin_x) / resolution)
         row = int((pose.pose.position.y - origin_y) / resolution)
-
         return (row, col)
 
     def grid_to_world(self, row: int, col: int) -> tuple:
         if self.map_data is None:
             return (0.0, 0.0)
-
         resolution = self.map_data.info.resolution
         origin_x = self.map_data.info.origin.position.x
         origin_y = self.map_data.info.origin.position.y
-
         x = col * resolution + origin_x
         y = row * resolution + origin_y
-
         return (x, y)
 
     def grid_path_to_world(self, grid_path: list) -> list:
-        world_path = []
-        for row, col in grid_path:
-            x, y = self.grid_to_world(row, col)
-            world_path.append((x, y))
-        return world_path
+        return [self.grid_to_world(r, c) for r, c in grid_path]
 
     def publish_path(self, path_world: list, frame_id: str):
-    
         path_msg = Path()
         path_msg.header.frame_id = frame_id
         path_msg.header.stamp = self.get_clock().now().to_msg()
@@ -379,9 +354,11 @@ def main(args=None):
     rclpy.init(args=args)
 
     path_planner = PathPlannerNode()
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(path_planner)
 
     try:
-        rclpy.spin(path_planner)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:

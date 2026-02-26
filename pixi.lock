@@ -6387,6 +6387,9 @@ packages:
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 88a84e5 (add: fix goal cancelation)
   size: 568910
   timestamp: 1772001095642
 =======
@@ -16478,7 +16481,7 @@ packages:
   sha256: ad6cbf1e2591051cce268e604e91c7a696a928bad92af084f9943a16350c282b
   md5: ca3931d0585cb22f85c75db523ccc442
   depends:
-  - python
+  - pythons
   - ros-jazzy-compressed-depth-image-transport
   - ros-jazzy-compressed-image-transport
   - ros-jazzy-ros-workspace
@@ -30932,6 +30935,7 @@ packages:
   license: MIT
   license_family: MIT
 <<<<<<< HEAD
+<<<<<<< HEAD
   size: 839652
   timestamp: 1770819209719
 =======
@@ -30939,6 +30943,10 @@ packages:
   size: 835896
   timestamp: 1741901112627
 >>>>>>> 58625f7 (add: py-trees)
+=======
+  size: 839652
+  timestamp: 1770819209719
+>>>>>>> 88a84e5 (add: fix goal cancelation)
 - conda: https://prefix.dev/conda-forge/osx-arm64/xorg-libx11-1.8.12-h6a5fb8c_0.conda
   sha256: 3ba39f182ecb6bf0bfb2dbbc08b1fc80a0a97e5c07cad06a03e71baf1fe7ac9d
   md5: 89b59aaa3c35257dba0b7c2d980f35f0
