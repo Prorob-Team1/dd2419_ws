@@ -9,6 +9,7 @@ from rclpy.time import Time
 from rclpy.duration import Duration
 
 from nav_msgs.msg import OccupancyGrid
+from visualization_msgs.msg import Marker
 from robp_interfaces.srv import GetGoal
 from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg
 
@@ -16,7 +17,7 @@ from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
-from tf_transformations import euler_from_quaternion
+from tf_transformations import euler_from_quaternion, quaternion_from_euler
 
 import numpy as np
 
@@ -42,6 +43,8 @@ class GetGoalService(Node):
             callback_group=mutgroup
         )
         self.map = None
+
+        self.goal_marker_publisher = self.create_publisher(Marker,"/nav_goal", 1)
 
         self.object_subscriber = self.create_subscription(
             ObjectCandidateArrayMsg,
@@ -101,7 +104,52 @@ class GetGoalService(Node):
         except TypeError as error:
             self.get_logger().warning(f"Oops, something went wrong: {error}")
         
+        self.publish_goal_marker(response, request.goal_type)
+
         return response
+
+    def publish_goal_marker(self, response: GetGoal.Response, goal_type):
+        goal_marker = Marker()
+
+        goal_marker.header.frame_id = "map"
+        goal_marker.header.stamp = self.get_clock().now().to_msg()
+
+        if goal_type == EXPLORE_GOAL:
+            goal_marker.color.r = 0.0
+            goal_marker.color.g = 1.0
+            goal_marker.color.b = 0.0
+        elif goal_type == CUBE_GOAL:
+            goal_marker.color.r = 1.0
+            goal_marker.color.g = 0.0
+            goal_marker.color.b = 0.0
+        elif goal_type == EXPLORE_GOAL:
+            goal_marker.color.r = 0.0
+            goal_marker.color.g = 0.0
+            goal_marker.color.b = 1.0
+
+        goal_marker.ns = "goal"
+        goal_marker.id = 0
+        goal_marker.color.a = 1.0
+        goal_marker.type = Marker.ARROW
+        goal_marker.action = Marker.ADD
+
+        goal_marker.pose.position.x = response.x
+        goal_marker.pose.position.y = response.y
+        goal_marker.pose.position.z = 0.03
+        q = quaternion_from_euler(0.0,0.0,response.yaw)
+        goal_marker.pose.orientation.x = q[0]
+        goal_marker.pose.orientation.y = q[1]
+        goal_marker.pose.orientation.z = q[2]
+        goal_marker.pose.orientation.w = q[3]
+
+        goal_marker.scale.x = 0.2
+        goal_marker.scale.y = 0.03
+        goal_marker.scale.z = 0.03
+        #goal_marker.lifetime = Duration(seconds=1)
+
+        self.goal_marker_publisher.publish(goal_marker)
+
+
 
     def find_frontiers(self, map_array):
         frontier_cells = []
@@ -182,7 +230,7 @@ class GetGoalService(Node):
         if len(frontiers) == 0:
             self.get_logger().warning("No distant frontiers available, returning fallback goal")
             return robot_x, robot_y, robot_yaw
-        (x,y) = frontiers[np.argmin(rs)]
+        (x,y) = np.random.choice(frontiers) # frontiers[np.argmin(rs)]
         # Convert back from grid coordinates to world coordinates (x, y)
         x = x * self.map.info.resolution + self.map.info.origin.position.x
         y = y * self.map.info.resolution + self.map.info.origin.position.y
