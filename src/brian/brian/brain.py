@@ -30,6 +30,7 @@ from py_trees.common import Status
 from action_msgs.msg import GoalStatus
 
 from robp_interfaces.action import DummyAction
+from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg
 
 
 EXPLORE_GOAL = 0
@@ -46,6 +47,12 @@ class Brain(Node):
 
         # Conditions
         self.cube_found = False
+        self.object_subscriber = self.create_subscription(
+            ObjectCandidateArrayMsg,
+            "/object_candidates",
+            self.object_callback,
+            10
+        )
         self.in_pickup_range = False
         self.cube_in_gripper = False
 
@@ -155,6 +162,16 @@ class Brain(Node):
             ],
             memory = False
         )
+    
+    def object_callback(self, msg: ObjectCandidateArrayMsg):
+        # check if valid cube candidate exists, handles the postcondition of "cube found"
+        for candidate in msg.candidates:
+            candidate: ObjectCandidateMsg
+            if candidate.confidence > 0.8 and candidate.class_name != "BOX":
+                self.cube_found = True
+                return
+            
+        self.cube_found = False
 
 
 class CubePickedUpCondition(Behaviour):
@@ -378,13 +395,6 @@ class Nav2GoalB(Behaviour):
 class ExploreB(Nav2GoalB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, EXPLORE_GOAL)
-
-    def update_postcondition(self):
-        if self.current_status == Status.SUCCESS:
-            self.node.cube_found = True
-        else:
-            self.node.cube_found = False
-        return 
 
 class Nav2CubeB(Nav2GoalB):
     def __init__(self, node: Brain):
