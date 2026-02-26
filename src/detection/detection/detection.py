@@ -10,32 +10,39 @@ from rclpy.node import Node
 from rclpy.duration import Duration
 
 # TF2 imports for coordinate transformation
-from tf2_ros import TransformException
+# from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-import tf2_geometry_msgs 
+import tf2_geometry_msgs
 
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 from geometry_msgs.msg import PointStamped
 from visualization_msgs.msg import Marker
 from rclpy.executors import MultiThreadedExecutor
+from robp_interfaces.msg import ObjectDetectionMsg, ObjectCandidateArrayMsg
+from napping.mapping import ObjectClassification
+from typing import Optional
+from geometry_msgs.msg import PoseStamped
+
 
 class Detection(Node):
 
     def __init__(self):
-        super().__init__('detection')
+        super().__init__("detection")
 
         # TF Buffer to listen for transforms
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Publisher for Markers (Visual "Placing" of objects)
-        self.marker_pub = self.create_publisher(Marker, '/detected_objects', 10)
+        self.object_detection_pub = self.create_publisher(
+            ObjectCandidateArrayMsg, "/object_detections", 10
+        )
 
         # Subscribe to point cloud
         self.create_subscription(
-            PointCloud2, '/realsense/depth/color/points', self.cloud_callback, 10)
+            PointCloud2, "/realsense/depth/color/points", self.cloud_callback, 10
+        )
 
         self.get_logger().info("Detection node started...")
 
@@ -47,110 +54,117 @@ class Detection(Node):
         Your task is to use the point cloud data in 'msg' to detect objects. You are allowed to add/change things outside this function.
 
         Keyword arguments:
-        msg -- A point cloud ROS message. To see more information about it 
+        msg -- A point cloud ROS message. To see more information about it
         run 'ros2 interface show sensor_msgs/msg/PointCloud2' in a terminal.
         """
 
         # Convert ROS -> NumPy
         gen = pc2.read_points_numpy(msg, skip_nans=True)
-        
-        
-        gen = gen[::50]
+        points = gen[:, :3]
+        colors = np.empty(points.shape, dtype=np.uint32)
 
-        if gen.shape[0] == 0:
-            return
+        for idx, x in enumerate(gen):
+            c = x[3]
+            s = struct.pack(">f", c)
+            i = struct.unpack(">l", s)[0]
+            pack = ctypes.c_uint32(i).value
+            colors[idx, 0] = np.asarray((pack >> 16) & 255, dtype=np.uint8)
+            colors[idx, 1] = np.asarray((pack >> 8) & 255, dtype=np.uint8)
+            colors[idx, 2] = np.asarray(pack & 255, dtype=np.uint8)
 
-        points = gen[:, :3] 
-      
+        colors = colors.astype(np.float32) / 255
 
-        rgb_floats = gen[:, 3]
-        colors = np.zeros((points.shape[0], 3), dtype=np.float32)
+        distance_limit = 1
+        distances = np.linalg.norm(points, axis=1)
+        close_points = points[distances <= distance_limit]
+        close_colors = colors[distances <= distance_limit]
 
-       
-        for i, c in enumerate(rgb_floats):
-             
-             s = struct.pack('>f', c)
-             packed = struct.unpack('>l', s)[0]
-             
-             r = (packed >> 16) & 255
-             g = (packed >> 8) & 255
-             b = packed & 255
-             colors[i] = [r, g, b]
+        # color picked and hand tuned, using hsv would be better
+        red_mask = (
+            (close_colors[:, 0] >= 200 / 255)
+            & (close_colors[:, 1] <= 90 / 255)
+            & (close_colors[:, 2] <= 90 / 255)
+        )
+        green_mask = (
+            (close_colors[:, 0] <= 20 / 255)
+            & (close_colors[:, 1] >= 90 / 255)
+            & (close_colors[:, 1] <= 130 / 255)
+            & (close_colors[:, 2] >= 80 / 255)
+            & (close_colors[:, 2] <= 120 / 255)
+        )
 
-        
-        colors /= 255.0
+        red_points = close_points[red_mask]
+        green_points = close_points[green_mask]
+        red_colors = close_colors[red_mask]
+        green_colors = close_colors[green_mask]
 
-      
-        dist_mask = points[:, 2] < 0.9
-        
-        
-        points = points[dist_mask]
-        colors = colors[dist_mask]
+        # filtered_points = np.vstack([red_points, green_points])
+        # filtered_colors = np.vstack([red_colors, green_colors])
+        detection_msgs = []
 
-        if points.shape[0] == 0:
-            return
+        RED = "\033[91m"
+        GREEN = "\033[92m"
+        RESET = "\033[0m"
+        object_detection_th = 20
+        has_detected_red_object = len(red_points) > object_detection_th
+        has_detected_green_object = len(green_points) > object_detection_th
+        if has_detected_red_object:
+            self.get_logger().info(
+                f"{RED}Red Ball spotted ({len(red_points)} points){RESET}"
+            )
+            detection_msgs.append(
+                self.process_object(
+                    red_points, ObjectClassification.CUBE_RED, msg.header
+                )
+            )
+        if has_detected_green_object:
+            self.get_logger().info(
+                f"{GREEN}Green Cube spotted ({len(green_points)} points){RESET}"
+            )
+            detection_msgs.append(
+                self.process_object(
+                    green_points, ObjectClassification.CUBE_GREEN, msg.header
+                )
+            )
+        # remove None values from failed detections
+        detection_msgs = [d for d in detection_msgs if d is not None]
+        self.object_detection_pub.publish(
+            ObjectCandidateArrayMsg(detections=detection_msgs)
+        )
 
+    def process_object(
+        self, points, classification: ObjectClassification, header
+    ) -> Optional[ObjectDetectionMsg]:
 
-        red_mask = (colors[:, 0] > 0.6) & (colors[:, 1] < 0.4) & (colors[:, 2] < 0.4)
-        self.process_object(points, red_mask, "red_cube", [1.0, 0.0, 0.0], msg.header, Marker.CUBE)
+        centroid = np.mean(points, axis=0)
 
+        p = PointStamped()
+        p.header = header
+        p.point.x = float(centroid[0])
+        p.point.y = float(centroid[1])
+        p.point.z = float(centroid[2])
 
-        green_mask = (colors[:, 1] > 0.6) & (colors[:, 0] < 0.4) & (colors[:, 2] < 0.4)
-        self.process_object(points, green_mask, "green_cube", [0.0, 1.0, 0.0], msg.header, Marker.CUBE)
+        try:
 
+            trans = self.tf_buffer.lookup_transform(
+                "map", header.frame_id, header.stamp, timeout=Duration(seconds=0.1)
+            )
+            p_map = tf2_geometry_msgs.do_transform_point(p, trans)
+            pose_map = PoseStamped()
+            pose_map.header = p_map.header
+            pose_map.pose.position = p_map.point
+            pose_map.pose.orientation.w = 1.0
+            detection_msg = ObjectDetectionMsg()
+            detection_msg.header.stamp = p_map.header.stamp
+            detection_msg.header.frame_id = "map"
+            detection_msg.class_name = classification.value
+            detection_msg.pose = pose_map.pose
+            detection_msg.confidence = 1.0
+            return detection_msg
 
-    def process_object(self, points, mask, name, color_rgb, header, marker_type=Marker.CUBE):
-
-        if np.sum(mask) > 10:
-
-            object_points = points[mask]
-            centroid = np.mean(object_points, axis=0)
-
-
-            p = PointStamped()
-            p.header = header
-            p.point.x = float(centroid[0])
-            p.point.y = float(centroid[1])
-            p.point.z = float(centroid[2])
-
-
-            try:
-
-                trans = self.tf_buffer.lookup_transform('map', header.frame_id, header.stamp, timeout=Duration(seconds=0.1))
-                p_map = tf2_geometry_msgs.do_transform_point(p, trans)
-
-
-                self.get_logger().info(f"Found {name} at {p_map.point.x:.2f}, {p_map.point.y:.2f}")
-
-
-                self.publish_marker(p_map, name, color_rgb, marker_type)
-
-            except TransformException as e:
-                print("Could not transform")
-                pass
-
-    def publish_marker(self, point_stamped, ns, color, marker_type=Marker.CUBE):
-        marker = Marker()
-        marker.header = point_stamped.header
-        marker.ns = ns
-        marker.id = 0
-        marker.type = marker_type
-        marker.action = Marker.ADD
-        marker.lifetime = Duration(seconds=1)
-
-        marker.pose.position = point_stamped.point
-        marker.pose.orientation.w = 1.0
-
-        marker.scale.x = 0.05
-        marker.scale.y = 0.05
-        marker.scale.z = 0.05
-
-        marker.color.r = float(color[0])
-        marker.color.g = float(color[1])
-        marker.color.b = float(color[2])
-        marker.color.a = 1.0
-
-        self.marker_pub.publish(marker)
+        except Exception as e:
+            print("Could not transform")
+            return None
 
 
 def main():
@@ -164,5 +178,6 @@ def main():
         pass
     rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
