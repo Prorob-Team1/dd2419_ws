@@ -68,7 +68,7 @@ class Odometry(Node):
         dt = Time.from_msg(msg.header.stamp) - Time.from_msg(self._last_imu_stamp)
         yaw = self._yaw_imu + w_z * dt.nanoseconds / 1e9
         # wrap angle to [-pi, pi]
-        self._yaw_imu = np.arctan2(np.sin(yaw), np.cos(yaw))
+        self._yaw_imu = (yaw + np.pi)%(2.0 * np.pi) - np.pi # np.arctan2(np.sin(yaw), np.cos(yaw))
         self._last_imu_stamp = msg.header.stamp
 
         with self._yaw_lock:
