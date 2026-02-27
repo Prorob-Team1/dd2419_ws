@@ -206,7 +206,7 @@ class Navigator(Node):
             w = 2.0 * alpha  
         else:
             #Pure pursuit 
-            kappa = 3.0 * math.sin(alpha) / ld
+            kappa = 2.0 * math.sin(alpha) / ld
             v = speed
             w = speed * kappa
 
