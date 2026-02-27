@@ -557,6 +557,9 @@ class Nav2GoalB(Behaviour):
     def initialise(self):
         self.current_status = Status.RUNNING
         self.node.get_logger().info(f"{self.name}: computing goal")
+        if self.node.map is None:
+            self.current_status = Status.FAILURE
+            return
         result = self.node.goal_provider.get_goal(self.goal_type)
         if result is None:
             self.node.get_logger().error(f"{self.name}: goal provider failed")
