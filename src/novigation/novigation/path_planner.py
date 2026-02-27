@@ -179,6 +179,7 @@ class PathPlannerNode(Node):
                     feedback_msg.feedback = f'dist_to_goal={dist:.2f}'
                     goal_handle.publish_feedback(feedback_msg)
                     if dist < self.goal_tolerance:
+                        self.cancel_pub.publish(Empty())  
                         goal_handle.succeed()
                         self._clear_active_handle(goal_handle)
                         self.get_logger().info('Goal reached')
