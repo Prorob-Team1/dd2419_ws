@@ -587,13 +587,13 @@ class DetectionMapper:
                     self.node.object_candidates, key=lambda c: c.log_prob
                 )
                 self.node.object_candidates.remove(worst_candidate)
-            self.node.get_logger().info(
+            self.node.get_logger().warning(
                 f"Had to remove candidate {worst_candidate.id} to make room for new candidate"
             )
         # add new candidate
         self.node.object_candidates.append(candidate)
         self.node.get_logger().info(
-            f"Added new candidate {candidate.id} with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
+            f"Added new candidate with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
         )
         assert len(self.node.object_candidates) <= self.node.object_max_candidates
 

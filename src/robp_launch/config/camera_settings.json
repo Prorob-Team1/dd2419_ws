@@ -1,9 +1,4 @@
 {
-    "device": {
-        "fw version": "5.12.7.150",
-        "name": "Intel RealSense D435I",
-        "product line": "D400"
-    },
     "parameters": {
         "aux-param-autoexposure-setpoint": "1536",
         "aux-param-colorcorrection1": "0.298828",
@@ -93,12 +88,5 @@
         "param-texturedifferencethresh": "2466",
         "param-usersm": "1",
         "param-zunits": "1000"
-    },
-    "schema version": 1,
-    "viewer": {
-        "stream-depth-format": "Z16",
-        "stream-fps": "10",
-        "stream-height": "480",
-        "stream-width": "848"
     }
 }
