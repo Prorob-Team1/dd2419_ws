@@ -15,13 +15,6 @@ from robp_interfaces.msg import DutyCycles, ObjectCandidateArrayMsg
 from nav_msgs.msg import Path
 from std_msgs.msg import Empty
 
-from tf2_ros import TransformListener, Buffer
-from tf_transformations import euler_from_quaternion
-
-from robp_interfaces.msg import DutyCycles
-from nav_msgs.msg import Path
-from std_msgs.msg import Empty
-
 
 class Navigator(Node):
 
@@ -41,9 +34,11 @@ class Navigator(Node):
         self.max_w = 2 * math.pi / 5
 
       
-        self.path = None  
+        self.path = None
         self.path_idx = 0  # Current progress along path
-        self.aligning = False 
+        self.aligning = False
+        self._backup_steps_remaining = 0
+        self._object_candidates = []
 
         
         self.tf_buffer = Buffer()
@@ -51,6 +46,7 @@ class Navigator(Node):
 
         self.create_subscription(Path, '/planned_path', self.path_callback, 10)
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
+        self.create_subscription(ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10)
 
        
         self.motor_pub = self.create_publisher(
@@ -62,6 +58,9 @@ class Navigator(Node):
 
         self.get_logger().info("Pure pursuit navigator initialized")
 
+    def candidates_callback(self, msg: ObjectCandidateArrayMsg):
+        self._object_candidates = msg.candidates
+
     def path_callback(self, msg: Path):
         if len(msg.poses) < 2:
             self.get_logger().warn("Received path with fewer than 2 poses, ignoring")
@@ -70,12 +69,32 @@ class Navigator(Node):
         self.path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         self.path_idx = 0
         self.aligning = True
+
+        if self._near_object_candidate(radius=0.6):
+            self._backup_steps_remaining = 15
+            self.get_logger().info('Object candidate nearby, backing up before following path')
+
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
 
     def cancel_callback(self, _msg: Empty):
         self.get_logger().info("Navigation cancelled")
         self.path = None
+        self._backup_steps_remaining = 0
         self.control_wheels(0.0, 0.0)
+
+    def _near_object_candidate(self, radius=0.6):
+        if not self._object_candidates:
+            return False
+        pose = self.get_robot_pose()
+        if pose is None:
+            return False
+        rx, ry, _ = pose
+        for candidate in self._object_candidates:
+            dx = candidate.pose.position.x - rx
+            dy = candidate.pose.position.y - ry
+            if math.hypot(dx, dy) < radius:
+                return True
+        return False
 
     def get_robot_pose(self):
         """Get robot (x, y, theta) from TF."""
@@ -107,6 +126,13 @@ class Navigator(Node):
             return None
 
     def control_loop(self):
+        if self._backup_steps_remaining > 0:
+            self.control_wheels(-0.1, 0.0)
+            self._backup_steps_remaining -= 1
+            if self._backup_steps_remaining == 0:
+                self.get_logger().info('Backup complete, starting path following')
+            return
+
         if self.path is None:
             return
 
