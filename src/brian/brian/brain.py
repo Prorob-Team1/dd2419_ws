@@ -111,13 +111,13 @@ class GoalProvider:
 
     def get_goal(self, goal_type):
         if goal_type == EXPLORE_GOAL: 
-            self.node.get_logger().info("Recieved exploration goal request")
+            self.node.get_logger().debug("Recieved exploration goal request")
             get_goal = lambda: self.get_explore_goal()
         elif goal_type == CUBE_GOAL:
-            self.node.get_logger().info("Recieved cube goal request")
+            self.node.get_logger().debug("Recieved cube goal request")
             get_goal = lambda: self.get_object_goal(CUBE_GOAL)
         elif goal_type == BOX_GOAL:
-            self.node.get_logger().info("Recieved box goal request")
+            self.node.get_logger().debug("Recieved box goal request")
             get_goal = lambda: self.get_object_goal(BOX_GOAL)
         else:
             self.node.get_logger().warning("Recieved unknown goal request, returning an empty goal")
@@ -323,6 +323,10 @@ class Brain(Node):
 
         self.root = self.make_bt()
         self.create_timer(self.tick_period, self.root.tick_once)
+
+        self.get_logger().info(
+            f"{ANSIEscClr.BOLD}I AM ALIVE!{ANSIEscClr.RESET}"
+        )
 
 
     def map_callback(self, msg: OccupancyGrid):
@@ -650,7 +654,7 @@ class Nav2GoalB(Behaviour):
         # Informative and fancy message :)))))
         goal_str = format_goal_text(self.goal_type, self.node.target_cube)
         self.node.get_logger().info(
-            f"Sent {goal_str} goal at {ANSIEscClr.BOLD}({x:.2f}, {y:.2f}){ANSIEscClr.RESET}"
+            f"Sent {goal_str} goal at {ANSIEscClr.BOLD}({x=:.2f}, {y=:.2f}){ANSIEscClr.RESET}"
         )
         goal = Navigation.Goal()
         goal.goal.pose.position.x = x
@@ -774,8 +778,8 @@ def main():
         executor.spin()
     except KeyboardInterrupt:
         pass
-
-    node.destroy_node()
+    node.get_logger().info(f"{ANSIEscClr.RED}{ANSIEscClr.BOLD}I AM DEAD!{ANSIEscClr.RESET}")
+    executor.shutdown(timeout_sec=1)
     rclpy.shutdown()
 
 
