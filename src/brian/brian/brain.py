@@ -137,8 +137,8 @@ class GoalProvider:
         grid_row = int(min(grid_y, node.map.info.height - 1))
         frontiers = np.array(self.find_frontiers(map_arr))
         if frontiers.size == 0:
-            node.get_logger().warning("No frontiers available, returning fallback goal")
-            return robot_x, robot_y, robot_yaw
+            node.get_logger().warning("No frontiers available, returning fallback goal (start position)")
+            return 0.49, 0.5, 0.0 # is subject to change
         rs = np.sum(([grid_row, grid_col] - frontiers) ** 2, axis=1)
         mask = (rs > 0.5 / node.map.info.resolution)
         frontiers = frontiers[mask]
@@ -557,6 +557,9 @@ class Nav2GoalB(Behaviour):
     def initialise(self):
         self.current_status = Status.RUNNING
         self.node.get_logger().info(f"{self.name}: computing goal")
+        if self.node.map is None:
+            self.current_status = Status.FAILURE
+            return
         result = self.node.goal_provider.get_goal(self.goal_type)
         if result is None:
             self.node.get_logger().error(f"{self.name}: goal provider failed")
@@ -693,4 +696,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
