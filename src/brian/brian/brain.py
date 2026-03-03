@@ -34,6 +34,8 @@ from action_msgs.msg import GoalStatus
 from robp_interfaces.action import DummyAction
 from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg
 
+from napping.mapping import ObjectClassification
+
 
 EXPLORE_GOAL = 0
 CUBE_GOAL = 1
@@ -80,7 +82,6 @@ class GoalProvider:
         self.node.goal_marker_publisher.publish(goal_marker)
 
     def get_goal(self, goal_type):
-        x, y, yaw = 0.0, 0.0, 0.0
         if goal_type == EXPLORE_GOAL: 
             self.node.get_logger().info("Recieved exploration goal request")
             get_goal = lambda: self.get_explore_goal()
@@ -92,19 +93,21 @@ class GoalProvider:
             get_goal = lambda: self.get_object_goal(BOX_GOAL)
         else:
             self.node.get_logger().warning("Recieved unknown goal request, returning an empty goal")
-            return x,y,yaw
+            return None
         
         if self.node.map == None:
             self.node.get_logger().warning("No map data available, returning an empty goal")
-            return x,y,yaw
+            return None
         
         try:
             (x,y,yaw) = get_goal()
             self.publish_goal_marker(x,y,yaw, goal_type)
+            return x,y,yaw
         except TypeError as error:
             self.node.get_logger().warning(f"Oops, something went wrong: {error}")
         
-        return x,y,yaw
+        
+        
 
     def find_frontiers(self, map_array):
         frontier_cells = []
@@ -130,15 +133,38 @@ class GoalProvider:
         robot_pose = node.get_robot_pose()
         if robot_pose is None:
             return None
+
+        r = np.random.rand()
+        frontiers = np.array(self.find_frontiers(map_arr))
+        if frontiers.size == 0:
+            if len(self.node.potential_candidates) < 1:
+                node.get_logger().warning("No frontiers available, returning fallback goal (start position)")
+                return self.node.start_pose 
+            r = 1.0 # ensure we always go to a candidate
+
+        # Go to a seen but uncertain object candidate 40% of the time if frontiers are available, otherwise every time
+        if r > 0.6:
+            candidates = self.node.potential_candidates
+            if len(candidates) > 0:
+                idx = np.random.choice(len(candidates))
+                candidate = candidates[idx]
+                x = candidate.pose.position.x
+                y = candidate.pose.position.y
+                yaw = euler_from_quaternion([
+                    candidate.pose.orientation.x,
+                    candidate.pose.orientation.y,
+                    candidate.pose.orientation.z,
+                    candidate.pose.orientation.w,
+                ])[2]
+                return x, y, yaw
+
+        # Go to a new frontier
         robot_x, robot_y, robot_yaw = robot_pose
         grid_x = (robot_x - node.map.info.origin.position.x) / node.map.info.resolution
         grid_y = (robot_y - node.map.info.origin.position.y) / node.map.info.resolution
         grid_col = int(min(grid_x, node.map.info.width - 1))
         grid_row = int(min(grid_y, node.map.info.height - 1))
-        frontiers = np.array(self.find_frontiers(map_arr))
-        if frontiers.size == 0:
-            node.get_logger().warning("No frontiers available, returning fallback goal (start position)")
-            return 0.49, 0.5, 0.0 # is subject to change
+        
         rs = np.sum(([grid_row, grid_col] - frontiers) ** 2, axis=1)
         mask = (rs > 0.5 / node.map.info.resolution)
         frontiers = frontiers[mask]
@@ -160,9 +186,9 @@ class GoalProvider:
             return None
         valid_objects: list[ObjectCandidateMsg] = []
         for candidate in node.valid_candidates:
-            if candidate.class_name == "BOX" and goal_type == BOX_GOAL:
+            if candidate.class_name == ObjectClassification.BOX and goal_type == BOX_GOAL:
                 valid_objects.append(candidate)
-            elif candidate.class_name != "BOX" and goal_type == CUBE_GOAL:
+            elif candidate.class_name != ObjectClassification.BOX and goal_type == CUBE_GOAL:
                 valid_objects.append(candidate)
         closest_obj = None
         closest_pose = None
@@ -217,6 +243,8 @@ class Brain(Node):
         # map / object tracking
         self.map = None
         self.valid_candidates: list[ObjectCandidateMsg] = []
+        self.potential_candidates: list[ObjectCandidateMsg] = []
+        self.start_pose = self.get_robot_pose()
 
         self.map_subscriber = self.create_subscription(
             OccupancyGrid,
@@ -228,6 +256,13 @@ class Brain(Node):
             ObjectCandidateArrayMsg,
             "/object_candidates",
             self.object_callback,
+            10
+        )
+
+        self.candidate_sub = self.create_subscription(
+            ObjectCandidateArrayMsg,
+            "/object_candidates_raw",
+            self.object_raw_callback,
             10
         )
 
@@ -253,14 +288,34 @@ class Brain(Node):
 
         self.arm_client = ActionClient(self, DummyAction, "dummy")
 
-        self.select_client = ActionClient(self, DummyAction, "dummy")
-
 
         self.root = self.make_bt()
         self.create_timer(self.tick_period, self.root.tick_once)
 
+
     def map_callback(self, msg: OccupancyGrid):
         self.map = msg
+
+    def object_callback(self, msg: ObjectCandidateArrayMsg):
+        # maintain list of valid candidates for use by goal_provider
+        valid_candidates: list[ObjectCandidateMsg] = []
+        self.cube_found = False
+        for candidate in msg.candidates:
+            candidate: ObjectCandidateMsg
+            if candidate.picked_up == False or candidate.class_name == ObjectClassification.BOX:
+                valid_candidates.append(candidate)
+                if candidate.class_name != ObjectClassification.BOX:
+                    self.cube_found = True
+        self.valid_candidates = valid_candidates
+
+    def object_raw_callback(self, msg: ObjectCandidateArrayMsg):
+        # maintain list of uncertain candidates for use by goal_provider
+        potential_candidates: list[ObjectCandidateMsg] = []
+        for candidate in msg.candidates:
+            candidate: ObjectCandidateMsg
+            if not candidate.picked_up:
+                potential_candidates.append(candidate)
+        self.potential_candidates = potential_candidates
 
     def update_caught_cubes(self):
         if self.target_cube is not None:
@@ -385,18 +440,7 @@ class Brain(Node):
             ],
             memory = False
         )
-    
-    def object_callback(self, msg: ObjectCandidateArrayMsg):
-        # maintain list of valid candidates for use by goal_provider
-        valid_candidates: list[ObjectCandidateMsg] = []
-        self.cube_found = False
-        for candidate in msg.candidates:
-            candidate: ObjectCandidateMsg
-            if candidate.picked_up == False or candidate.class_name == "BOX":
-                valid_candidates.append(candidate)
-                if candidate.class_name != "BOX":
-                    self.cube_found = True
-        self.valid_candidates = valid_candidates
+
 
 
 class CubePickedUpCondition(Behaviour):
@@ -556,13 +600,13 @@ class Nav2GoalB(Behaviour):
 
     def initialise(self):
         self.current_status = Status.RUNNING
-        self.node.get_logger().info(f"{self.name}: computing goal")
+        self.node.get_logger().debug(f"{self.name}: computing goal")
         if self.node.map is None:
             self.current_status = Status.FAILURE
             return
         result = self.node.goal_provider.get_goal(self.goal_type)
         if result is None:
-            self.node.get_logger().error(f"{self.name}: goal provider failed")
+            self.node.get_logger().error(f"{self.name}: goal provider failed.")
             self.current_status = Status.FAILURE
             return
         x, y, yaw = result
@@ -592,10 +636,10 @@ class Nav2GoalB(Behaviour):
     def nav_goal_response_callback(self, future):
         self.nav_goal_handle = future.result()
         if not self.nav_goal_handle.accepted:
-            self.node.get_logger().info(f"{self.name}: Navigation goal rejected")
+            self.node.get_logger().debug(f"{self.name}: Navigation goal rejected")
             self.current_status = Status.FAILURE
             return
-        self.node.get_logger().info(f"{self.name}: Navigation goal accepted")
+        self.node.get_logger().debug(f"{self.name}: Navigation goal accepted")
         result_future = self.nav_goal_handle.get_result_async()
         result_future.add_done_callback(self.nav_done_callback)
         
@@ -605,7 +649,7 @@ class Nav2GoalB(Behaviour):
             result = response.result
 
             if response.status == GoalStatus.STATUS_SUCCEEDED:
-                self.node.get_logger().info(f"{self.name}: Navigation to goal succeeded! {result}")
+                self.node.get_logger().debug(f"{self.name}: Navigation to goal succeeded! {result}")
                 self.current_status = self.done_status
             else:
                 self.node.get_logger().error(
@@ -674,10 +718,6 @@ class ReleaseCubeB(DummyB):
         else:
             self.node.cube_in_gripper = True
         return 
-
-class SelectBoxB(DummyB):
-    def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, True, node.select_client)
 
 
 def main():
