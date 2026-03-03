@@ -3,6 +3,7 @@ import py_trees
 #!/usr/bin/env python
 
 import math
+from enum import Enum
 
 import numpy as np
 
@@ -36,11 +37,38 @@ from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg
 
 from napping.mapping import ObjectClassification
 
+class ANSIEscClr(Enum):
+    BOLD = "\x1b[1m"
+    RESET = "\x1b[0m"
+    RED = "\x1b[31m"
+    GREEN = "\x1b[32m"
+    BLUE = "\x1b[94m"
+    WOOD = "\x1b[33m"
+    GRAY = "\x1b[90m"
+    UNKNOWN = "\x1b[35m"
+
 
 EXPLORE_GOAL = 0
 CUBE_GOAL = 1
 BOX_GOAL = 2
 
+def format_goal_text(goal_type: int, target_cube: ObjectCandidateMsg):
+    # Informative and fancy message string :)))))
+    message = ""
+    if goal_type == EXPLORE_GOAL:
+        message = f"{ANSIEscClr.BOLD}EXPLORATION{ANSIEscClr.RESET}"
+    elif goal_type == CUBE_GOAL:
+        clr = ""
+        if target_cube.class_name == ObjectClassification.CUBE_RED: clr = ANSIEscClr.RED
+        elif target_cube.class_name == ObjectClassification.CUBE_GREEN: clr = ANSIEscClr.GREEN
+        elif target_cube.class_name == ObjectClassification.CUBE_BLUE: clr = ANSIEscClr.BLUE
+        elif target_cube.class_name == ObjectClassification.CUBE_WOOD: clr = ANSIEscClr.WOOD
+        else: clr = ANSIEscClr.UNKNOWN
+        message = f"{ANSIEscClr.BOLD}{clr}CUBE{ANSIEscClr.RESET}"
+    elif goal_type == BOX_GOAL:
+        message = f"{ANSIEscClr.BOLD}{ANSIEscClr.GRAY}BOX{ANSIEscClr.RESET}"
+    return message    
+    
 class GoalProvider:
     """Provides exploration/object goals using data maintained by the brain node."""
     # TODO: make this not depend on accessing the Brain, pass things as arguments instead 
@@ -206,7 +234,7 @@ class GoalProvider:
                 euler_from_quaternion(q)[2],
             ]
             new_dist = self.calc_dist(robot_pose, pose)
-            if new_dist < closest_dist:
+            if new_dist < closest_dist and obj.id != node.target_cube.id: # don't select the same goal if it failed previously
                 closest_pose = pose
                 closest_dist = new_dist
                 closest_obj = obj
@@ -524,13 +552,13 @@ class DummyB(Behaviour):
 
     def terminate(self, new_status):
         if self.goal_handle is not None:
-            self.logger.info(f"{self.name}: Interrupted, status: ")
+            self.node.get_logger().debug(f"{self.name}: Interrupted, status: ")
             self.goal_handle.cancel_goal_async()
 
 
     def initialise(self):
         self.current_status = Status.RUNNING
-        self.logger.info(f"{self.name}: Call some service")
+        self.node.get_logger().debug(f"{self.name}: Call some service")
 
         self.action_client.wait_for_server()
         goal = DummyAction.Goal(succeed=self.goal)
@@ -546,10 +574,10 @@ class DummyB(Behaviour):
     def goal_response_callback(self, future):
         self.goal_handle = future.result()
         if not self.goal_handle.accepted:
-            self.node.get_logger().info(f"{self.name}: Goal rejected")
+            self.node.get_logger().debug(f"{self.name}: Goal rejected")
             self.current_status = Status.FAILURE
             return
-        self.node.get_logger().info(f"{self.name}: Goal accepted")
+        self.node.get_logger().debug(f"{self.name}: Goal accepted")
         result_future = self.goal_handle.get_result_async()
         result_future.add_done_callback(self.done_callback)
         
@@ -559,7 +587,7 @@ class DummyB(Behaviour):
             result = response.result
 
             if response.status == GoalStatus.STATUS_SUCCEEDED:
-                self.node.get_logger().info(f"{self.name}: Action goal succeeded! {result}")
+                self.node.get_logger().debug(f"{self.name}: Action goal succeeded! {result}")
                 self.current_status = Status.SUCCESS
             else:
                 self.node.get_logger().error(
@@ -594,7 +622,7 @@ class Nav2GoalB(Behaviour):
 
     def terminate(self, new_status):
         if self.nav_goal_handle is not None:
-            self.node.get_logger().info(f"{self.name}: Interrupted, status: ")
+            self.node.get_logger().debug(f"{self.name}: Interrupted, status: {new_status}")
             self.nav_goal_handle.cancel_goal_async()
 
 
@@ -613,6 +641,11 @@ class Nav2GoalB(Behaviour):
         # publish marker for debugging
         self.node.goal_provider.publish_goal_marker(x, y, yaw, self.goal_type)
 
+        # Informative and fancy message :)))))
+        goal_str = format_goal_text(self.goal_type, self.node.target_cube)
+        self.node.get_logger().info(
+            f"Sent {goal_str} goal at {ANSIEscClr.BOLD}({x:.2f}, {y:.2f}){ANSIEscClr.RESET}"
+        )
         goal = Navigation.Goal()
         goal.goal.pose.position.x = x
         goal.goal.pose.position.y = y
@@ -642,6 +675,12 @@ class Nav2GoalB(Behaviour):
         self.node.get_logger().debug(f"{self.name}: Navigation goal accepted")
         result_future = self.nav_goal_handle.get_result_async()
         result_future.add_done_callback(self.nav_done_callback)
+
+        goal_str = format_goal_text(self.goal_type, self.node.target_cube)
+        message = f"--> Navigating to {goal_str}"
+        if self.goal_type == EXPLORE_GOAL:
+            message += "-goal"
+        self.node.get_logger().info(message)
         
     def nav_done_callback(self, future):
         try:
