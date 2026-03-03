@@ -37,7 +37,7 @@ from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg
 
 from napping.mapping import ObjectClassification
 
-class ANSIEscClr(Enum):
+class ANSIEscClr():
     BOLD = "\x1b[1m"
     RESET = "\x1b[0m"
     RED = "\x1b[31m"
@@ -59,10 +59,10 @@ def format_goal_text(goal_type: int, target_cube: ObjectCandidateMsg):
         message = f"{ANSIEscClr.BOLD}EXPLORATION{ANSIEscClr.RESET}"
     elif goal_type == CUBE_GOAL:
         clr = ""
-        if target_cube.class_name == ObjectClassification.CUBE_RED: clr = ANSIEscClr.RED
-        elif target_cube.class_name == ObjectClassification.CUBE_GREEN: clr = ANSIEscClr.GREEN
-        elif target_cube.class_name == ObjectClassification.CUBE_BLUE: clr = ANSIEscClr.BLUE
-        elif target_cube.class_name == ObjectClassification.CUBE_WOOD: clr = ANSIEscClr.WOOD
+        if target_cube.class_name == ObjectClassification.CUBE_RED.value: clr = ANSIEscClr.RED
+        elif target_cube.class_name == ObjectClassification.CUBE_GREEN.value: clr = ANSIEscClr.GREEN
+        elif target_cube.class_name == ObjectClassification.CUBE_BLUE.value: clr = ANSIEscClr.BLUE
+        elif target_cube.class_name == ObjectClassification.CUBE_WOOD.value: clr = ANSIEscClr.WOOD
         else: clr = ANSIEscClr.UNKNOWN
         message = f"{ANSIEscClr.BOLD}{clr}CUBE{ANSIEscClr.RESET}"
     elif goal_type == BOX_GOAL:
@@ -184,6 +184,7 @@ class GoalProvider:
                     candidate.pose.orientation.z,
                     candidate.pose.orientation.w,
                 ])[2]
+                node.get_logger().debug(f"Sending goal at ({x=},{y=},{yaw=})")
                 return x, y, yaw
 
         # Go to a new frontier
@@ -204,7 +205,7 @@ class GoalProvider:
         x = col * node.map.info.resolution + node.map.info.origin.position.x
         y = row * node.map.info.resolution + node.map.info.origin.position.y
         yaw = np.atan2(y - robot_y, x - robot_x)
-        node.get_logger().info(f"Sending goal at ({x=},{y=},{yaw=})")
+        node.get_logger().debug(f"Sending goal at ({x=},{y=},{yaw=})")
         return x, y, yaw
 
     def get_object_goal(self, goal_type):
@@ -214,9 +215,9 @@ class GoalProvider:
             return None
         valid_objects: list[ObjectCandidateMsg] = []
         for candidate in node.valid_candidates:
-            if candidate.class_name == ObjectClassification.BOX and goal_type == BOX_GOAL:
+            if candidate.class_name == ObjectClassification.BOX.value and goal_type == BOX_GOAL:
                 valid_objects.append(candidate)
-            elif candidate.class_name != ObjectClassification.BOX and goal_type == CUBE_GOAL:
+            elif candidate.class_name != ObjectClassification.BOX.value and goal_type == CUBE_GOAL:
                 valid_objects.append(candidate)
         closest_obj = None
         closest_pose = None
@@ -234,7 +235,10 @@ class GoalProvider:
                 euler_from_quaternion(q)[2],
             ]
             new_dist = self.calc_dist(robot_pose, pose)
-            if new_dist < closest_dist and obj.id != node.target_cube.id: # don't select the same goal if it failed previously
+            if new_dist < closest_dist:
+                if self.node.target_cube is not None:
+                    if self.node.target_cube.id == obj.id:
+                        continue
                 closest_pose = pose
                 closest_dist = new_dist
                 closest_obj = obj
@@ -244,7 +248,7 @@ class GoalProvider:
         x, y, _ = closest_pose
         robot_x, robot_y, robot_yaw = robot_pose
         yaw = np.atan2(y - robot_y, x - robot_x)
-        node.get_logger().info(f"Created object goal at ({x=},{y=},{yaw=})")
+        node.get_logger().debug(f"Created object goal at (x={x:.2f},y={y:.2f},yaw={yaw:.2f})")
         if goal_type == CUBE_GOAL:
             self.node.target_cube = closest_obj
         return x, y, yaw
@@ -272,7 +276,7 @@ class Brain(Node):
         self.map = None
         self.valid_candidates: list[ObjectCandidateMsg] = []
         self.potential_candidates: list[ObjectCandidateMsg] = []
-        self.start_pose = self.get_robot_pose()
+        self.start_pose = None
 
         self.map_subscriber = self.create_subscription(
             OccupancyGrid,
@@ -323,6 +327,8 @@ class Brain(Node):
 
     def map_callback(self, msg: OccupancyGrid):
         self.map = msg
+        if self.start_pose is None:
+            self.start_pose = self.get_robot_pose()
 
     def object_callback(self, msg: ObjectCandidateArrayMsg):
         # maintain list of valid candidates for use by goal_provider
@@ -330,9 +336,9 @@ class Brain(Node):
         self.cube_found = False
         for candidate in msg.candidates:
             candidate: ObjectCandidateMsg
-            if candidate.picked_up == False or candidate.class_name == ObjectClassification.BOX:
+            if candidate.picked_up == False or candidate.class_name == ObjectClassification.BOX.value:
                 valid_candidates.append(candidate)
-                if candidate.class_name != ObjectClassification.BOX:
+                if candidate.class_name != ObjectClassification.BOX.value:
                     self.cube_found = True
         self.valid_candidates = valid_candidates
 
