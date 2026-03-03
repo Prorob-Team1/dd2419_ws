@@ -16,6 +16,7 @@ from tf2_ros import TransformBroadcaster, TransformListener, Buffer
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 
 from geometry_msgs.msg import TransformStamped
+from std_srvs.srv import Trigger
 from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker
 from rclpy.duration import Duration
@@ -314,6 +315,10 @@ class Brain(Node):
 
         # provider instance
         self.goal_provider = GoalProvider(self)
+
+        # Clients
+        self.grabbing_client = self.create_client(Trigger, "/Start_Grabbing")
+        self.dropping_client = self.create_client(Trigger, "/Start_Dropping")
 
         # Action clients
         self.nav_client = ActionClient(self, Navigation, "plan_path")
@@ -616,6 +621,50 @@ class DummyB(Behaviour):
     def update_postcondition(self):
         pass
 
+class ArmB(Behaviour):
+    def __init__(self, node: Brain, name, arm_client):
+        super().__init__(name)
+        self.node = node
+        self.current_status = Status.RUNNING
+        self.client = arm_client
+
+    def terminate(self, new_status):
+        self.node.get_logger().debug(f"Terminated arm action: {new_status}")
+        pass # this could POTENTIALLY be a problem if we terminate in the middle of grasping
+
+    def update(self):
+        #self.logger.info(f"{self.name}: Checking feedback")
+        return self.current_status
+    
+    def initialise(self):
+        self.current_status = Status.RUNNING
+        request = Trigger.Request()
+        self.client.wait_for_service(timeout_sec=1)
+        self.node.get_logger().debug("Sent request to arm")
+        future = self.client.call_async(request)
+        future.add_done_callback(self.arm_callback)
+
+    def arm_callback(self, request: Trigger.Request, response: Trigger.Response):
+        goal_msg = format_goal_text(CUBE_GOAL, self.node.target_cube)
+        message = ""
+        if response.success:
+            self.current_status = Status.SUCCESS
+            message = "Successfully dropped "
+            if self.client == self.node.grabbing_client:
+                message = "Successfully grabbed "
+        else:
+            self.current_status = Status.FAILURE
+            message = "Failed to drop "
+            if self.client == self.node.grabbing_client:
+                message = "Failed to grab "
+        message += goal_msg
+        self.node.get_logger().info(message)
+        self.update_postcondition()
+
+    def update_postcondition(self):
+        pass
+        
+
 class Nav2GoalB(Behaviour):
 
     def __init__(self, node: Brain, name, goal_type, done_status=Status.SUCCESS):
@@ -664,6 +713,10 @@ class Nav2GoalB(Behaviour):
         goal.goal.pose.orientation.w = q[3]
         goal.goal.header.frame_id = "map"
         goal.goal.header.stamp = self.node.get_clock().now().to_msg()
+        if self.goal_type == BOX_GOAL:
+            goal.goal.goal_label = "BOX"
+        elif self.goal_type == CUBE_GOAL:
+            goal.goal.goal_label = "CUBE"
 
         self.node.nav_client.wait_for_server()
         nav_request_future = self.node.nav_client.send_goal_async(
@@ -743,9 +796,9 @@ class Nav2BoxB(Nav2GoalB):
         else:
             self.node.in_dropoff_range = False
 
-class GrabCubeB(DummyB):
+class GrabCubeB(ArmB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, True, node.arm_client)
+        super().__init__(node, __class__.__name__, node.grabbing_client)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
@@ -755,9 +808,9 @@ class GrabCubeB(DummyB):
             self.node.cube_in_gripper = False
 
 
-class ReleaseCubeB(DummyB):
+class ReleaseCubeB(ArmB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, True, node.arm_client)
+        super().__init__(node, __class__.__name__, node.dropping_client)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
