@@ -17,7 +17,7 @@ class MapInflator(Node):
         super().__init__('map_inflator')
 
       
-        self.inflation_radius_m = 0.175
+        self.inflation_radius_m = 0.125
         self.cost_inflation_radius_m = 0.35
 
         self.base_grid = None    

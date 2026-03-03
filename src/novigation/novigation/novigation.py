@@ -28,7 +28,7 @@ class Navigator(Node):
         self.max_off_path_distance = 0.5
 
        
-        self.wheel_base = 0.3
+        self.wheel_base = 0.3125
         self.wheel_radius = 0.04921
         self.max_v = 0.5
         self.max_w = 2 * math.pi / 5
@@ -71,7 +71,7 @@ class Navigator(Node):
         self.aligning = True
 
         if self._near_object_candidate(radius=0.6):
-            self._backup_steps_remaining = 15
+            self._backup_steps_remaining = 40
             self.get_logger().info('Object candidate nearby, backing up before following path')
 
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
