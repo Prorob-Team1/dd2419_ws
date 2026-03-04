@@ -133,6 +133,8 @@ class ArmGraspingServer(Node):
 
         # Publishers and Subscribers
         self.control_pub = self.create_publisher(ArmControl, '/arm/control', 10)
+        self.debug_img_pub = self.create_publisher(Image, 'arm/camera/img_debug', 10)
+        self._last_debug_publish = 0.0
         self.create_subscription(Image, 'arm/camera/image_raw', self.image_callback, 10)
         self.CallbackGroup = MutuallyExclusiveCallbackGroup()
         self.grasp_srv = self.create_service(Trigger,'Start_Grasping',self.grasp_service_callback, callback_group = self.CallbackGroup)
@@ -422,8 +424,7 @@ class ArmGraspingServer(Node):
             cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     
-            cv2.imshow("Smart Vision", img)
-            cv2.waitKey(1)
+            self._publish_debug_image(img)
             
             # Finally, return only the coordinates and errors of the closest target
             return (best_obj['cx'], best_obj['cy'], best_obj['angle'], err_x, err_y)
@@ -431,10 +432,17 @@ class ArmGraspingServer(Node):
         # === 4. Fallback: If no valid objects were found in the entire frame ===
         cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
         cv2.putText(img, "Target: NONE", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.imshow("Smart Vision", img)
-        cv2.waitKey(1)
+        self._publish_debug_image(img)
         
         return None
+
+    def _publish_debug_image(self, img):
+        now = time.time()
+        if now - self._last_debug_publish < 0.1:  # 10 fps cap
+            return
+        self._last_debug_publish = now
+        msg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
+        self.debug_img_pub.publish(msg)
     
 
     def main_loop(self):
@@ -543,7 +551,6 @@ def main():
     executor.add_node(node)
     try: executor.spin()
     except KeyboardInterrupt: pass
-    cv2.destroyAllWindows()
     rclpy.shutdown()
 
 if __name__ == '__main__':
