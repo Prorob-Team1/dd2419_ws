@@ -222,6 +222,7 @@ class Navigator(Node):
         slowdown_dist = 0.5
         if dist_to_goal < slowdown_dist:
             speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
+            
 
         # When heading is very off
         if abs(alpha) > math.pi / 2:
@@ -229,8 +230,10 @@ class Navigator(Node):
             v = 0.0
             w = 2.0 * alpha  
         else:
-            #Pure pursuit 
+            #Pure pursuit
             ld_for_kappa = max(ld, self.lookahead_distance)
+            if dist_to_goal < slowdown_dist:
+                ld_for_kappa *= 2.0
             kappa = 2.0 * math.sin(alpha) / ld_for_kappa
             
             v = speed
