@@ -124,6 +124,7 @@ class ArmGraspingServer(Node):
         self.curr_pos = [0.06, 0.0, 0.12] 
         self.prepare_pos = [0.06, 0.0, 0.14]
         self.hold_pos = [0.14, 0.0, 0.12] 
+        self.drop_pos = [0.06, 0.0, 0.22]
         self.Y_LIMIT = 0.15 
         self.Z_MIN = 0.12
         self.Z_MAX = 0.22
@@ -155,15 +156,19 @@ class ArmGraspingServer(Node):
         self.HSV_RANGES = { 
             'red': [
                 ((0, 140, 100), (2, 255, 255)),       
-                ((175, 140, 100), (180, 255, 255))
+                ((175, 140, 100), (180, 255, 255)),
+                ((0, 20, 190), (40, 255, 255)),       
+                ((140, 20, 190), (180, 255, 255))
             ],
             
             'green': [
-                ((50, 80, 46), (85, 255, 255))
+                ((50, 80, 46), (85, 255, 255)),
+                ((20, 20, 190), (110, 255, 255)),       
             ],
             
             'blue': [
-                ((100, 80, 46), (124, 255, 255))
+                ((100, 80, 46), (124, 255, 255)),
+                ((80, 20, 190), (150, 255, 255)),       
             ]
         }
         
@@ -313,7 +318,10 @@ class ArmGraspingServer(Node):
 
         self.get_logger().info("Start Dropping...")
 
-        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 30.0, 0.0, time_ms=1000)
+        self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 108.0, 0.0, time_ms=1000)
+        time.sleep(1.5)
+
+        self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 30.0, 0.0, time_ms=1000)
         time.sleep(1.5)
 
         self.send_arm_cmd(self.init_pos[0], self.init_pos[1], self.init_pos[2], 30.0, 0.0, time_ms=1000)
