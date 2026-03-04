@@ -32,6 +32,7 @@ class PointcloudFilter(Node):
     TOO_BIG_NOT_TO_FAIL = 0.3  # Meaning it is bigger than even a box (SHOULD BE RENDERED USELESS BY STICKING WITH MAP LIMIT)
     YOU_THREE_MAKE_A_CUBE = 0.06 # verify if cube
     BIG_BEAUTIFUL_BOX_potential = 0.12 # verify if box is big and beautiful
+    CUBE_SIZE = 0.03 # size of the cube in meters
 
     def __init__(self):
         super().__init__('pointcloud_filter')
@@ -75,14 +76,15 @@ class PointcloudFilter(Node):
         mean_s = np.mean(hsv_points[:, 1]) / 255.0
         if mean_s < 0.2:
             return "CUBE_W"  # wood (low saturation)
-        if mean_h < 15 or mean_h >= 345:
-            return "CUBE_R"
-        if 85 <= mean_h < 150:
-            return "CUBE_G"
-        if 200 <= mean_h < 260:
-            return "CUBE_B"
-        if 40 <= mean_h < 85:
-            return "CUBE_W"  # yellow -> wood
+        # Approximate hue bands for our cube colors (in OpenCV scale)
+        if mean_h < 10 or mean_h > 170:
+            return "CUBE_R"  # red
+        if 35 <= mean_h < 85:
+            return "CUBE_G"  # green
+        if 100 <= mean_h < 140:
+            return "CUBE_B"  # blue
+        if 20 <= mean_h < 35:
+            return "CUBE_W"  # yellow-ish -> wood
         return "CUBE_U"
 
     def _publish_detection(self, centroid: np.ndarray, class_name: str, confidence: float,
@@ -200,7 +202,9 @@ class PointcloudFilter(Node):
 
                     # Publish eliminated point cloud in Yellow (valid cube detection)
                     cube_class = self._infer_cube_color_from_rgb(cluster_full)
-                    centroid = np.mean(cluster_points, axis=0)
+                    centroid = np.median(cluster_points, axis=0)
+                    # push centroid 1.5 cm back in z (depth)
+                    centroid[2] = centroid[2] + self.CUBE_SIZE / 2
                     self._publish_detection(centroid, cube_class, 0.7, msg.header.frame_id, received_stamp, detections_list)
                     eliminated_rgb = np.full((cluster_points.shape[0], 3), [1.0, 1.0, 0.0], dtype=np.float32)
                     r = (eliminated_rgb[:, 0] * 255).astype(np.uint32)
