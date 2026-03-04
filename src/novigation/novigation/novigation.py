@@ -230,7 +230,9 @@ class Navigator(Node):
             w = 2.0 * alpha  
         else:
             #Pure pursuit 
-            kappa = 2.0 * math.sin(alpha) / ld
+            ld_for_kappa = max(ld, self.lookahead_distance)
+            kappa = 2.0 * math.sin(alpha) / ld_for_kappa
+            
             v = speed
             w = speed * kappa
 
