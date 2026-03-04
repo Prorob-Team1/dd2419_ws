@@ -186,7 +186,7 @@ class GoalProvider:
                     candidate.pose.orientation.w,
                 ])[2]
                 node.get_logger().debug(f"Sending goal at ({x=},{y=},{yaw=})")
-                return x, y, yaw
+                return x, y, 0.0#yaw
 
         # Go to a new frontier
         robot_x, robot_y, robot_yaw = robot_pose
@@ -207,7 +207,7 @@ class GoalProvider:
         y = row * node.map.info.resolution + node.map.info.origin.position.y
         yaw = np.atan2(y - robot_y, x - robot_x)
         node.get_logger().debug(f"Sending goal at ({x=},{y=},{yaw=})")
-        return x, y, yaw
+        return x, y, 0.0#yaw
 
     def get_object_goal(self, goal_type):
         node = self.node
@@ -248,7 +248,10 @@ class GoalProvider:
             return robot_pose
         x, y, _ = closest_pose
         robot_x, robot_y, robot_yaw = robot_pose
-        yaw = np.atan2(y - robot_y, x - robot_x)
+        #yaw = np.atan2(y - robot_y, x - robot_x)
+        yaw = 0
+        if goal_type == BOX_GOAL:
+            yaw = -np.pi/2
         node.get_logger().debug(f"Created object goal at (x={x:.2f},y={y:.2f},yaw={yaw:.2f})")
         if goal_type == CUBE_GOAL:
             self.node.target_cube = closest_obj
@@ -317,7 +320,7 @@ class Brain(Node):
         self.goal_provider = GoalProvider(self)
 
         # Clients
-        self.grabbing_client = self.create_client(Trigger, "/Start_Grabbing")
+        self.grabbing_client = self.create_client(Trigger, "/Start_Grasping")
         self.dropping_client = self.create_client(Trigger, "/Start_Dropping")
 
         # Action clients
@@ -622,11 +625,12 @@ class DummyB(Behaviour):
         pass
 
 class ArmB(Behaviour):
-    def __init__(self, node: Brain, name, arm_client):
+    def __init__(self, node: Brain, name, grabbing: bool):
         super().__init__(name)
         self.node = node
         self.current_status = Status.RUNNING
-        self.client = arm_client
+        self.grabbing = grabbing
+
 
     def terminate(self, new_status):
         self.node.get_logger().debug(f"Terminated arm action: {new_status}")
@@ -639,23 +643,32 @@ class ArmB(Behaviour):
     def initialise(self):
         self.current_status = Status.RUNNING
         request = Trigger.Request()
-        self.client.wait_for_service(timeout_sec=1)
+        client = self.node.dropping_client
+        if self.grabbing:
+            client = self.node.grabbing_client
+        client.wait_for_service(timeout_sec=1)
         self.node.get_logger().debug("Sent request to arm")
-        future = self.client.call_async(request)
+        future = client.call_async(request)
         future.add_done_callback(self.arm_callback)
 
-    def arm_callback(self, request: Trigger.Request, response: Trigger.Response):
+    def arm_callback(self, future):
+        response = future.result()
+        if response is None:
+            self.current_status = Status.FAILURE
+            self.node.get_logger().warning("Never got a valid response from the arm.")
+            return
         goal_msg = format_goal_text(CUBE_GOAL, self.node.target_cube)
+
         message = ""
         if response.success:
             self.current_status = Status.SUCCESS
             message = "Successfully dropped "
-            if self.client == self.node.grabbing_client:
+            if self.grabbing:
                 message = "Successfully grabbed "
         else:
             self.current_status = Status.FAILURE
             message = "Failed to drop "
-            if self.client == self.node.grabbing_client:
+            if self.grabbing:
                 message = "Failed to grab "
         message += goal_msg
         self.node.get_logger().info(message)
@@ -709,14 +722,15 @@ class Nav2GoalB(Behaviour):
         goal.goal.pose.position.x = x
         goal.goal.pose.position.y = y
         q = quaternion_from_euler(0.0,0.0,yaw)
+        self.node.get_logger().info(f"{self.goal_type=} --- q: [{q[0]:.2f}, {q[1]:.2f}, {q[2]:.2f} , {q[3]:.2f}]")
         goal.goal.pose.orientation.z = q[2]
         goal.goal.pose.orientation.w = q[3]
         goal.goal.header.frame_id = "map"
         goal.goal.header.stamp = self.node.get_clock().now().to_msg()
-        if self.goal_type == BOX_GOAL:
-            goal.goal.goal_label = "BOX"
-        elif self.goal_type == CUBE_GOAL:
-            goal.goal.goal_label = "CUBE"
+        #if self.goal_type == BOX_GOAL:
+        #    goal.goal.goal_label = "BOX"
+        #elif self.goal_type == CUBE_GOAL:
+        #    goal.goal.goal_label = "CUBE"
 
         self.node.nav_client.wait_for_server()
         nav_request_future = self.node.nav_client.send_goal_async(
@@ -798,7 +812,7 @@ class Nav2BoxB(Nav2GoalB):
 
 class GrabCubeB(ArmB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, node.grabbing_client)
+        super().__init__(node, __class__.__name__, True)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
@@ -810,7 +824,7 @@ class GrabCubeB(ArmB):
 
 class ReleaseCubeB(ArmB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, node.dropping_client)
+        super().__init__(node, __class__.__name__, False)
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
