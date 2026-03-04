@@ -28,7 +28,7 @@ class GoalReceiver(Node):
         if self._goal_handle is not None:
             self.get_logger().info('Cancelling current goal before sending new one')
             self._goal_handle.cancel_goal_async()
-        self.send_goal(x, y)
+        self.send_goal(msg)
 
     def cancel_callback(self, _msg: Empty):
         if self._goal_handle is not None:
@@ -36,7 +36,7 @@ class GoalReceiver(Node):
             self._goal_handle.cancel_goal_async()
             self._goal_handle = None
 
-    def send_goal(self, x, y):
+    def send_goal(self, pose: PoseStamped):
         if not self._action_client.wait_for_server(timeout_sec=2.0):
             self.get_logger().error('Action server not available')
             return
@@ -44,9 +44,7 @@ class GoalReceiver(Node):
         goal_msg = Navigation.Goal()
         goal_msg.goal.header.frame_id = 'map'
         goal_msg.goal.header.stamp = self.get_clock().now().to_msg()
-        goal_msg.goal.pose.position.x = x
-        goal_msg.goal.pose.position.y = y
-        goal_msg.goal.pose.orientation.w = 1.0
+        goal_msg.goal.pose = pose.pose
 
         future = self._action_client.send_goal_async(goal_msg)
         future.add_done_callback(self.goal_response_callback)
@@ -88,7 +86,12 @@ def main(args=None):
 
     if len(sys.argv) >= 3:
         try:
-            node.send_goal(float(sys.argv[1]), float(sys.argv[2]))
+            p = PoseStamped()
+            p.header.frame_id = 'map'
+            p.pose.position.x = float(sys.argv[1])
+            p.pose.position.y = float(sys.argv[2])
+            p.pose.orientation.w = 1.0
+            node.send_goal(p)
         except ValueError:
             node.get_logger().error('Invalid coordinates')
 

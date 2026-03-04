@@ -14300,7 +14300,7 @@ packages:
   - ros-jazzy-visualization-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/detection
@@ -16770,7 +16770,7 @@ packages:
   - ros-jazzy-tf-transformations
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
@@ -16966,7 +16966,7 @@ packages:
   - ros-jazzy-tf2-ros
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/odometry
@@ -19986,7 +19986,7 @@ packages:
   - numpy >=1.23,<3
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/robp_interfaces
@@ -20046,7 +20046,7 @@ packages:
   - ros-jazzy-topic-tools
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
