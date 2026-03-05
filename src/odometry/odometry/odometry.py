@@ -27,6 +27,8 @@ class Odometry(Node):
     def __init__(self):
         super().__init__("odometry")
 
+        self.use_imu = True
+
         # Initialize the transform broadcaster
         self._tf_broadcaster = TransformBroadcaster(self)
 
@@ -121,7 +123,7 @@ class Odometry(Node):
         # dt = 50 / 1000
         ticks_per_rev = 48 * 64
         wheel_radius = 0.04921  # TODO: Fill in
-        # base = 0.3135 # TODO: Fill in
+        base = 0.3135 # TODO: Fill in
 
         # Ticks since last message
         #delta_ticks_left = msg.delta_encoder_left
@@ -133,13 +135,15 @@ class Odometry(Node):
         delta_phi_l = 2 * np.pi * (delta_ticks_left / ticks_per_rev)
 
         D = 0.5 * wheel_radius * (delta_phi_r + delta_phi_l)
-        # delta_theta = wheel_radius * (delta_phi_r - delta_phi_l) / base
+        delta_theta = wheel_radius * (delta_phi_r - delta_phi_l) / base
 
         self._x = self._x + D * np.cos(self._yaw)  # TODO: Fill in
         self._y = self._y + D * np.sin(self._yaw)  # TODO: Fill in
-        #self._yaw = self._yaw + delta_theta  # TODO: Fill in
-        #self._yaw = np.arctan2(np.sin(self._yaw), np.cos(self._yaw))  # wrap angle
-        self._yaw = self.get_yaw(msg.header.stamp)
+        if not self.use_imu:
+            self._yaw = self._yaw + delta_theta  # TODO: Fill in
+            self._yaw = np.arctan2(np.sin(self._yaw), np.cos(self._yaw)) # wrap angle
+        else:
+            self._yaw = self.get_yaw(msg.header.stamp)
 
         stamp = msg.header.stamp  # TODO: Fill in
 

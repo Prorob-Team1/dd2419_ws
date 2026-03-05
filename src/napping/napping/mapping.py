@@ -137,7 +137,7 @@ class Mapper(Node):
         self.object_max_candidates = 100
         self.n_cubes = 3
         self.n_boxes = 2
-        self.detection_mapper = DetectionMapper(self)
+        self.detection_mapper = DetectionMapper(self, merge_threshold=0.5)
         self.fov_updater = FOVUpdater(self.tf_buffer, logger=self.get_logger())
 
         self.startup()
@@ -410,6 +410,7 @@ class Mapper(Node):
                 candidate.log_prob
             )
             obj_msg.picked_up = candidate.picked_up
+            obj_msg.id = candidate.id
             arr_msg_all.candidates.append(obj_msg)  # type: ignore
             if (
                 DetectionMapper.log_odds_to_probability(candidate.log_prob)
@@ -549,6 +550,9 @@ class DetectionMapper:
             best_match = None
             min_dist = self.merge_threshold
             # check if close to any candidate aleady. If yes then update candidate
+            if detection.class_name == "CUBE_U":
+                continue
+            
             for i, candidate in enumerate(self.node.object_candidates):
                 same_class = detection.class_name == candidate.classification.value
                 unknown_class = (
@@ -631,6 +635,8 @@ class DetectionMapper:
                 f"Discarding candidate {candidate.id} because it is outside of the workspace"
             )
             return
+        if np.sqrt((candidate.avg_pose.x - self.node.given_boxes[0].x)**2 + (candidate.avg_pose.y - self.node.given_boxes[0].y)**2) < 0.7:
+            return 
         if len(self.node.object_candidates) >= self.node.object_max_candidates:
             # remove lowest confidence candidate that is more than 10 seconds old
             now = self.node.get_clock().now()

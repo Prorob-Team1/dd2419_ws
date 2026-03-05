@@ -71,7 +71,7 @@ class Navigator(Node):
         self.aligning = True
 
         if self._near_object_candidate(radius=0.6):
-            self._backup_steps_remaining = 40
+            self._backup_steps_remaining = 80
             self.get_logger().info('Object candidate nearby, backing up before following path')
 
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
