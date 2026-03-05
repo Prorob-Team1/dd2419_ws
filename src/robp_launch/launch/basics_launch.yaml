@@ -1,12 +1,5 @@
 launch:
 
-  # Static transform: map -> odom
-  - node:
-      pkg: tf2_ros
-      exec: static_transform_publisher
-      name: map_to_odom
-      args: "0 0 0 0 0 0 map odom"
-
   # Arm
   - include:
       file: "$(find-pkg-share robp_launch)/launch/arm_launch.yaml"
@@ -27,6 +20,10 @@ launch:
   - include:
       file: "$(find-pkg-share robp_launch)/launch/realsense_launch.yaml"
 
+  # static trafos
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/static_transform_launch.yaml"
+
 
   # Joystick
   - node:
@@ -45,9 +42,3 @@ launch:
       pkg: odometry
       exec: odometry
       name: odometry
-
-# Odometry
-  - node:
-      pkg: novigation
-      exec: novigation
-      name: novigation
