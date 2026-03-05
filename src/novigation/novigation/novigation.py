@@ -101,8 +101,6 @@ class Navigator(Node):
         try:
             t = self.tf_buffer.lookup_transform(
                 "map", "base_link",
-            t = self.tf_buffer.lookup_transform(
-                "map", "base_link",
                 Time(seconds=0),
                 timeout=Duration(seconds=0.1),
             )
