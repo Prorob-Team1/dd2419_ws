@@ -87,6 +87,9 @@ ros-jazzy-detection = { path = "src/detection" }
 ros-jazzy-rc-control = { path = "src/rc_control" }
 ros-jazzy-novigation = { path = "src/novigation" }
 ros-jazzy-napping = { path = "src/napping" }
+ros-jazzy-arm-grasping = { path = "src/arm_grasping"}
+ros-jazzy-brian = { path = "src/brian" }
+
 
 # Other
 argcomplete = ">=3.6.3,<4"
@@ -94,6 +97,7 @@ ros-jazzy-joy = ">=3.3.0,<4"
 numpy = ">=2.4.2,<3"
 open3d = ">=0.19.0,<0.20"
 ros-jazzy-teleop-twist-keyboard = ">=2.4.1,<3"
+opencv = ">=4.12.0,<5"
 
 [target.linux-64.dependencies]
 # ROS
@@ -117,3 +121,6 @@ platformio = ">=6.1.18,<7"
 RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
 ROS_AUTOMATIC_DISCOVERY_RANGE = "SUBNET"  # LOCALHOST, SUBNET
 ROS_DOMAIN_ID = "1"                       # Change to group number
+
+[pypi-dependencies]
+py-trees = ">=2.4.0, <3"

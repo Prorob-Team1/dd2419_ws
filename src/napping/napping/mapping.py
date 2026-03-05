@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 import uuid
+import json
 
 
 @dataclass
@@ -88,6 +89,12 @@ class Mapper(Node):
             self.detection_callback,
             10,
         )
+        self.pick_up_sub = self.create_subscription(
+            ObjectCandidateArrayMsg,
+            "/caught_cubes",
+            self.picked_up_callback,
+            10,
+        )
         self.workspace_pub = self.create_publisher(
             Marker,
             "/geofence",
@@ -96,6 +103,9 @@ class Mapper(Node):
         self.map_pub = self.create_publisher(OccupancyGrid, "/occupancy_grid", 10)
         self.object_pub = self.create_publisher(
             ObjectCandidateArrayMsg, "/object_candidates", 10
+        )
+        self.object_pub_all = self.create_publisher(
+            ObjectCandidateArrayMsg, "/object_candidates_raw", 10
         )
         self.object_marker_pub = self.create_publisher(
             Marker, "/object_candidate_markers", 10
@@ -121,7 +131,10 @@ class Mapper(Node):
         self.object_candidates: list[ObjectCandidate] = []
         self.object_confidence_threshold = 0.8
         self.object_max_candidates = 100
-        self.detection_mapper = DetectionMapper(self)
+        self.n_cubes = 3
+        self.n_boxes = 2
+        self.detection_mapper = DetectionMapper(self, merge_threshold=0.5)
+        self.fov_updater = FOVUpdater(self.tf_buffer, logger=self.get_logger())
 
         self.startup()
 
@@ -133,6 +146,10 @@ class Mapper(Node):
         self.object_timer = self.create_timer(0.1, self.publish_objects)
         self.candidate_display_timer = self.create_timer(
             0.1, self.display_object_candidates
+        )
+        # TODO: create service in the future instead of periodic export
+        self.export_timer = self.create_timer(
+            10.0, lambda: self.export_map(self.map_dir / "map_solution.json")
         )
 
     def startup(self):
@@ -352,28 +369,37 @@ class Mapper(Node):
             )
 
     def publish_objects(self):
-        msg = ObjectCandidateArrayMsg()
-        msg.header.frame_id = "map"
-        msg.header.stamp = self.get_clock().now().to_msg()
+        arr_msg = ObjectCandidateArrayMsg()
+        arr_msg.header.frame_id = "map"
+        arr_msg.header.stamp = self.get_clock().now().to_msg()
+
+        arr_msg_all = ObjectCandidateArrayMsg()
+        arr_msg_all.header.frame_id = "map"
+        arr_msg_all.header.stamp = self.get_clock().now().to_msg()
+
         for candidate in self.object_candidates:
+            obj_msg = ObjectCandidateMsg()
+            obj_msg.class_name = candidate.classification.value
+            obj_msg.pose.position.x = candidate.avg_pose.x
+            obj_msg.pose.position.y = candidate.avg_pose.y
+            q = quaternion_from_euler(0, 0, candidate.avg_pose.angle)
+            obj_msg.pose.orientation.x = q[0]
+            obj_msg.pose.orientation.y = q[1]
+            obj_msg.pose.orientation.z = q[2]
+            obj_msg.pose.orientation.w = q[3]
+            obj_msg.confidence = DetectionMapper.log_odds_to_probability(
+                candidate.log_prob
+            )
+            obj_msg.picked_up = candidate.picked_up
+            obj_msg.id = candidate.id
+            arr_msg_all.candidates.append(obj_msg)  # type: ignore
             if (
                 DetectionMapper.log_odds_to_probability(candidate.log_prob)
                 > self.object_confidence_threshold
             ):
-                obj_msg = ObjectCandidateMsg()
-                obj_msg.class_name = candidate.classification.value
-                obj_msg.pose.position.x = candidate.avg_pose.x
-                obj_msg.pose.position.y = candidate.avg_pose.y
-                q = quaternion_from_euler(0, 0, candidate.avg_pose.angle)
-                obj_msg.pose.orientation.x = q[0]
-                obj_msg.pose.orientation.y = q[1]
-                obj_msg.pose.orientation.z = q[2]
-                obj_msg.pose.orientation.w = q[3]
-                obj_msg.confidence = DetectionMapper.log_odds_to_probability(
-                    candidate.log_prob
-                )
-                msg.candidates.append(obj_msg)  # type: ignore
-        self.object_pub.publish(msg)
+                arr_msg.candidates.append(obj_msg)  # type: ignore
+        self.object_pub.publish(arr_msg)
+        self.object_pub_all.publish(arr_msg_all)
 
     def display_object_candidates(self):
         # use rviz markers
@@ -439,6 +465,45 @@ class Mapper(Node):
     def detection_callback(self, msg: ObjectDetectionArrayMsg):
         self.detection_mapper.process_object_detections(msg)
 
+    def picked_up_callback(self, msg: ObjectCandidateArrayMsg):
+        for candidate in self.object_candidates:
+            for picked in msg.candidates:
+                if candidate.id == picked.id:
+                    candidate.picked_up = True
+    def export_map(self, file: Path):
+        cubes: list[ObjectCandidate] = []
+        boxes: list[ObjectCandidate] = []
+        for candidate in self.object_candidates:
+            if candidate.classification == ObjectClassification.BOX:
+                boxes.append(candidate)
+            else:
+                cubes.append(candidate)
+        cubes.sort(key=lambda c: c.log_prob, reverse=True)
+        boxes.sort(key=lambda c: c.log_prob, reverse=True)
+        solution = {
+            "cubes": [
+                {
+                    "class": c.classification.value,
+                    "x": c.avg_pose.x,
+                    "y": c.avg_pose.y,
+                    "angle": c.avg_pose.angle,
+                    "confidence": DetectionMapper.log_odds_to_probability(c.log_prob),
+                }
+                for c in cubes[: self.n_cubes]
+            ],
+            "boxes": [
+                {
+                    "x": b.avg_pose.x,
+                    "y": b.avg_pose.y,
+                    "angle": b.avg_pose.angle,
+                    "confidence": DetectionMapper.log_odds_to_probability(b.log_prob),
+                }
+                for b in boxes[: self.n_boxes]
+            ],
+        }
+        with open(file, "w") as f:
+            json.dump(solution, f, indent=4)
+
 
 class DetectionMapper:
     def __init__(self, node: Mapper, merge_threshold=0.1):
@@ -466,6 +531,9 @@ class DetectionMapper:
             best_match = None
             min_dist = self.merge_threshold
             # check if close to any candidate aleady. If yes then update candidate
+            if detection.class_name == "CUBE_U":
+                continue
+            
             for i, candidate in enumerate(self.node.object_candidates):
                 same_class = detection.class_name == candidate.classification.value
                 unknown_class = (
@@ -535,6 +603,18 @@ class DetectionMapper:
                 )
 
     def add_object_candidate(self, candidate: ObjectCandidate):
+        # check if candidate is outside of the workspace, if yes then discard
+        if not self.node.point_in_polygon(
+            candidate.avg_pose.x,
+            candidate.avg_pose.y,
+            [(p.x, p.y) for p in self.node.workspace],
+        ):
+            self.node.get_logger().info(
+                f"Discarding candidate {candidate.id} because it is outside of the workspace"
+            )
+            return
+        if np.sqrt((candidate.avg_pose.x - self.node.given_boxes[0].x)**2 + (candidate.avg_pose.y - self.node.given_boxes[0].y)**2) < 0.7:
+            return 
         if len(self.node.object_candidates) >= self.node.object_max_candidates:
             # remove lowest confidence candidate that is more than 10 seconds old
             now = self.node.get_clock().now()
@@ -551,13 +631,13 @@ class DetectionMapper:
                     self.node.object_candidates, key=lambda c: c.log_prob
                 )
                 self.node.object_candidates.remove(worst_candidate)
-            self.node.get_logger().info(
+            self.node.get_logger().warning(
                 f"Had to remove candidate {worst_candidate.id} to make room for new candidate"
             )
         # add new candidate
         self.node.object_candidates.append(candidate)
         self.node.get_logger().info(
-            f"Added new candidate {candidate.id} with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
+            f"Added new candidate with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
         )
         assert len(self.node.object_candidates) <= self.node.object_max_candidates
 

@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'detection'
+package_name = 'arm_grasping'
 
 setup(
     name=package_name,
@@ -13,8 +13,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='dduberg',
-    maintainer_email='danielduberg@gmail.com',
+    maintainer='rob1',
+    maintainer_email='Robot@example.com',
     description='TODO: Package description',
     license='MIT',
     extras_require={
@@ -24,8 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'detection = detection.detection:main',
-            'pointcloud_filter = detection.pointcloud_filter:main'
+            'arm_grasping = arm_grasping.arm_grasping:main'
         ],
     },
 )
