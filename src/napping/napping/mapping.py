@@ -93,6 +93,12 @@ class Mapper(Node):
             self.detection_callback,
             10,
         )
+        self.pick_up_sub = self.create_subscription(
+            ObjectCandidateArrayMsg,
+            "/caught_cubes",
+            self.picked_up_callback,
+            10,
+        )
         self.workspace_pub = self.create_publisher(
             Marker,
             "/geofence",
@@ -131,7 +137,7 @@ class Mapper(Node):
         self.object_max_candidates = 100
         self.n_cubes = 3
         self.n_boxes = 2
-        self.detection_mapper = DetectionMapper(self)
+        self.detection_mapper = DetectionMapper(self, merge_threshold=0.5)
         self.fov_updater = FOVUpdater(self.tf_buffer, logger=self.get_logger())
 
         self.startup()
@@ -404,6 +410,7 @@ class Mapper(Node):
                 candidate.log_prob
             )
             obj_msg.picked_up = candidate.picked_up
+            obj_msg.id = candidate.id
             arr_msg_all.candidates.append(obj_msg)  # type: ignore
             if (
                 DetectionMapper.log_odds_to_probability(candidate.log_prob)
@@ -477,6 +484,11 @@ class Mapper(Node):
     def detection_callback(self, msg: ObjectDetectionArrayMsg):
         self.detection_mapper.process_object_detections(msg)
 
+    def picked_up_callback(self, msg: ObjectCandidateArrayMsg):
+        for candidate in self.object_candidates:
+            for picked in msg.candidates:
+                if candidate.id == picked.id:
+                    candidate.picked_up = True
     def export_map(self, file: Path):
         cubes: list[ObjectCandidate] = []
         boxes: list[ObjectCandidate] = []
@@ -538,6 +550,9 @@ class DetectionMapper:
             best_match = None
             min_dist = self.merge_threshold
             # check if close to any candidate aleady. If yes then update candidate
+            if detection.class_name == "CUBE_U":
+                continue
+            
             for i, candidate in enumerate(self.node.object_candidates):
                 same_class = detection.class_name == candidate.classification.value
                 unknown_class = (
@@ -620,6 +635,8 @@ class DetectionMapper:
                 f"Discarding candidate {candidate.id} because it is outside of the workspace"
             )
             return
+        if np.sqrt((candidate.avg_pose.x - self.node.given_boxes[0].x)**2 + (candidate.avg_pose.y - self.node.given_boxes[0].y)**2) < 0.7:
+            return 
         if len(self.node.object_candidates) >= self.node.object_max_candidates:
             # remove lowest confidence candidate that is more than 10 seconds old
             now = self.node.get_clock().now()
@@ -636,13 +653,13 @@ class DetectionMapper:
                     self.node.object_candidates, key=lambda c: c.log_prob
                 )
                 self.node.object_candidates.remove(worst_candidate)
-            self.node.get_logger().info(
+            self.node.get_logger().warning(
                 f"Had to remove candidate {worst_candidate.id} to make room for new candidate"
             )
         # add new candidate
         self.node.object_candidates.append(candidate)
         self.node.get_logger().info(
-            f"Added new candidate {candidate.id} with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
+            f"Added new candidate with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
         )
         assert len(self.node.object_candidates) <= self.node.object_max_candidates
 
