@@ -24,9 +24,12 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'path_planner = novigation.path_planner:main',
+            'goal_reciever = novigation.goal_reciever:main',
+            'map_inflator = novigation.map_inflator:main',
+            'sim_robot = novigation.sim_robot:main',
             'novigation = novigation.novigation:main',
-            'dispatcher = novigation.dispatcher:main',
-            'random_dispatcher = novigation.random_dispatcher:main'
+
         ],
     },
 )
