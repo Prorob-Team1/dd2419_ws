@@ -284,6 +284,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/ocl-icd-2.3.3-hb9d3cd8_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/open3d-0.19.0-py312h4cd2344_10.conda
       - conda: https://prefix.dev/conda-forge/linux-64/opencl-headers-2025.06.13-h5888daf_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/opencv-4.12.0-qt6_py312h7bb6282_612.conda
       - conda: https://prefix.dev/conda-forge/linux-64/openexr-3.4.4-h40f6f1d_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/openh264-2.6.0-hc22cd8d_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/openjpeg-2.5.4-h55fea9a_0.conda
@@ -674,6 +675,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/zlib-ng-2.3.2-hceb46e0_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zziplib-0.13.69-he45264a_2.conda
+      - conda: src/arm_grasping
+        build: hb0f4dca_0
       - conda: src/aruco_ros/aruco
         build: hb0f4dca_0
       - conda: src/aruco_ros/aruco_msgs
@@ -939,6 +942,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/nss-3.118-h1c710a3_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/numpy-2.4.2-py312he281c53_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/open3d-0.19.0-py312h0b5b3e9_10.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/opencv-4.12.0-qt6_py312h5b798a3_612.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openexr-3.4.4-he0ec429_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openh264-2.6.0-hb5b2745_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openjpeg-2.5.4-hbfb3c88_0.conda
@@ -1293,6 +1297,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.2-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zziplib-0.13.69-h57f5043_2.conda
+      - conda: src/arm_grasping
+        build: h60d57d3_0
       - conda: src/aruco_ros/aruco
         build: h60d57d3_0
       - conda: src/aruco_ros/aruco_msgs
@@ -1525,6 +1531,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/numpy-2.4.2-py312ha72d056_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/open3d-0.19.0-py312h18acd4d_10.conda
       - conda: https://prefix.dev/conda-forge/win-64/opencl-headers-2025.06.13-he0c23c2_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/opencv-4.12.0-qt6_py312h64de955_612.conda
       - conda: https://prefix.dev/conda-forge/win-64/openexr-3.4.4-h3840fac_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/openh264-2.6.0-hb17fa0b_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/openjpeg-2.5.4-h24db6dd_0.conda
@@ -1878,6 +1885,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.3.2-h0261ad2_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
       - conda: https://prefix.dev/conda-forge/win-64/zziplib-0.13.69-h3ca93ac_2.conda
+      - conda: src/arm_grasping
+        build: ha41a7fa_0
       - conda: src/aruco_ros/aruco
         build: ha41a7fa_0
       - conda: src/aruco_ros/aruco_msgs
@@ -10489,6 +10498,42 @@ packages:
   purls: []
   size: 55411
   timestamp: 1749853655608
+- conda: https://prefix.dev/conda-forge/linux-64/opencv-4.12.0-qt6_py312h7bb6282_612.conda
+  sha256: c4532ba519a1b072398de54669c5c783991eb332aaa2a076cc27dd4a6379ccc3
+  md5: 3c22d365c8d69933d2ad9fb4bad1bc24
+  depends:
+  - libopencv 4.12.0 qt6_py312h52d6ec5_612
+  - libprotobuf >=6.31.1,<6.31.2.0a0
+  - py-opencv 4.12.0 qt6_py312h598be00_612
+  - python_abi 3.12.* *_cp312
+  license: Apache-2.0
+  license_family: Apache
+  size: 28422
+  timestamp: 1766495425558
+- conda: https://prefix.dev/conda-forge/osx-arm64/opencv-4.12.0-qt6_py312h5b798a3_612.conda
+  sha256: 5f7db074febac65e5d9bdd3ba877b8c644fc217fafd487da0938d585c8d3a6eb
+  md5: 8f67158fd4d352807f9a6be5f3c1ae7f
+  depends:
+  - libopencv 4.12.0 qt6_py312h74f5ed3_612
+  - libprotobuf >=6.31.1,<6.31.2.0a0
+  - py-opencv 4.12.0 qt6_py312he92a2c1_612
+  - python_abi 3.12.* *_cp312
+  license: Apache-2.0
+  license_family: Apache
+  size: 27909
+  timestamp: 1766497165754
+- conda: https://prefix.dev/conda-forge/win-64/opencv-4.12.0-qt6_py312h64de955_612.conda
+  sha256: 3a28e18912b1cd8032aaaceba084eaab5c93526772b87c46cc21fa151ef349a3
+  md5: 91af9a7298e79aad53177cf463a573c2
+  depends:
+  - libopencv 4.12.0 qt6_py312h8547a2f_612
+  - libprotobuf >=6.31.1,<6.31.2.0a0
+  - py-opencv 4.12.0 qt6_py312h4c995e2_612
+  - python_abi 3.12.* *_cp312
+  license: Apache-2.0
+  license_family: Apache
+  size: 28172
+  timestamp: 1766497456355
 - conda: https://prefix.dev/conda-forge/linux-64/openexr-3.4.4-h40f6f1d_1.conda
   sha256: 97881c7f2fb05b24c8481b6b2c311b7106b9c165c47a2d37242927ff5d14f0e0
   md5: c87d9f26932f2e000d3767fc8893e51a
@@ -14421,6 +14466,54 @@ packages:
   license: BSD-3-Clause
   size: 34340
   timestamp: 1768974403396
+- conda: src/arm_grasping
+  name: ros-jazzy-arm-grasping
+  version: 0.0.0
+  build: h60d57d3_0
+  subdir: osx-arm64
+  variants:
+    target_platform: osx-arm64
+  depends:
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libcxx >=22
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
+- conda: src/arm_grasping
+  name: ros-jazzy-arm-grasping
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
+- conda: src/arm_grasping
+  name: ros-jazzy-arm-grasping
+  version: 0.0.0
+  build: hb0f4dca_0
+  subdir: linux-64
+  variants:
+    target_platform: linux-64
+  depends:
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libgcc >=15
+  - libgcc >=15
+  - libstdcxx >=15
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
 - conda: src/aruco_ros/aruco
   name: ros-jazzy-aruco
   version: 5.0.5
@@ -14434,7 +14527,7 @@ packages:
   - ros-jazzy-vision-opencv
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
@@ -14493,7 +14586,7 @@ packages:
   - ros-jazzy-std-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/aruco_ros/aruco_msgs
@@ -14559,7 +14652,7 @@ packages:
   - ros-jazzy-visualization-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
@@ -15368,7 +15461,7 @@ packages:
   - ros-jazzy-tf2-ros
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
@@ -17124,7 +17217,7 @@ packages:
   - numpy >=1.23,<3
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
 - conda: src/learning_tf2_py
   name: ros-jazzy-learning-tf2-py
@@ -18708,7 +18801,7 @@ packages:
   - ros-jazzy-std-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/rc_control
@@ -20819,7 +20912,7 @@ packages:
   depends:
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
@@ -20874,7 +20967,7 @@ packages:
   - ros-jazzy-tf2-ros
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=21
+  - libcxx >=22
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT

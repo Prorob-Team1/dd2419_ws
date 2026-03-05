@@ -107,7 +107,7 @@ Visualization Manager:
       Update Interval: 0
       Value: true
     - Class: rviz_default_plugins/Image
-      Enabled: true
+      Enabled: false
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -119,7 +119,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /arm/camera/image_raw
-      Value: true
+      Value: false
     - Alpha: 1
       Axes Length: 0.10000000149011612
       Axes Radius: 0.009999999776482582
@@ -144,7 +144,7 @@ Visualization Manager:
       Enabled: true
       Name: Geofence
       Namespaces:
-        workspace: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -180,7 +180,7 @@ Visualization Manager:
       Enabled: true
       Name: Object candidates
       Namespaces:
-        object_candidates: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -269,6 +269,8 @@ Visualization Manager:
       Yaw: 3.135396718978882
     Saved: ~
 Window Geometry:
+  ArmCamProcessed:
+    collapsed: false
   Displays:
     collapsed: false
   Height: 897
