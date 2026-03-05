@@ -1,0 +1,22 @@
+launch:
+
+  # Path planner
+  - node:
+      pkg: novigation
+      exec: path_planner
+      name: path_planner
+      output: "screen"
+
+  # Map inflator
+  - node:
+      pkg: novigation
+      exec: map_inflator
+      name: map_inflator
+      output: "screen"
+
+# Novigation
+  - node:
+      pkg: novigation
+      exec: novigation
+      name: novigation
+      output: "screen"
