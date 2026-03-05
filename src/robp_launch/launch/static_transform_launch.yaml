@@ -2,6 +2,14 @@
 ---
 launch:
 
+  # Static transform: map -> odom
+  - node:
+      pkg: "tf2_ros"
+      exec: "static_transform_publisher"
+      name: "map_to_odom"
+      args: "0 0 0 0 0 0 map odom"
+      output: "screen"
+
   # BASE TO LIDAR
   - node:
       pkg: "tf2_ros"

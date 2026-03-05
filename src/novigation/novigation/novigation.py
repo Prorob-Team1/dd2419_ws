@@ -2,25 +2,18 @@
 
 import math
 
-import numpy as np
-
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
-
-from tf2_ros import TransformBroadcaster, TransformListener, Buffer
-from tf_transformations import quaternion_from_euler, euler_from_quaternion
-
-from geometry_msgs.msg import TransformStamped
 from rclpy.duration import Duration
-
-# from robp_interfaces.actions import Navigation
-from robp_interfaces.msg import Encoders, DutyCycles
-from robp_interfaces.action import Navigation
-from nav_msgs.msg import Path
-from geometry_msgs.msg import PoseStamped
-from rclpy.action.server import ActionServer, ServerGoalHandle
 from rclpy.executors import MultiThreadedExecutor
+
+from tf2_ros import TransformListener, Buffer
+from tf_transformations import euler_from_quaternion
+
+from robp_interfaces.msg import DutyCycles, ObjectCandidateArrayMsg
+from nav_msgs.msg import Path
+from std_msgs.msg import Empty
 
 
 class Navigator(Node):
@@ -28,115 +21,233 @@ class Navigator(Node):
     def __init__(self):
         super().__init__("navigation")
 
-        self.k_distance = 0.5
-        self.k_heading = 2.0
-        self.thresh_distance = 0.1
+      
+        self.lookahead_distance = 0.5
+        self.target_speed = 0.3
+        self.goal_tolerance = 0.05
+        self.max_off_path_distance = 0.5
+
+       
         self.wheel_base = 0.3
         self.wheel_radius = 0.04921
         self.max_v = 0.5
         self.max_w = 2 * math.pi / 5
-        self.time_out = Duration(seconds=10)
 
+      
+        self.path = None
+        self.path_idx = 0  # Current progress along path
+        self.aligning = False
+        self._backup_steps_remaining = 0
+        self._object_candidates = []
+
+        
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
-        self.nav_action_server = ActionServer(
-            self, Navigation, "point_navigation", self.navigate_to_pose_callback
-        )
+        self.create_subscription(Path, '/planned_path', self.path_callback, 10)
+        self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
+        self.create_subscription(ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10)
+
+       
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
         )
 
-        self.get_logger().info("Node initialized!")
+      
+        self.create_timer(0.05, self.control_loop)
 
-    def navigate_to_pose_callback(self, goal_handle: ServerGoalHandle):
-        rate = self.create_rate(20)
-        # save the time when called and use it to timeout if the goal takes too long
-        time_start = self.get_clock().now()
-        duration_timeout = Duration(seconds=30)
+        self.get_logger().info("Pure pursuit navigator initialized")
 
-        self.get_logger().info(
-            f"Received navigation goal with pose: {goal_handle.request.goal}"
-        )
+    def candidates_callback(self, msg: ObjectCandidateArrayMsg):
+        self._object_candidates = msg.candidates
 
-        time_elapsed = self.get_clock().now() - time_start
+    def path_callback(self, msg: Path):
+        if len(msg.poses) < 2:
+            self.get_logger().warn("Received path with fewer than 2 poses, ignoring")
+            return
 
-        while True:
-            if time_elapsed > duration_timeout:
-                self.get_logger().warn(
-                    f"Navigation goal timed out after {duration_timeout} seconds. Stopping robot."
-                )
-                # stop the robot
-                self.control_wheels(0.0, 0.0)
-                goal_handle.abort()
-                return Navigation.Result(result=False)
+        self.path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+        self.path_idx = 0
+        self.aligning = True
 
-            err_distance, err_heading = self.drive_to_goal(goal_handle.request.goal)
+        if self._near_object_candidate(radius=0.6):
+            self._backup_steps_remaining = 15
+            self.get_logger().info('Object candidate nearby, backing up before following path')
 
-            if err_distance < self.thresh_distance:
-                self.get_logger().info(
-                    f"Reached goal with distance error: {err_distance:.2f}. Stopping robot."
-                )
-                # stop the robot
-                self.control_wheels(0.0, 0.0)
-                goal_handle.succeed()
-                return Navigation.Result(result=True)
+        self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
 
-            time_elapsed = self.get_clock().now() - time_start
-            rate.sleep()
+    def cancel_callback(self, _msg: Empty):
+        self.get_logger().info("Navigation cancelled")
+        self.path = None
+        self._backup_steps_remaining = 0
+        self.control_wheels(0.0, 0.0)
 
-    def drive_to_goal(self, pose: PoseStamped):
-        to_frame_rel = "map"
-        from_frame_rel = "base_link"
+    def _near_object_candidate(self, radius=0.6):
+        if not self._object_candidates:
+            return False
+        pose = self.get_robot_pose()
+        if pose is None:
+            return False
+        rx, ry, _ = pose
+        for candidate in self._object_candidates:
+            dx = candidate.pose.position.x - rx
+            dy = candidate.pose.position.y - ry
+            if math.hypot(dx, dy) < radius:
+                return True
+        return False
+
+    def get_robot_pose(self):
+        """Get robot (x, y, theta) from TF."""
         try:
-            current_pose = self.tf_buffer.lookup_transform(
-                to_frame_rel,
-                from_frame_rel,
+            t = self.tf_buffer.lookup_transform(
+                "map", "base_link",
                 Time(seconds=0),
                 timeout=Duration(seconds=0.1),
             )
-            # if the transform is older than 0.1 seconds, consider it invalid
-            transform_time = Time.from_msg(current_pose.header.stamp)
-            if self.get_clock().now() - transform_time > Duration(
-                seconds=0.1
-            ):
-                raise Exception("Transform is too old")
+            
+            transform_time = Time.from_msg(t.header.stamp)
+            if self.get_clock().now() - transform_time > Duration(seconds=0.5):
+                return None
+
+            x = t.transform.translation.x
+            y = t.transform.translation.y
+            q = [
+                t.transform.rotation.x,
+                t.transform.rotation.y,
+                t.transform.rotation.z,
+                t.transform.rotation.w,
+            ]
+            theta = euler_from_quaternion(q)[2]
+            return (x, y, theta)
         except Exception as e:
-            self.get_logger().warn(f"Failed to get current pose: {e}")
-            return float("inf"), float("inf")
+            self.get_logger().debug(f"TF lookup failed: {e}")
+            return None
 
-        current_rotation = [
-            current_pose.transform.rotation.x,
-            current_pose.transform.rotation.y,
-            current_pose.transform.rotation.z,
-            current_pose.transform.rotation.w,
-        ]
-        theta_current = euler_from_quaternion(current_rotation)[2]
-        dx = pose.pose.position.x - current_pose.transform.translation.x
-        dy = pose.pose.position.y - current_pose.transform.translation.y
+    def control_loop(self):
+        if self._backup_steps_remaining > 0:
+            self.control_wheels(-0.1, 0.0)
+            self._backup_steps_remaining -= 1
+            if self._backup_steps_remaining == 0:
+                self.get_logger().info('Backup complete, starting path following')
+            return
 
-        err_distance = np.sqrt(dx**2 + dy**2)
-        err_heading = math.atan2(dy, dx) - theta_current
-        # normalize heading error to [-pi, pi]
-        err_heading = (err_heading + math.pi) % (2 * math.pi) - math.pi
+        if self.path is None:
+            return
 
-        # control
-        v = self.k_distance * err_distance
-        w = self.k_heading * err_heading
+        pose = self.get_robot_pose()
+        if pose is None:
+            return
 
-        # spin in place if heading error is too large
-        if np.abs(err_heading) > np.pi / 4:
-            v = 0
+        rx, ry, rtheta = pose
+        path = self.path
 
-        # clamp velocities
-        v = np.clip(v, 0.1, self.max_v)
-        w = np.clip(w, -self.max_w, self.max_w)
+        # Initial alignmenn
+        if self.aligning:
+            # Compute direction to a point a bit ahead on the path
+            look_idx = min(len(path) - 1, 5)
+            target_angle = math.atan2(
+                path[look_idx][1] - ry, path[look_idx][0] - rx
+            )
+            heading_err = target_angle - rtheta
+            heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
+
+            if abs(heading_err) < math.radians(15):
+                self.aligning = False
+                self.get_logger().info("Aligned, starting pure pursuit")
+            else:
+                w = 3.0 * heading_err
+                w = max(-self.max_w, min(w, self.max_w))
+                self.get_logger().info(
+                    f"Aligning: err={math.degrees(heading_err):.1f}° w={w:.2f}",
+                    throttle_duration_sec=0.5
+                )
+                self.control_wheels(0.0, w)
+                return
+
+        # Advance path_idx
+        while self.path_idx < len(path) - 1:
+            px, py = path[self.path_idx + 1]
+            if math.hypot(px - rx, py - ry) < math.hypot(
+                path[self.path_idx][0] - rx, path[self.path_idx][1] - ry
+            ):
+                self.path_idx += 1
+            else:
+                break
+
+        # Check if reached goal
+        goal_x, goal_y = path[-1]
+        dist_to_goal = math.hypot(goal_x - rx, goal_y - ry)
+
+        if dist_to_goal < self.goal_tolerance:
+            self.get_logger().info("Reached goal, stopping")
+            self.control_wheels(0.0, 0.0)
+            self.path = None
+            return
+
+        # Find lookahead point: walk along path from path_idx
+        lookahead_pt = None
+        accumulated = 0.0
+        for i in range(self.path_idx, len(path) - 1):
+            seg_len = math.hypot(
+                path[i + 1][0] - path[i][0],
+                path[i + 1][1] - path[i][1]
+            )
+            if accumulated + seg_len >= self.lookahead_distance:
+                remaining = self.lookahead_distance - accumulated
+                frac = remaining / seg_len if seg_len > 0 else 0
+                lx = path[i][0] + frac * (path[i + 1][0] - path[i][0])
+                ly = path[i][1] + frac * (path[i + 1][1] - path[i][1])
+                lookahead_pt = (lx, ly)
+                break
+            accumulated += seg_len
+
+        if lookahead_pt is None:
+            lookahead_pt = path[-1]
+
+        # Pure pursuit geometry
+        dx = lookahead_pt[0] - rx
+        dy = lookahead_pt[1] - ry
+        ld = math.hypot(dx, dy)
+
+        if ld < 1e-6:
+            self.control_wheels(0.0, 0.0)
+            return
+
+        # Angle from robot heading to lookahead point
+        alpha = math.atan2(dy, dx) - rtheta
+        alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
+
+        # slow down near goal
+        speed = self.target_speed
+        slowdown_dist = 0.5
+        if dist_to_goal < slowdown_dist:
+            speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
+
+        # When heading is very off
+        if abs(alpha) > math.pi / 2:
+            
+            v = 0.0
+            w = 2.0 * alpha  
+        else:
+            #Pure pursuit 
+            kappa = 2.0 * math.sin(alpha) / ld
+            v = speed
+            w = speed * kappa
+
+        
+        v = max(0.0, min(v, self.max_v))
+        w = max(-self.max_w, min(w, self.max_w))
+
+        self.get_logger().info(
+            f"idx={self.path_idx} alpha={math.degrees(alpha):.1f}° "
+            f"v={v:.2f} w={w:.2f} dist_goal={dist_to_goal:.2f}",
+            throttle_duration_sec=1.0
+        )
+
         self.control_wheels(v, w)
 
-        return err_distance, err_heading
-
     def control_wheels(self, v: float, w: float):
-        # convert to wheel speeds
+        
         left_speed = (v - (w * self.wheel_base / 2)) / self.wheel_radius
         right_speed = (v + (w * self.wheel_base / 2)) / self.wheel_radius
 
@@ -144,7 +255,7 @@ class Navigator(Node):
             self.max_v + self.max_w * self.wheel_base / 2
         ) / self.wheel_radius
 
-        # convert range to -1 to 1 for duty cycle
+        
         left = left_speed / max_wheel_speed
         right = right_speed / max_wheel_speed
 
@@ -156,9 +267,6 @@ class Navigator(Node):
         left_duty_cycle = left * 0.5
         right_duty_cycle = right * 0.5
 
-        self.get_logger().info(
-            f"Control command - Left wheel: {left_duty_cycle:.2f}, Right wheel: {right_duty_cycle:.2f}"
-        )
         duty_cycles_msg = DutyCycles()
         duty_cycles_msg.duty_cycle_left = left_duty_cycle
         duty_cycles_msg.duty_cycle_right = right_duty_cycle
