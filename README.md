@@ -39,8 +39,23 @@ Static transform for the lidar:
 
 
 ## Milestone 1
-pixi run ros2 launch robp_launch basics_launch.yaml
-pixi run ros2 launch robp_launch static_transform_launch.yaml
-pixi run ros2 run novigation random_dispatcher
-pixi run ros2 run detection detection
-pixi run ros2 run robp_arm arm_move_action_server
+    pixi run ros2 launch robp_launch basics_launch.yaml
+    pixi run ros2 launch robp_launch static_transform_launch.yaml
+    pixi run ros2 run novigation random_dispatcher
+    pixi run ros2 run detection detection
+    pixi run ros2 run robp_arm arm_move_action_server
+
+## Milestone 2
+    pixi run rviz2 -d rviz_config.rviz 
+    pixi run ros2 launch robp_launch basics_launch.yaml
+    pixi run ros2 launch robp_launch navigation_launch.yaml
+    pixi run ros2 run napping mapping
+    pixi run ros2 run brian brain
+    pixi run ros2 run arm_grasping arm_grasping
+    pixi run ros2 run detection pointcloud_filter
+    
+
+
+    pixi run ros2 run brian dummy_server
+    pixi run ros2 service call /Start_Grasping std_srvs/srv/Trigger
+
