@@ -1,4 +1,5 @@
 geometry_msgs/PoseStamped goal
+string goal_label
 ---
 bool result
 ---
