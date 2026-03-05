@@ -26,11 +26,9 @@ launch:
         - name: "enable_color"
           value: true
         - name: "rgb_camera.color_profile"
-          value: "848,480,6"
+          value: "848,480,15"
         - name: "rgb_camera.color_format"
           value: "RGB8"
-        - name: "rgb_camera.enable_auto_exposure"
-          value: true
         - name: "enable_depth"
           value: true
         - name: "enable_infra"
@@ -40,11 +38,11 @@ launch:
         - name: "enable_infra2"
           value: false
         - name: "depth_module.depth_profile"
-          value: "848,480,6"
+          value: "848,480,15"
         - name: "depth_module.depth_format"
           value: "Z16"
         - name: "depth_module.infra_profile"
-          value: "848,480,6"
+          value: "848,480,15"
         - name: "depth_module.infra_format"
           value: "RGB8"
         - name: "depth_module.infra1_format"
@@ -52,25 +50,11 @@ launch:
         - name: "depth_module.infra2_format"
           value: "Y8"
         - name: "depth_module.color_profile"
-          value: "848,480,6"
+          value: "848,480,15"
         - name: "depth_module.color_format"
           value: "RGB8"
-        - name: "depth_module.exposure"
-          value: 8500
-        - name: "depth_module.gain"
-          value: 16
         - name: "depth_module.hdr_enabled"
           value: false
-        - name: "depth_module.enable_auto_exposure"
-          value: true
-        - name: "depth_module.exposure.1"
-          value: 7500
-        - name: "depth_module.gain.1"
-          value: 16
-        - name: "depth_module.exposure.2"
-          value: 1
-        - name: "depth_module.gain.2"
-          value: 16
         - name: "enable_sync"
           value: true
         - name: "depth_module.inter_cam_sync_mode"
@@ -89,8 +73,8 @@ launch:
           value: 0
         - name: "unite_imu_method"
           value: 0
-        - name: "clip_distance"
-          value: -2
+        - name: "json_file_path"
+          value: "$(find-pkg-share robp_launch)/config/camera_settings.json"
         - name: "angular_velocity_cov"
           value: 0.01
         - name: "linear_accel_cov"

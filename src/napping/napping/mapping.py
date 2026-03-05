@@ -14,8 +14,6 @@ from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from nav_msgs.msg import OccupancyGrid
-from napping.fov_tracking import FOVUpdater
-
 from robp_interfaces.msg import (
     ObjectCandidateMsg,
     ObjectCandidateArrayMsg,
@@ -70,7 +68,6 @@ class ObjectCandidate:
     count: int
     last_seen: Time
     id: str
-    picked_up: bool
 
 
 BOX_SIZE = ObjectSize(x=0.24, y=0.16, z=0.1)
@@ -83,7 +80,6 @@ class Mapper(Node):
         super().__init__("mapper")
         self.get_logger().info("Mapper node started")
 
-        self.occupancy_callback_group = MutuallyExclusiveCallbackGroup()
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = StaticTransformBroadcaster(self)
@@ -143,14 +139,7 @@ class Mapper(Node):
         self.startup()
 
         # publishers
-        self.occupancy_pub_timer = self.create_timer(
-            0.5,
-            self.publish_occupancy_map,
-            callback_group=self.occupancy_callback_group,
-        )
-        self.fov_trace_timer = self.create_timer(
-            0.2, self.apply_fov_trace, callback_group=self.occupancy_callback_group
-        )
+        self.timer = self.create_timer(1.0, self.publish_map)
         self.marker_timer = self.create_timer(
             5.0, self.publish_workspace_perimeter_marker
         )
@@ -333,7 +322,7 @@ class Mapper(Node):
             p1x, p1y = p2x, p2y
 
         # Mark free cells inside workspace
-        grid[inside] = -1  # unknown
+        grid[inside] = 0
         msg = OccupancyGrid()
         msg.header.frame_id = "map"
         msg.info.resolution = self.resolution
@@ -350,13 +339,7 @@ class Mapper(Node):
 
         return msg
 
-    def apply_fov_trace(self):
-        # TODO: instead of passing occupancy_grid which always needs to be converted to numpy array,
-        # we should pass the numpy array directly and only convert back to OccupancyGrid when publishing
-        if self.occupancy_grid is not None:
-            self.fov_updater.apply(self.occupancy_grid)
-
-    def publish_occupancy_map(self):
+    def publish_map(self):
         if self.occupancy_grid is not None:
             self.occupancy_grid.header.stamp = self.get_clock().now().to_msg()
             self.map_pub.publish(self.occupancy_grid)
@@ -371,7 +354,6 @@ class Mapper(Node):
                     count=1,
                     last_seen=self.get_clock().now(),
                     id=str(uuid.uuid4()),
-                    picked_up=False,
                 )
             )
         for obj in self.given_objects:
@@ -383,7 +365,6 @@ class Mapper(Node):
                     count=1,
                     last_seen=self.get_clock().now(),
                     id=str(uuid.uuid4()),
-                    picked_up=False,
                 )
             )
 
@@ -581,22 +562,20 @@ class DetectionMapper:
 
             if best_match is not None:
                 best_match.count += 1
-                if not best_match.log_prob == np.inf:  # no update for known objects
-                    best_match.avg_pose.x += (
-                        detection.pose.position.x - best_match.avg_pose.x
-                    ) / best_match.count
-                    best_match.avg_pose.y += (
-                        detection.pose.position.y - best_match.avg_pose.y
-                    ) / best_match.count
+                best_match.avg_pose.x += (
+                    detection.pose.position.x - best_match.avg_pose.x
+                ) / best_match.count
+                best_match.avg_pose.y += (
+                    detection.pose.position.y - best_match.avg_pose.y
+                ) / best_match.count
 
-                    angle_diff = (yaw - best_match.avg_pose.angle + math.pi) % (
-                        2 * math.pi
-                    ) - math.pi
-                    best_match.avg_pose.angle += angle_diff / best_match.count
+                angle_diff = (yaw - best_match.avg_pose.angle + math.pi) % (
+                    2 * math.pi
+                ) - math.pi
+                best_match.avg_pose.angle += angle_diff / best_match.count
 
-                    # increase confidence (log odds) by a fixed amount (e.g. 0.5)
-                    # TODO: scale with confidence of detection
-                    best_match.log_prob += self.log_prob_increase
+                # increase confidence (log odds) by a fixed amount (e.g. 0.5)
+                best_match.log_prob += self.log_prob_increase
                 best_match.last_seen = Time.from_msg(detection.header.stamp)
                 # TODO: this is dependent on a single detection, should be changed in the future
                 if (
@@ -620,7 +599,6 @@ class DetectionMapper:
                         count=1,
                         last_seen=Time.from_msg(detection.header.stamp),
                         id=str(uuid.uuid4()),
-                        picked_up=False,
                     )
                 )
 
@@ -667,7 +645,7 @@ class DetectionMapper:
 def main():
     rclpy.init()
     node = Mapper()
-    executor = MultiThreadedExecutor(num_threads=2)
+    executor = SingleThreadedExecutor()
     executor.add_node(node)
     try:
         executor.spin()
