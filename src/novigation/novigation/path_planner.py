@@ -164,7 +164,7 @@ class PathPlannerNode(Node):
                 self.get_logger().info(f'Goal in obstacle, snapped from {goal_grid} to {snapped}')
 
             if use_tail:
-                tail_length = 0.3
+                tail_length = 0.5
                 pre_goal = PoseStamped()
                 pre_goal.header = goal_pose.header
                 pre_goal.pose.position.x = snapped_wx - tail_length * approach_dx
