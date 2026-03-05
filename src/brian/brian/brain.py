@@ -333,14 +333,14 @@ class Brain(Node):
         self.create_timer(self.tick_period, self.root.tick_once)
 
         self.get_logger().info(
-            f"{ANSIEscClr.BOLD}I AM ALIVE!{ANSIEscClr.RESET}"
+            f"{ANSIEscClr.GREEN}{ANSIEscClr.BOLD}I AM ALIVE!{ANSIEscClr.RESET}"
         )
 
 
     def map_callback(self, msg: OccupancyGrid):
         self.map = msg
         if self.start_pose is None:
-            self.start_pose = self.get_robot_pose()
+            self.start_pose = self.get_start_pose()
 
     def object_callback(self, msg: ObjectCandidateArrayMsg):
         # maintain list of valid candidates for use by goal_provider
@@ -359,7 +359,7 @@ class Brain(Node):
         potential_candidates: list[ObjectCandidateMsg] = []
         for candidate in msg.candidates:
             candidate: ObjectCandidateMsg
-            if not candidate.picked_up:
+            if not candidate.picked_up and candidate.confidence != 1.0:
                 potential_candidates.append(candidate)
         self.potential_candidates = potential_candidates
 
@@ -369,13 +369,15 @@ class Brain(Node):
             self.caught_cubes.header.stamp = self.get_clock().now().to_msg()
             self.caught_cubes_publisher.publish(self.caught_cubes)
 
-    def get_robot_pose(self):
+    def get_start_pose(self):
+        if self.start_pose is not None:
+            return self.start_pose
         if self.map is None:
             self.get_logger().error("Cannot compute pose without map timestamp")
             return None
         stamp = self.map.header.stamp
-        from_frame_rel = self.map.header.frame_id
-        to_frame_rel = "base_link"
+        from_frame_rel = "odom"
+        to_frame_rel = self.map.header.frame_id
         try:
             tf = self.tf_buffer.lookup_transform(
                 target_frame=to_frame_rel,
@@ -383,8 +385,36 @@ class Brain(Node):
                 time=Time().from_msg(stamp),
                 timeout=Duration(seconds=1)
             )
-        except TransformException:
-            self.get_logger().error(f"Couldn't find transform from {from_frame_rel} to {to_frame_rel}")
+        except Exception as ex:
+            self.get_logger().error(f"Couldn't find transform from {from_frame_rel} to {to_frame_rel}: {ex}")
+            return None
+        start_x = tf.transform.translation.x
+        start_y = tf.transform.translation.y
+        q = [
+            tf.transform.rotation.x,
+            tf.transform.rotation.y,
+            tf.transform.rotation.z,
+            tf.transform.rotation.w,
+        ]
+        start_yaw = euler_from_quaternion(q)[2]
+        return (start_x, start_y, start_yaw)
+
+    def get_robot_pose(self):
+        if self.map is None:
+            self.get_logger().error("Cannot compute pose without map timestamp")
+            return None
+        stamp = self.map.header.stamp
+        from_frame_rel = "base_link"
+        to_frame_rel = self.map.header.frame_id
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                target_frame=to_frame_rel,
+                source_frame=from_frame_rel,
+                time=Time().from_msg(stamp),
+                timeout=Duration(seconds=1)
+            )
+        except Exception as ex:
+            self.get_logger().error(f"Couldn't find transform from {from_frame_rel} to {to_frame_rel}: {ex}")
             return None
         robot_x = tf.transform.translation.x
         robot_y = tf.transform.translation.y
