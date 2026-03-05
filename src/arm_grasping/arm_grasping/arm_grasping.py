@@ -70,7 +70,7 @@ class PID:
 class ArmIK:
     def __init__(self):
         self.L1, self.L2, self.L3 = 0.065, 0.101, 0.094
-        self.L4 = 0.121 
+        self.L4 = 0.116 
 
     def solve(self, u_x, u_y, u_z, alpha=-75):
         x, y, z = u_z, u_y, u_x
@@ -112,7 +112,7 @@ class ArmGraspingServer(Node):
 
         # Movement constraints
         self.MAX_STEP = 0.005      
-        self.DEADZONE = 5        
+        self.DEADZONE = 3        
 
         # State management
         self.stable_count = 0
@@ -159,13 +159,13 @@ class ArmGraspingServer(Node):
             'red': [
                 ((0, 140, 100), (2, 255, 255)),       
                 ((175, 140, 100), (180, 255, 255)),
-                ((0, 20, 190), (40, 255, 255)),       
-                ((140, 20, 190), (180, 255, 255))
+                ((165, 92, 80), (180, 255, 255)),
+                ((0, 92, 80), (6, 255, 255))
             ],
             
             'green': [
                 ((50, 80, 46), (85, 255, 255)),
-                ((20, 20, 190), (110, 255, 255)),       
+                ((75, 100, 80), (98, 255, 255)),       
             ],
             
             'blue': [
@@ -282,13 +282,13 @@ class ArmGraspingServer(Node):
         self.get_logger().info(">>> STARTING GRASP SEQUENCE <<<")
         
         # Optimized: Z-Offset Compensation for better grasping reliability
-        OFFSET_Z = 0.0152
+        OFFSET_Z = 0.01476
         OFFSET_Y = 0.0
         
         # 1. Lower arm 
         # Note: If your calibration is perfect, you might not need OFFSET_Z
         # But usually, it helps to pull back slightly when going down.
-        GRASP_HEIGHT = -0.039
+        GRASP_HEIGHT = -0.0402
         target_z = self.curr_pos[2] + OFFSET_Z
         target_z = max(target_z, self.Z_MIN) # Safety
 
@@ -425,6 +425,8 @@ class ArmGraspingServer(Node):
             cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     
             self._publish_debug_image(img)
+            #cv2.imshow("Smart Vision", img)
+            #cv2.waitKey(1)
             
             # Finally, return only the coordinates and errors of the closest target
             return (best_obj['cx'], best_obj['cy'], best_obj['angle'], err_x, err_y)
@@ -432,6 +434,10 @@ class ArmGraspingServer(Node):
         # === 4. Fallback: If no valid objects were found in the entire frame ===
         cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
         cv2.putText(img, "Target: NONE", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+        #cv2.imshow("Smart Vision", img)
+        #cv2.waitKey(1)
+
         self._publish_debug_image(img)
         
         return None
