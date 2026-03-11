@@ -1,26 +1,29 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/time.hpp>
 #include <rclcpp/duration.hpp>
+#include <rclcpp/clock.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 #include <cmath>
 #include <vector>
 #include <Eigen/Dense>
 #include <pcl/point_types.h>
 #include <pcl/registration/icp.h>
+#include <pcl/filters/radius_outlier_removal.h>
 #include <chrono>
 
 
 using namespace std::chrono_literals;
-constexpr auto TIMEOUT = 1000ms; // pain
+constexpr auto TIMEOUT = 100ms; // pain
 
 pcl::PointCloud<pcl::PointXYZ> scan_to_pc(const sensor_msgs::msg::LaserScan::SharedPtr scan)
 {
 	/* 
-	This function converts the laser scan readings into 2D points in the lidar frame.
+	This function converts the laser scan readings into 2D point cloud in the lidar frame.
 	*/
 	const size_t num_ranges = scan->ranges.size();
 	pcl::PointCloud<pcl::PointXYZ> pointcloud;
@@ -37,22 +40,73 @@ pcl::PointCloud<pcl::PointXYZ> scan_to_pc(const sensor_msgs::msg::LaserScan::Sha
 	return pointcloud;
 }
 
+pcl::PointCloud<pcl::PointXYZ> filter_for_icp(const pcl::PointCloud<pcl::PointXYZ>& input)
+{
+	/*
+	This function filters out outliers in a point cloud
+	*/
+    pcl::PointCloud<pcl::PointXYZ> filtered;
+
+    pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+    ror.setInputCloud(input.makeShared());
+    ror.setRadiusSearch(0.50);
+    ror.setMinNeighborsInRadius(2);
+    ror.filter(filtered);
+
+    return filtered;
+}
+
 static tf2::Transform tf2_from_msg(const geometry_msgs::msg::TransformStamped & transform_stamped)
+{
+	tf2::Transform tf;
+	tf.setOrigin(tf2::Vector3(
+		transform_stamped.transform.translation.x,
+		transform_stamped.transform.translation.y,
+		transform_stamped.transform.translation.z
+	));
+	tf.setRotation(tf2::Quaternion(
+		transform_stamped.transform.rotation.x,
+		transform_stamped.transform.rotation.y,
+		transform_stamped.transform.rotation.z,
+		transform_stamped.transform.rotation.w
+	));
+	return tf;
+}
+
+visualization_msgs::msg::Marker marker_from_cloud(const pcl::PointCloud<pcl::PointXYZ> & current_cloud, const pcl::PointCloud<pcl::PointXYZ> & result_cloud, sensor_msgs::msg::LaserScan::SharedPtr msg) 
+{
+	/* 
+	Creates a marker in the map frame for visualization purposes.
+	*/
+	visualization_msgs::msg::Marker marker;
+	marker.header.frame_id = "lidar_link";
+	marker.header.stamp = msg->header.stamp;
+	marker.ns = "icp_debug";
+	marker.id = 0;
+	marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+	marker.action = visualization_msgs::msg::Marker::ADD;
+	marker.scale.x = 0.01;
+	marker.color.a = 1.0;
+	marker.color.r = 1.0;
+	marker.color.b = 1.0;
+
+	for (size_t i = 0; i < std::min<size_t>(current_cloud.size(), result_cloud.size()); ++i) 
 	{
-		tf2::Transform tf;
-		tf.setOrigin(tf2::Vector3(
-			transform_stamped.transform.translation.x,
-			transform_stamped.transform.translation.y,
-			transform_stamped.transform.translation.z
-		));
-		tf.setRotation(tf2::Quaternion(
-			transform_stamped.transform.rotation.x,
-			transform_stamped.transform.rotation.y,
-			transform_stamped.transform.rotation.z,
-			transform_stamped.transform.rotation.w
-		));
-		return tf;
+		geometry_msgs::msg::Point p_raw, p_aligned;
+		p_raw.x = current_cloud[i].x;
+		p_raw.y = current_cloud[i].y;
+		p_raw.z = current_cloud[i].z;
+
+		p_aligned.x = result_cloud[i].x;
+		p_aligned.y = result_cloud[i].y;
+		p_aligned.z = result_cloud[i].z;
+
+		marker.points.push_back(p_raw);
+		marker.points.push_back(p_aligned);
 	}
+
+	return marker;
+}
 
 class Localization : public rclcpp::Node
 {
@@ -61,7 +115,23 @@ class Localization : public rclcpp::Node
 		{
 			auto scan_callback = [this](const sensor_msgs::msg::LaserScan::SharedPtr msg) -> void 
 			{	
-				if (counter_++ < 10) { return; }
+				if (counter_++ < 5) 
+				{
+					// Broadcast old map -> odom TF every time (unless it's time to update it)
+					geometry_msgs::msg::TransformStamped map_to_odom_msg;
+					map_to_odom_msg.header.stamp = msg->header.stamp;
+					map_to_odom_msg.header.frame_id = "map";
+					map_to_odom_msg.child_frame_id = "odom";
+					map_to_odom_msg.transform.translation.x = T_map_odom_.getOrigin().x();
+					map_to_odom_msg.transform.translation.y = T_map_odom_.getOrigin().y();
+					map_to_odom_msg.transform.translation.z = T_map_odom_.getOrigin().z();
+					map_to_odom_msg.transform.rotation.x = T_map_odom_.getRotation().x();
+					map_to_odom_msg.transform.rotation.y = T_map_odom_.getRotation().y();
+					map_to_odom_msg.transform.rotation.z = T_map_odom_.getRotation().z();
+					map_to_odom_msg.transform.rotation.w = T_map_odom_.getRotation().w();
+					tf_broadcaster_->sendTransform(map_to_odom_msg);
+					return;
+				}
 
 				counter_ = 0;
 				const long int start_time = this->get_clock()->now().nanoseconds();
@@ -71,13 +141,21 @@ class Localization : public rclcpp::Node
 				pcl::PointCloud<pcl::PointXYZ> current_pc = scan_to_pc(msg);
 				rclcpp::Time current_stamp = msg->header.stamp;
 
+				if (current_pc.empty()) {
+					RCLCPP_WARN(this->get_logger(), "Scan produced no valid points; skipping.");
+					return;
+				}
+
 				if (this->prev_scan_msg_ == nullptr) 
 				{
 					prev_scan_msg_ = msg;
 					prev_pc_ = current_pc;
+					filtered_prev_pc_ = filter_for_icp(current_pc);
 					try
 					{
-						T_odom_prev_base_ = tf2_from_msg(tf_buffer_->lookupTransform("odom", "base_link", prev_scan_msg_->header.stamp, TIMEOUT));
+						T_odom_prev_lidar_ = tf2_from_msg(
+							tf_buffer_->lookupTransform("lidar_link", "odom", msg->header.stamp, TIMEOUT)
+						);
 					}
 					catch(tf2::TransformException & ex)
 					{
@@ -89,12 +167,12 @@ class Localization : public rclcpp::Node
 
 				
 				// 2. Get odom pose at current scan timestamp
-				tf2::Transform T_odom_curr_base;
+				tf2::Transform T_odom_curr_lidar;
 
 				try 
 				{
-					T_odom_curr_base = tf2_from_msg(
-						tf_buffer_->lookupTransform("odom", "base_link", msg->header.stamp, TIMEOUT)
+					T_odom_curr_lidar = tf2_from_msg(
+						tf_buffer_->lookupTransform("lidar_link", "odom", msg->header.stamp, TIMEOUT)
 					);
 				} 
 				catch (tf2::TransformException & ex)
@@ -105,7 +183,7 @@ class Localization : public rclcpp::Node
 
 
 				// 3. Relative motion prediction from odom
-				tf2::Transform T_initial_guess = T_odom_prev_base_.inverseTimes(T_odom_curr_base);
+				tf2::Transform T_initial_guess = T_odom_curr_lidar *T_odom_prev_lidar_.inverse();
 				Eigen::Matrix4f guess = Eigen::Matrix4f::Identity();
 				const tf2::Matrix3x3& R = T_initial_guess.getBasis();
 				const tf2::Vector3& t = T_initial_guess.getOrigin();
@@ -119,11 +197,21 @@ class Localization : public rclcpp::Node
 				guess(2,3) = static_cast<float>(t.z());
 				
 
-				// 4. ICP between prev/reference scan and current scan
+				// 4. ICP between prev scan and current scan
+				// TODO: Make pc's shared ptrs from the getgo, this heap allocation should only be done once per scan
 				pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
-				icp.setInputSource(current_pc.makeShared());
-				icp.setInputTarget(prev_pc_.makeShared());
-				icp.setMaximumIterations(10);
+				auto filtered_current_pc = filter_for_icp(current_pc);
+				if (filtered_current_pc.empty()) 
+				{
+					RCLCPP_FATAL(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAaaa");
+				}
+				if (filtered_prev_pc_.empty()) 
+				{
+					RCLCPP_FATAL(this->get_logger(), "BBBBBBBBBBBAaaaaaaaaaaaa");
+				}
+				icp.setInputSource(filtered_current_pc.makeShared());
+				icp.setInputTarget(filtered_prev_pc_.makeShared());
+				icp.setMaximumIterations(50);
 				icp.setTransformationEpsilon(1e-8);
 				icp.setEuclideanFitnessEpsilon(1e-8);
 				icp.setMaxCorrespondenceDistance(0.5);
@@ -131,47 +219,60 @@ class Localization : public rclcpp::Node
 				icp.align(result_icp, guess);
 
 
-				// 5. Update map pose estimate (accumulate using ICP delta)
-				Eigen::Matrix4f T = icp.getFinalTransformation();
+				// If ICP fails, keep the previous map->base boundary (do not drift to identity)
+				if (!icp.hasConverged()) {
+					RCLCPP_WARN(this->get_logger(), "ICP did not converge (fitness=%f). Keeping previous map->base.", icp.getFitnessScore());
+					return;
+				}
+				
+				// DEBUG: publish markers to see icp result:
+				this->ipc_publisher_->publish(marker_from_cloud(filtered_current_pc, result_icp, msg));
 
-				double x = T(0, 3);
-				double y = T(1, 3);
-				double yaw = std::atan2(T(1, 0), T(0, 0));
+				// 5. Update map pose estimate (accumulate using ICP delta)
+				Eigen::Matrix4f T = icp.hasConverged() ? icp.getFinalTransformation() : Eigen::Matrix4f::Identity();
+
+				float x = T(0, 3);
+				float y = T(1, 3);
+				float yaw = std::atan2(T(1, 0), T(0, 0));
+
+				RCLCPP_INFO(get_logger(), "\n\t* ICP dx=%.3f dy=%.3f yaw=%.3f rad", x, y, yaw);
+				RCLCPP_INFO(get_logger(), "\t* ICP converged: %s", icp.hasConverged() ? "true" : "false");
+				RCLCPP_INFO(get_logger(), "\t* ICP fitness: %.6f", icp.getFitnessScore());
 
 				tf2::Quaternion q;
 				q.setRPY(0.0, 0.0, yaw);
 
 				tf2::Transform T_icp(q, tf2::Vector3(x, y, 0.0));
-				// PCL ICP returns a transform that maps current -> previous; use its inverse to get prev->curr
-				tf2::Transform delta_icp = T_icp.inverse();
-				T_map_base_ = T_map_base_ * delta_icp;
+				tf2::Transform T_map_lidar = T_icp.inverseTimes(T_odom_curr_lidar) * T_map_odom_;
 
 				// 6. Compute map -> odom
-				// T_map_odom = T_map_base * inverse(T_odom_curr_base)
-				tf2::Transform T_map_odom = T_map_base_ * T_odom_curr_base.inverse();
-
+				T_map_odom_ = T_map_lidar * T_odom_curr_lidar.inverse();
+				
 				// 7. Broadcast map -> odom
 				geometry_msgs::msg::TransformStamped map_to_odom_msg;
 				map_to_odom_msg.header.stamp = current_stamp;
 				map_to_odom_msg.header.frame_id = "map";
 				map_to_odom_msg.child_frame_id = "odom";
-				map_to_odom_msg.transform.translation.x = T_map_odom.getOrigin().x();
-				map_to_odom_msg.transform.translation.y = T_map_odom.getOrigin().y();
-				map_to_odom_msg.transform.translation.z = T_map_odom.getOrigin().z();
-				map_to_odom_msg.transform.rotation.x = T_map_odom.getRotation().x();
-				map_to_odom_msg.transform.rotation.y = T_map_odom.getRotation().y();
-				map_to_odom_msg.transform.rotation.z = T_map_odom.getRotation().z();
-				map_to_odom_msg.transform.rotation.w = T_map_odom.getRotation().w();
+				map_to_odom_msg.transform.translation.x = T_map_odom_.getOrigin().x();
+				map_to_odom_msg.transform.translation.y = T_map_odom_.getOrigin().y();
+				map_to_odom_msg.transform.translation.z = T_map_odom_.getOrigin().z();
+				map_to_odom_msg.transform.rotation.x = T_map_odom_.getRotation().x();
+				map_to_odom_msg.transform.rotation.y = T_map_odom_.getRotation().y();
+				map_to_odom_msg.transform.rotation.z = T_map_odom_.getRotation().z();
+				map_to_odom_msg.transform.rotation.w = T_map_odom_.getRotation().w();
 				tf_broadcaster_->sendTransform(map_to_odom_msg);
 
 				// 8. Store current as next reference
 				prev_scan_msg_ = msg;
 				prev_pc_ = current_pc;
-				T_odom_prev_base_ = T_odom_curr_base;
+				filtered_prev_pc_ = filtered_current_pc;
+				T_odom_prev_lidar_ = T_odom_curr_lidar;
 
-				RCLCPP_INFO(this->get_logger(), "Processed scan: %li ns", this->get_clock()->now().nanoseconds() - start_time);
+				RCLCPP_INFO(this->get_logger(), "\t-> Processed scan: %li ns", this->get_clock()->now().nanoseconds() - start_time);
 
 			};
+
+			ipc_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/icp_result", 2);
 
 			tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
 			
@@ -180,6 +281,18 @@ class Localization : public rclcpp::Node
 			tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
 			subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>("/lidar/scan", 10, scan_callback);
+			// Ensure we start with a valid TFs (for first iteration)
+			T_odom_prev_lidar_.setIdentity();
+			try
+			{
+				// Fetch the latest available map->odomTF
+				T_map_odom_ = tf2_from_msg(this->tf_buffer_->lookupTransform("odom", "map", rclcpp::Time(), 1000ms));
+			}
+			catch(tf2::TransformException & ex)
+			{
+				RCLCPP_FATAL(this->get_logger(), "Could not get transform: %s. Defaulting to identity.", ex.what());
+				T_map_odom_.setIdentity();
+			}
 
 			RCLCPP_INFO(this->get_logger(), "Localization node has been started.");
 		}
@@ -189,11 +302,14 @@ class Localization : public rclcpp::Node
 		std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 		rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr subscription_;
 
+		rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr ipc_publisher_;
+
 		sensor_msgs::msg::LaserScan::SharedPtr prev_scan_msg_;
 		pcl::PointCloud<pcl::PointXYZ> prev_pc_;
+		pcl::PointCloud<pcl::PointXYZ> filtered_prev_pc_;
 
-		tf2::Transform T_odom_prev_base_;
-		tf2::Transform T_map_base_;
+		tf2::Transform T_odom_prev_lidar_;
+		tf2::Transform T_map_odom_;
 
 		size_t counter_{0};
 };
