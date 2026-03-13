@@ -15,7 +15,7 @@ find_package(tf2_ros REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 #set(PCL_DIR /home/robot/dd2419_ws/.pixi/envs/default/share/pcl-1.15) # why on earth was this needed
-find_package(PCL REQUIRED COMPONENTS common registration)
+find_package(PCL REQUIRED COMPONENTS common registration visualization filters)
 
 add_executable(localization src/localization.cpp)
 target_include_directories(localization PUBLIC
