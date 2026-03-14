@@ -19,6 +19,7 @@ using namespace std::chrono_literals;
 constexpr auto TIMEOUT = 100ms;
 constexpr int8_t UNKNOWN_SPACE = -1;
 constexpr int8_t OCCUPIED_SPACE = 1;
+constexpr int8_t OCCUPIED_SPACE_MAX = 100;
 constexpr int8_t FREE_SPACE = 0;
 
 static tf2::Transform tf2_from_msg(const geometry_msgs::msg::TransformStamped & transform_stamped)
@@ -172,10 +173,13 @@ void ray_trace(const tf2::Vector3 & start, const tf2::Vector3 & end, nav_msgs::m
 			t_max_y += t_delta_y;
 		}
 
-		if (x >= 0 && x < static_cast<int>(map.info.width) &&
-			y >= 0 && y < static_cast<int>(map.info.height))
+		if (x >= 0 && x < static_cast<int>(map.info.width) && y >= 0 && y < static_cast<int>(map.info.height))
 		{	
-			map.data.at(x + static_cast<int>(map.info.width) * y) = FREE_SPACE;
+			if (x != x_end && y != y_end)
+			{
+				int8_t & cell = map.data.at(x + static_cast<int>(map.info.width) * y);
+				cell = (cell <= FREE_SPACE || cell == UNKNOWN_SPACE) ? FREE_SPACE : --cell;
+			}
 		}
 		else
 		{
@@ -252,7 +256,8 @@ class ObstacleMapper : public rclcpp::Node
 					const GridIdx idx = pose_to_grid_idx(vec_in_map_frame.getX(), vec_in_map_frame.getY(), map_);
 					if (idx.x >= 0 && idx.x < static_cast<int>(map_.info.width) && idx.y >= 0 && idx.y < static_cast<int>(map_.info.height))
 					{
-						map_.data.at(idx.x + static_cast<int>(map_.info.width) * idx.y) = OCCUPIED_SPACE;
+						int8_t & cell = map_.data.at(idx.x + static_cast<int>(map_.info.width) * idx.y);
+						cell = (cell < OCCUPIED_SPACE_MAX) ? ++cell : OCCUPIED_SPACE_MAX;
 					}
 				}
 
