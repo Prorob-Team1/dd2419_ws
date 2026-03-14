@@ -12,12 +12,11 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
-#include <Eigen/Dense>
 #include <chrono>
 #include <thread>
 
 using namespace std::chrono_literals;
-constexpr auto TIMEOUT = 10ms;
+constexpr auto TIMEOUT = 100ms;
 constexpr int8_t UNKNOWN_SPACE = -1;
 constexpr int8_t OCCUPIED_SPACE = 1;
 constexpr int8_t FREE_SPACE = 0;
@@ -41,16 +40,16 @@ static tf2::Transform tf2_from_msg(const geometry_msgs::msg::TransformStamped & 
 
 // https://stackoverflow.com/questions/65169078/c-finding-the-argsort-of-a-vectorfloat
 std::vector<int> VectorArgSort(std::vector<float> const & v) {
-    /* Get the indices that gives a sorted vector v*/
+	/* Get the indices that gives a sorted vector v*/
 	
-    std::vector<int> retIndices(v.size());
-    std::iota(retIndices.begin(), retIndices.end(), 0);
+	std::vector<int> retIndices(v.size());
+	std::iota(retIndices.begin(), retIndices.end(), 0);
 
-    std::stable_sort(
-        retIndices.begin(), retIndices.end(),
-        [&v](int i1, int i2) {return v[i1] > v[i2];});
+	std::stable_sort(
+		retIndices.begin(), retIndices.end(),
+		[&v](int i1, int i2) {return v[i1] > v[i2];});
 
-    return retIndices;
+	return retIndices;
 }
 
 std::vector<tf2::Vector3> scan_to_vec(sensor_msgs::msg::LaserScan::SharedPtr scan, const tf2::Transform & T_start, const tf2::Transform & T_end)
@@ -106,22 +105,83 @@ std::vector<tf2::Vector3> scan_to_vec(sensor_msgs::msg::LaserScan::SharedPtr sca
 	return vec;
 }
 
-int pose_to_grid_idx(const float x, const float y, const nav_msgs::msg::OccupancyGrid & map) {
-	
-	int idx;
 
-	// Do shit
+struct GridIdx
+{
+	int x;
+	int y;
+};
 
-	return idx;
+GridIdx pose_to_grid_idx(const double x, const double y, const nav_msgs::msg::OccupancyGrid & map) {
+	int x_idx = static_cast<int>(std::floor((x - map.info.origin.position.x)/map.info.resolution));
+	int y_idx = static_cast<int>(std::floor((y - map.info.origin.position.y)/map.info.resolution));
+	return GridIdx{x_idx, y_idx};
 }
 
-std::vector<int> ray_trace(const tf2::Vector3 & start, const tf2::Vector3 & end, const nav_msgs::msg::OccupancyGrid & map) 
+void ray_trace(const tf2::Vector3 & start, const tf2::Vector3 & end, nav_msgs::msg::OccupancyGrid & map) 
 {
-	std::vector<int> grid_indeces;
-	// do raytracing :D
+	/*
+	A Fast Voxel Traversal Algorithm for Ray Tracing
+	J. Amanatides, A. Woo
+	http://www.cse.yorku.ca/~amana/research/grid.pdf
+	*/
 
+	const tf2::Vector3 v = end - start;
+	const double res = map.info.resolution;
+	const double origin_x = map.info.origin.position.x;
+	const double origin_y = map.info.origin.position.y;
 
-	return grid_indeces;
+	const int step_x = (v.getX() > 0) ? 1 : (v.getX() < 0 ? -1 : 0);
+	const int step_y = (v.getY() > 0) ? 1 : (v.getY() < 0 ? -1 : 0);
+
+	const GridIdx current_idx = pose_to_grid_idx(start.getX(), start.getY(), map);
+	const GridIdx end_idx = pose_to_grid_idx(end.getX(), end.getY(), map);
+
+	int x = current_idx.x;
+	int y = current_idx.y;
+	const int x_end = end_idx.x;
+	const int y_end = end_idx.y;
+
+	const double next_boundary_x = (step_x > 0) ? (origin_x + (x + 1) * res) : (origin_x + x * res);
+
+	const double next_boundary_y = (step_y > 0) ? (origin_y + (y + 1) * res) : (origin_y + y * res);
+
+	double t_max_x = (step_x != 0) ? (next_boundary_x - start.getX()) / v.getX() : DBL_MAX;
+	double t_max_y = (step_y != 0) ? (next_boundary_y - start.getY()) / v.getY() : DBL_MAX;
+
+	const double t_delta_x = (step_x != 0) ? res / std::abs(v.getX()) : DBL_MAX;
+	const double t_delta_y = (step_y != 0) ? res / std::abs(v.getY()) : DBL_MAX;
+
+	while (x != x_end || y != y_end)
+	{
+		if (t_max_x < t_max_y)
+		{
+			x += step_x;
+			t_max_x += t_delta_x;
+		}
+		else if (t_max_y < t_max_x)
+		{
+			y += step_y;
+			t_max_y += t_delta_y;
+		}
+		else // edge case, traverse in both directions
+		{
+			x += step_x;
+			y += step_y;
+			t_max_x += t_delta_x;
+			t_max_y += t_delta_y;
+		}
+
+		if (x >= 0 && x < static_cast<int>(map.info.width) &&
+			y >= 0 && y < static_cast<int>(map.info.height))
+		{	
+			map.data.at(x + static_cast<int>(map.info.width) * y) = FREE_SPACE;
+		}
+		else
+		{
+			break;
+		}
+	}
 }
 
 
@@ -159,15 +219,16 @@ class ObstacleMapper : public rclcpp::Node
 				// 1. Retrieve TF
 				tf2::Transform T_map_curr_lidar;
 				try
-				{
+				{	
+					// ### THIS IS THE MAJOR BOTTLENECK! ###
 					T_map_curr_lidar = tf2_from_msg(
-						tf_buffer_->lookupTransform("map", "lidar_link", msg->header.stamp, TIMEOUT)
+						tf_buffer_->lookupTransform("map", "lidar_link", msg->header.stamp+rclcpp::Duration::from_seconds(msg->scan_time), TIMEOUT) // We retrieve the TF for when the current scan *ends* (at least according to the source code of the lidar node)
 					);
 				}
 				catch (tf2::TransformException & ex)
 				{
 					RCLCPP_WARN(this->get_logger(), "Could not get transform: %s", ex.what());
-					prev_T_exists_ = false; // de-skewing requires the tf from the previous scan, otherwise it will fail
+					prev_T_exists_ = false; // de-skewing requires the tf from the previous scan (i.e. the TF from when the current scan started), otherwise it will fail
 					return;
 				}
 
@@ -182,22 +243,27 @@ class ObstacleMapper : public rclcpp::Node
 				const std::vector<tf2::Vector3> scan_vec = scan_to_vec(msg,T_map_prev_lidar_, T_map_curr_lidar);
 
 				// 3. Ray-trace and populate map
-				for (size_t i = 0; i < scan_vec.size(); ++i)
+				for (size_t i = 0; i < scan_vec.size(); ++i) 
 				{
 					tf2::Vector3 vec_in_map_frame = T_map_prev_lidar_ * scan_vec.at(i);
-					std::vector<int> grid_indeces = ray_trace(T_map_prev_lidar_.getOrigin(), vec_in_map_frame, map_);
-					for (auto k : grid_indeces) {
-						map_.data.at(k) = FREE_SPACE;
+					// Raytrace to fill map with FREE_SPACE
+					ray_trace(T_map_prev_lidar_.getOrigin(), vec_in_map_frame, map_);
+					// Set end-point to OCCUPIED_SPACE
+					const GridIdx idx = pose_to_grid_idx(vec_in_map_frame.getX(), vec_in_map_frame.getY(), map_);
+					if (idx.x >= 0 && idx.x < static_cast<int>(map_.info.width) && idx.y >= 0 && idx.y < static_cast<int>(map_.info.height))
+					{
+						map_.data.at(idx.x + static_cast<int>(map_.info.width) * idx.y) = OCCUPIED_SPACE;
 					}
-					map_.data.at(pose_to_grid_idx(vec_in_map_frame.getX(), vec_in_map_frame.getY(), map_)) = OCCUPIED_SPACE;
 				}
 
 				// 4. Publish map
 				map_.header.stamp = msg->header.stamp;
 				map_publisher_->publish(map_);
+				
+				// 5. Store previous TF
+				T_map_prev_lidar_ = T_map_curr_lidar;
 
-
-				// 5. Report processing time.
+				// 6. Report processing time.
 				const auto runtime = this->get_clock()->now().nanoseconds() - start_time;
 
 				RCLCPP_INFO(this->get_logger(), "-> Processed scan: %li ns", runtime);

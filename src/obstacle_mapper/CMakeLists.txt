@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(obstacle_mapper)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -O3)
 endif()
 
 # find dependencies
@@ -13,7 +13,6 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
-find_package(Eigen3 REQUIRED)
 
 add_executable(obstacle_mapper src/obstacle_mapper.cpp)
 target_include_directories(obstacle_mapper PUBLIC
@@ -29,10 +28,6 @@ ament_target_dependencies(
   "sensor_msgs"
   "nav_msgs"
   "visualization_msgs"
-)
-target_link_libraries(
-  obstacle_mapper
-  Eigen3::Eigen
 )
 
 install(TARGETS obstacle_mapper
