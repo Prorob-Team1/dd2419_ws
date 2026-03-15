@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-import time
-
 import cv2
 import numpy as np
 
@@ -61,8 +59,18 @@ class PointcloudFilter(Node):
         self._eliminated_pub = self.create_publisher(
             PointCloud2, '/eliminated', 10)
 
+    # Hue bands for cube colors (OpenCV H scale 0-179)
+    _HUE_RED_LOW = (0, 10)
+    _HUE_RED_HIGH = (170, 180)
+    _HUE_GREEN = (80, 88)
+    _HUE_BLUE = (95, 110)
+    _HUE_WOOD = (20, 35)
+    _SAT_THRESHOLD = 0.2  # normalized; ignore points with S below this for hue classification
+    _V_PERCENTILE_LOW = 10   # ignore darkest %
+    _V_PERCENTILE_HIGH = 90  # ignore brightest %
+
     def _infer_cube_color_from_rgb(self, cluster_full: np.ndarray) -> str:
-        """Infer cube color from RGB using HSV. Returns CUBE_R, CUBE_B, CUBE_G, CUBE_W, or CUBE_U."""
+        """Infer cube color from RGB using HSV: median H/S/V, ignore low-sat and extreme V, classify from hue histogram."""
         if cluster_full.shape[0] == 0 or cluster_full.shape[1] < 4:
             return "CUBE_U"
         rgb_packed = cluster_full[:, 3].view(np.uint32)
@@ -71,21 +79,63 @@ class PointcloudFilter(Node):
         b = rgb_packed & 255
         rgb_uint8 = np.column_stack([r, g, b]).astype(np.uint8)
         rgb_for_cv2 = rgb_uint8.reshape(-1, 1, 3)
-        hsv_points = cv2.cvtColor(rgb_for_cv2, cv2.COLOR_RGB2HSV).reshape(-1, 3)
-        mean_h = np.mean(hsv_points[:, 0])
-        mean_s = np.mean(hsv_points[:, 1]) / 255.0
-        if mean_s < 0.2:
-            return "CUBE_W"  # wood (low saturation)
-        # Approximate hue bands for our cube colors (in OpenCV scale)
-        if mean_h < 10 or mean_h > 170:
-            return "CUBE_R"  # red
-        if 35 <= mean_h < 85:
-            return "CUBE_G"  # green
-        if 100 <= mean_h < 140:
-            return "CUBE_B"  # blue
-        if 20 <= mean_h < 35:
-            return "CUBE_W"  # yellow-ish -> wood
-        return "CUBE_U"
+        hsv_points = cv2.cvtColor(rgb_for_cv2, cv2.COLOR_RGB2HSV).reshape(-1, 3)  # H [0,179], S,V [0,255]
+
+        # Ignore darkest and brightest 10% by value
+        v = hsv_points[:, 2].astype(np.float64)
+        v_lo = np.percentile(v, self._V_PERCENTILE_LOW)
+        v_hi = np.percentile(v, self._V_PERCENTILE_HIGH)
+        mask_v = (v >= v_lo) & (v <= v_hi)
+        hsv_filtered = hsv_points[mask_v]
+        if hsv_filtered.shape[0] == 0:
+            return "CUBE_U"
+
+        # Ignore low-saturation points before hue classification
+        sat_threshold_uint8 = int(self._SAT_THRESHOLD * 255)
+        s = hsv_filtered[:, 1]
+        mask_s = s >= sat_threshold_uint8
+        hsv_sat = hsv_filtered[mask_s]
+
+        if hsv_sat.shape[0] == 0:
+            # All points low saturation: use median to decide wood vs unknown
+            median_s = np.median(hsv_filtered[:, 1]) / 255.0
+            if median_s < self._SAT_THRESHOLD:
+                return "CUBE_W"
+            median_h = np.median(hsv_filtered[:, 0])
+            if 20 <= median_h < 35:
+                return "CUBE_W"
+            return "CUBE_U"
+
+        # Classify from hue histogram: count points in each color band
+        h = hsv_sat[:, 0].astype(np.float64)
+        red_count = np.sum((h < self._HUE_RED_LOW[1]) | (h >= self._HUE_RED_HIGH[0]))
+        green_count = np.sum((h >= self._HUE_GREEN[0]) & (h < self._HUE_GREEN[1]))
+        blue_count = np.sum((h >= self._HUE_BLUE[0]) & (h < self._HUE_BLUE[1]))
+        wood_count = np.sum((h >= self._HUE_WOOD[0]) & (h < self._HUE_WOOD[1]))
+        counts = [
+            ("CUBE_R", red_count),
+            ("CUBE_G", green_count),
+            ("CUBE_B", blue_count),
+            ("CUBE_W", wood_count),
+        ]
+        best_class, best_count = max(counts, key=lambda x: x[1])
+
+        if best_count == 0:
+            # No point in any band: fallback to median hue
+            median_h = np.median(h)
+            median_s = np.median(hsv_sat[:, 1]) / 255.0
+            if median_s < self._SAT_THRESHOLD:
+                return "CUBE_W"
+            if median_h < 10 or median_h >= 170:
+                return "CUBE_R"
+            if 35 <= median_h < 85:
+                return "CUBE_G"
+            if 100 <= median_h < 140:
+                return "CUBE_B"
+            if 20 <= median_h < 35:
+                return "CUBE_W"
+            return "CUBE_U"
+        return best_class
 
     def _publish_detection(self, centroid: np.ndarray, class_name: str, confidence: float,
                            frame_id: str, stamp, detections_list: list) -> None:
@@ -128,11 +178,8 @@ class PointcloudFilter(Node):
             return
         
         points = filtered[:, :3]
-        dbscan_start = time.perf_counter()
         labels = DBSCAN(eps=self.DBSCAN_EPS, min_samples=self.DBSCAN_MIN_SAMPLES).fit_predict(points)
-        dbscan_time = time.perf_counter() - dbscan_start
 
-        labelling_start = time.perf_counter()
         unique_labels = np.unique(labels)
         unique_labels = unique_labels[unique_labels >= 0]
         detections_list = []
@@ -208,6 +255,7 @@ class PointcloudFilter(Node):
 
                 # Publish eliminated point cloud in Yellow (valid cube detection)
                 cube_class = self._infer_cube_color_from_rgb(cluster_full)
+                self.get_logger().info(f'Detected color: {cube_class}')
                 centroid = np.median(cluster_points, axis=0)
 
                 # push centroid 1.5 cm back in z (depth)
@@ -324,8 +372,6 @@ class PointcloudFilter(Node):
             cluster_cloud = np.column_stack([points_cluster, rgb_float])
             cluster_msg = pc2.create_cloud(msg.header, msg.fields, cluster_cloud)
             self._cluster_cloud_pub.publish(cluster_msg)
-        labelling_time = time.perf_counter() - labelling_start
-        self.get_logger().info(f'DBSCAN: {dbscan_time*1000:.2f} ms | Total labelling: {labelling_time*1000:.2f} ms | ')
 
 
 def main():
