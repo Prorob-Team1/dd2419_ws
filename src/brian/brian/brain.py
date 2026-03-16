@@ -20,6 +20,7 @@ from std_srvs.srv import Trigger
 from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker
 from rclpy.duration import Duration
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 
 # from robp_interfaces.actions import Navigation
 from robp_interfaces.msg import Encoders, DutyCycles
@@ -32,6 +33,7 @@ from py_trees.composites import Sequence, Selector, Parallel
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 from action_msgs.msg import GoalStatus
+from std_msgs.msg import Bool
 
 from robp_interfaces.action import DummyAction
 from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg
@@ -282,6 +284,8 @@ class Brain(Node):
         self.potential_candidates: list[ObjectCandidateMsg] = []
         self.start_pose = None
 
+        self.detection_on = True
+
         self.map_subscriber = self.create_subscription(
             OccupancyGrid,
             "/occupancy_grid",
@@ -305,6 +309,9 @@ class Brain(Node):
         # publishers
         self.goal_marker_publisher = self.create_publisher(Marker, "/nav_goal", 1)
         self.caught_cubes_publisher = self.create_publisher(ObjectCandidateArrayMsg, "/caught_cubes", 10)
+
+        detection_qos = QoSProfile(depth=1, history=QoSHistoryPolicy.KEEP_LAST, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.detection_pub = self.create_publisher(Bool, "/detection_on", detection_qos)
 
         # caught cubes
         self.caught_cubes: ObjectCandidateArrayMsg = ObjectCandidateArrayMsg()
@@ -335,6 +342,8 @@ class Brain(Node):
         self.get_logger().info(
             f"{ANSIEscClr.GREEN}{ANSIEscClr.BOLD}I AM ALIVE!{ANSIEscClr.RESET}"
         )
+
+        self.detection_pub.publish(Bool(data=self.detection_on))
 
 
     def map_callback(self, msg: OccupancyGrid):
@@ -664,6 +673,8 @@ class ArmB(Behaviour):
 
     def terminate(self, new_status):
         self.node.get_logger().debug(f"Terminated arm action: {new_status}")
+        self.node.detection_on = True
+        self.node.detection_pub.publish(Bool(data=self.node.detection_on))
         pass # this could POTENTIALLY be a problem if we terminate in the middle of grasping
 
     def update(self):
@@ -672,6 +683,10 @@ class ArmB(Behaviour):
     
     def initialise(self):
         self.current_status = Status.RUNNING
+        
+        self.node.detection_on = False
+        self.node.detection_pub.publish(Bool(data=self.node.detection_on))
+
         request = Trigger.Request()
         client = self.node.dropping_client
         if self.grabbing:

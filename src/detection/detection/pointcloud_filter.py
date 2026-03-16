@@ -7,12 +7,15 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.duration import Duration
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
+from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 from sklearn.cluster import DBSCAN
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PointStamped
+from std_msgs.msg import Bool
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -37,6 +40,9 @@ class PointcloudFilter(Node):
 
         self.get_logger().info(f'PointcloudFilter initialized with MAX_DEPTH={self.MAX_DEPTH} and MAX_HEIGHT={self.MAX_HEIGHT}')
 
+        self._cloud_cb_group = ReentrantCallbackGroup()
+        self._detection_cb_group = MutuallyExclusiveCallbackGroup()
+
         # TF for transforming detections to map frame
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
@@ -53,8 +59,12 @@ class PointcloudFilter(Node):
         self._detections_pub = self.create_publisher(
             ObjectDetectionArrayMsg, '/object_detections', 10)
 
-        self.create_subscription(
-            PointCloud2, '/realsense/depth/color/points', self.cloud_callback, 10)
+        self.create_subscription(PointCloud2, '/realsense/depth/color/points', self.cloud_callback, 10, callback_group=self._cloud_cb_group)
+        detection_qos = QoSProfile(depth=1, history=QoSHistoryPolicy.KEEP_LAST, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(Bool, '/detection_on', self.detection_callback, detection_qos, callback_group=self._detection_cb_group)
+
+        self.detection_on = True
+
 
         self._eliminated_pub = self.create_publisher(
             PointCloud2, '/eliminated', 10)
@@ -191,8 +201,15 @@ class PointcloudFilter(Node):
         except TransformException:
             pass
 
+
+    def detection_callback(self, msg: Bool):
+        self.detection_on = msg.data
+
     def cloud_callback(self, msg: PointCloud2):
         # Use the received timestamp everywhere: TF lookup and all published messages
+        if not self.detection_on:
+            return
+
         received_stamp = msg.header.stamp
         data = pc2.read_points_numpy(msg, skip_nans=True)
         filtered = data[(data[:, 2] <= self.MAX_DEPTH) & (data[:, 1] >= -self.MAX_HEIGHT) & (data[:, 1] <= self.CAMERA_HEIGHT)]
