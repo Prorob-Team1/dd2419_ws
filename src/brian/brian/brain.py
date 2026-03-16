@@ -17,6 +17,7 @@ from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from geometry_msgs.msg import TransformStamped
 from std_srvs.srv import Trigger
 from nav_msgs.msg import OccupancyGrid
+from std_msgs.msg import Bool
 from visualization_msgs.msg import Marker
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
@@ -72,26 +73,15 @@ def format_goal_text(goal_type: int, target_cube: ObjectCandidateMsg):
     return message    
     
 class GoalProvider:
-    """Provides exploration/object goals using injected dependencies."""
-    def __init__(self, logger, marker_publisher, clock, map_getter,
-                 valid_candidates_getter, potential_candidates_getter,
-                 start_pose_getter, target_cube_getter, target_cube_setter,
-                 get_robot_pose):
+    """Provides exploration/object goals"""
+    def __init__(self, logger, start_pose):
         self.logger = logger
-        self.marker_publisher = marker_publisher
-        self.clock = clock
-        self.map_getter = map_getter
-        self.valid_candidates_getter = valid_candidates_getter
-        self.potential_candidates_getter = potential_candidates_getter
-        self.start_pose_getter = start_pose_getter
-        self.target_cube_getter = target_cube_getter
-        self.target_cube_setter = target_cube_setter
-        self.get_robot_pose = get_robot_pose
+        self.start_pose = start_pose
+        self.target_cube = None
 
-    def publish_goal_marker(self, x: float, y: float, yaw: float, goal_type: int):
+    def create_goal_marker(self, x: float, y: float, yaw: float, goal_type: int):
         goal_marker = Marker()
         goal_marker.header.frame_id = "map"
-        goal_marker.header.stamp = self.clock().now().to_msg()
         if goal_type == EXPLORE_GOAL:
             goal_marker.color.r = 0.0
             goal_marker.color.g = 1.0
@@ -120,29 +110,29 @@ class GoalProvider:
         goal_marker.scale.x = 0.2
         goal_marker.scale.y = 0.03
         goal_marker.scale.z = 0.03
-        self.marker_publisher.publish(goal_marker)
+        
+        return goal_marker
 
-    def get_goal(self, goal_type):
+    def get_goal(self, goal_type, robot_pose, map, valid_candidates, candidates):
         if goal_type == EXPLORE_GOAL: 
             self.logger.debug("Recieved exploration goal request")
-            get_goal = lambda: self.get_explore_goal()
+            get_goal = lambda: self.get_explore_goal(robot_pose, map, candidates)
         elif goal_type == CUBE_GOAL:
             self.logger.debug("Recieved cube goal request")
-            get_goal = lambda: self.get_object_goal(CUBE_GOAL)
+            get_goal = lambda: self.get_object_goal(CUBE_GOAL, robot_pose, valid_candidates)
         elif goal_type == BOX_GOAL:
             self.logger.debug("Recieved box goal request")
-            get_goal = lambda: self.get_object_goal(BOX_GOAL)
+            get_goal = lambda: self.get_object_goal(BOX_GOAL, robot_pose, valid_candidates)
         else:
             self.logger.warning("Recieved unknown goal request, returning an empty goal")
             return None
         
-        if self.map_getter() == None:
+        if map == None:
             self.logger.warning("No map data available, returning an empty goal")
             return None
         
         try:
             (x,y,yaw) = get_goal()
-            self.publish_goal_marker(x,y,yaw, goal_type)
             return x,y,yaw
         except TypeError as error:
             self.logger.warning(f"Oops, something went wrong: {error}")
@@ -165,27 +155,24 @@ class GoalProvider:
                     frontier_cells.append((i, j))
         return frontier_cells
 
-    def get_explore_goal(self):
-        map_obj = self.map_getter()
+    def get_explore_goal(self, robot_pose, map_obj: OccupancyGrid, candidates):
         if map_obj is None or len(map_obj.data) < 1:
             self.logger.error("Recieved an empty map")
             return None
         map_arr = np.reshape(map_obj.data, (map_obj.info.height, map_obj.info.width))
-        robot_pose = self.get_robot_pose()
         if robot_pose is None:
             return None
 
         r = np.random.rand()
         frontiers = np.array(self.find_frontiers(map_arr))
         if frontiers.size == 0:
-            if len(self.potential_candidates_getter()) < 1:
+            if len(candidates) < 1:
                 self.logger.warning("No frontiers available, returning fallback goal (start position)")
-                return self.start_pose_getter() 
+                return self.start_pose 
             r = 1.0 # ensure we always go to a candidate
 
         # Go to a seen but uncertain object candidate 40% of the time if frontiers are available, otherwise every time
         if r > 0.6:
-            candidates = self.potential_candidates_getter()
             if len(candidates) > 0:
                 idx = np.random.choice(len(candidates))
                 candidate = candidates[idx]
@@ -202,7 +189,6 @@ class GoalProvider:
 
         # Go to a new frontier
         robot_x, robot_y, robot_yaw = robot_pose
-        map_obj = self.map_getter()
         grid_x = (robot_x - map_obj.info.origin.position.x) / map_obj.info.resolution
         grid_y = (robot_y - map_obj.info.origin.position.y) / map_obj.info.resolution
         grid_col = int(min(grid_x, map_obj.info.width - 1))
@@ -222,12 +208,11 @@ class GoalProvider:
         self.logger.debug(f"Sending goal at ({x=},{y=},{yaw=})")
         return x, y, 0.0#yaw
 
-    def get_object_goal(self, goal_type):
-        robot_pose = self.get_robot_pose()
+    def get_object_goal(self, goal_type, robot_pose, valid_candidates):
         if robot_pose is None:
             return None
         valid_objects: list[ObjectCandidateMsg] = []
-        for candidate in self.valid_candidates_getter():
+        for candidate in valid_candidates:
             if candidate.class_name == ObjectClassification.BOX.value and goal_type == BOX_GOAL:
                 valid_objects.append(candidate)
             elif candidate.class_name != ObjectClassification.BOX.value and goal_type == CUBE_GOAL:
@@ -249,8 +234,8 @@ class GoalProvider:
             ]
             new_dist = self.calc_dist(robot_pose, pose)
             if new_dist < closest_dist:
-                if self.target_cube_getter() is not None:
-                    if self.target_cube_getter().id == obj.id:
+                if self.target_cube is not None:
+                    if self.target_cube.id == obj.id:
                         continue
                 closest_pose = pose
                 closest_dist = new_dist
@@ -266,7 +251,7 @@ class GoalProvider:
             yaw = -np.pi/2
         self.logger.debug(f"Created object goal at (x={x:.2f},y={y:.2f},yaw={yaw:.2f})")
         if goal_type == CUBE_GOAL:
-            self.target_cube_setter(closest_obj)
+            self.target_cube = closest_obj
         return x, y, yaw
 
     def calc_dist(self, pose1: list[float], pose2: list[float]):
@@ -321,31 +306,18 @@ class Brain(Node):
         # Publishers
         self.goal_marker_publisher = self.create_publisher(Marker, "/nav_goal", 1)
         self.caught_cubes_publisher = self.create_publisher(ObjectCandidateArrayMsg, "/caught_cubes", 10)
-
-        detection_qos = QoSProfile(depth=1, history=QoSHistoryPolicy.KEEP_LAST, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
-        self.detection_pub = self.create_publisher(Bool, "/detection_on", detection_qos)
+        self.detection_publisher = self.create_publisher(Bool, "/detection_on", 10)
+        self.detection_publisher.publish(Bool(data=True)) # turn on detection
 
         # caught cubes
         self.caught_cubes: ObjectCandidateArrayMsg = ObjectCandidateArrayMsg()
-        self.target_cube: ObjectCandidateMsg = None
 
         # TF for robot pose
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Goal provider instance
-        self.goal_provider = GoalProvider(
-            logger=self.get_logger(),
-            marker_publisher=self.goal_marker_publisher,
-            clock=self.get_clock,
-            map_getter=lambda: self.map,
-            valid_candidates_getter=lambda: self.valid_candidates,
-            potential_candidates_getter=lambda: self.potential_candidates,
-            start_pose_getter=lambda: self.start_pose,
-            target_cube_getter=lambda: self.target_cube,
-            target_cube_setter=lambda cube: setattr(self, 'target_cube', cube),
-            get_robot_pose=self.get_robot_pose
-        )
+        self.goal_provider = GoalProvider(logger=self.get_logger(), start_pose = self.start_pose)
 
         # Clients
         self.grabbing_client = self.create_client(Trigger, "/Start_Grasping")
@@ -396,8 +368,8 @@ class Brain(Node):
         self.potential_candidates = potential_candidates
 
     def update_caught_cubes(self):
-        if self.target_cube is not None:
-            self.caught_cubes.candidates.append(self.target_cube)
+        if self.goal_provider.target_cube is not None:
+            self.caught_cubes.candidates.append(self.goal_provider.target_cube)
             self.caught_cubes.header.stamp = self.get_clock().now().to_msg()
             self.caught_cubes_publisher.publish(self.caught_cubes)
 
@@ -684,8 +656,7 @@ class ArmB(Behaviour):
 
     def terminate(self, new_status):
         self.node.get_logger().debug(f"Terminated arm action: {new_status}")
-        self.node.detection_on = True
-        self.node.detection_pub.publish(Bool(data=self.node.detection_on))
+        self.node.detection_publisher.publish(Bool(data=True))
         pass # this could POTENTIALLY be a problem if we terminate in the middle of grasping
 
     def update(self):
@@ -694,9 +665,8 @@ class ArmB(Behaviour):
     
     def initialise(self):
         self.current_status = Status.RUNNING
-        
-        self.node.detection_on = False
-        self.node.detection_pub.publish(Bool(data=self.node.detection_on))
+
+        self.node.detection_publisher.publish(Bool(data=False))
 
         request = Trigger.Request()
         client = self.node.dropping_client
@@ -717,7 +687,7 @@ class ArmB(Behaviour):
             self.current_status = Status.FAILURE
             self.node.get_logger().warning("Never got a valid response from the arm.")
             return
-        goal_msg = format_goal_text(CUBE_GOAL, self.node.target_cube)
+        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_cube)
 
         message = ""
         if response.success:
@@ -767,17 +737,19 @@ class Nav2GoalB(Behaviour):
 
         if self.node.debugging:
             self.node.get_logger().info(f"{self.name}: computing goal")
-        result = self.node.goal_provider.get_goal(self.goal_type)
+        result = self.node.goal_provider.get_goal(self.goal_type, self.node.get_robot_pose(), self.node.map, self.node.valid_candidates, self.node.potential_candidates)
         if result is None:
             self.node.get_logger().error(f"{self.name}: goal provider failed.")
             self.current_status = Status.FAILURE
             return
         x, y, yaw = result
         # publish marker for debugging
-        self.node.goal_provider.publish_goal_marker(x, y, yaw, self.goal_type)
+        marker = self.node.goal_provider.create_goal_marker(x, y, yaw, self.goal_type)
+        marker.header.stamp = self.node.get_clock().now().to_msg()
+        self.node.goal_marker_publisher.publish(marker)
 
         # Informative and fancy message :)))))
-        goal_str = format_goal_text(self.goal_type, self.node.target_cube)
+        goal_str = format_goal_text(self.goal_type, self.node.goal_provider.target_cube)
         self.node.get_logger().info(
             f"Sent {goal_str} goal at {ANSIEscClr.BOLD}({x=:.2f}, {y=:.2f}){ANSIEscClr.RESET}"
         )
@@ -821,7 +793,7 @@ class Nav2GoalB(Behaviour):
         result_future = self.nav_goal_handle.get_result_async()
         result_future.add_done_callback(self.nav_done_callback)
 
-        goal_str = format_goal_text(self.goal_type, self.node.target_cube)
+        goal_str = format_goal_text(self.goal_type, self.node.goal_provider.target_cube)
         message = f"--> Navigating to {goal_str}"
         if self.goal_type == EXPLORE_GOAL:
             message += "-goal"
@@ -888,7 +860,7 @@ class GrabCubeB(ArmB):
             self.node.cube_in_gripper = True
         else:
             self.node.cube_in_gripper = False
-
+        self.node.detection_publisher.publish(Bool(data=True))
 
 class ReleaseCubeB(ArmB):
     def __init__(self, node: Brain):
@@ -901,7 +873,8 @@ class ReleaseCubeB(ArmB):
             self.node.in_dropoff_range = False
         else:
             self.node.cube_in_gripper = True
-        return 
+        self.node.detection_publisher.publish(Bool(data=True))
+        
 
 
 def main():
