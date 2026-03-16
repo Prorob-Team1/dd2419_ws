@@ -10,11 +10,11 @@ import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
 import rclpy.time
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 
-from tf2_ros import TransformBroadcaster, TransformListener, Buffer
+from tf2_ros import TransformListener, Buffer
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 
-from geometry_msgs.msg import TransformStamped
 from std_srvs.srv import Trigger
 from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Bool
@@ -22,14 +22,13 @@ from visualization_msgs.msg import Marker
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 
-from robp_interfaces.msg import Encoders, DutyCycles
 from robp_interfaces.action import Navigation
-from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from rclpy.action.client import ActionClient
 from rclpy.executors import MultiThreadedExecutor
+
 import py_trees
-from py_trees.composites import Sequence, Selector, Parallel
+from py_trees.composites import Sequence, Selector
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 from action_msgs.msg import GoalStatus
@@ -306,7 +305,8 @@ class Brain(Node):
         # Publishers
         self.goal_marker_publisher = self.create_publisher(Marker, "/nav_goal", 1)
         self.caught_cubes_publisher = self.create_publisher(ObjectCandidateArrayMsg, "/caught_cubes", 10)
-        self.detection_publisher = self.create_publisher(Bool, "/detection_on", 10)
+        detection_qos = QoSProfile(depth=1, history=QoSHistoryPolicy.KEEP_LAST, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.detection_publisher = self.create_publisher(Bool, "/detection_on", detection_qos)
         self.detection_publisher.publish(Bool(data=True)) # turn on detection
 
         # caught cubes
