@@ -18,6 +18,8 @@ pcl = "*"
 
 [package.build-dependencies]
 ros2-distro-mutex = ">=0.13,<0.14"
+pcl = "*"
 
 [package.run-dependencies]
 ros2-distro-mutex = ">=0.13,<0.14"
+pcl = "*"
