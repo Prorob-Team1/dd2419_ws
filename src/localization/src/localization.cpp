@@ -25,10 +25,10 @@
 
 using namespace std::chrono_literals;
 constexpr auto TIMEOUT = 10ms; // pain
-constexpr bool DO_ICP = true;
 
 // who doesn't love global vars? :DD (it's for debugging only, relax)
-bool next_iteration = false; 
+constexpr bool DO_ICP = true; // false means we do something else that didn't work at first (skill issue)
+constexpr bool deskewing = false;
 long int frame = 0;
 long int marker_id = 0;
 
@@ -59,18 +59,26 @@ pcl::PointCloud<pcl::PointXYZ> scan_to_pc(const sensor_msgs::msg::LaserScan::Sha
 			float y = range * sin(angle);
 			float z = 0.0;
 			
-			// Interpolate lidar point TF
-			r = std::clamp((i * scan->time_increment) / ((num_ranges - 1)*scan->time_increment), 0.0f, 1.0f);
-			p_i = tf2::lerp(T_start.getOrigin(), T_end.getOrigin(), r);
-			q_i = tf2::slerp(T_start.getRotation(), T_end.getRotation(), r);
-			T_i.setOrigin(p_i);
-			T_i.setRotation(q_i);
+			if (deskewing) 
+			{
+				// Interpolate lidar point TF
+				r = std::clamp((i * scan->time_increment) / ((num_ranges - 1)*scan->time_increment), 0.0f, 1.0f);
+				p_i = tf2::lerp(T_start.getOrigin(), T_end.getOrigin(), r);
+				q_i = tf2::slerp(T_start.getRotation(), T_end.getRotation(), r);
+				T_i.setOrigin(p_i);
+				T_i.setRotation(q_i);
 
-			// TF point back to start TF
-			T_start_i = T_start.inverseTimes(T_i);
-			p_out = T_start_i * tf2::Vector3(x,y,z);
+				// TF point back to start TF
+				T_start_i = T_start.inverseTimes(T_i);
+				p_out = T_start_i * tf2::Vector3(x,y,z);
+				pointcloud.emplace_back(p_out.getX(), p_out.getY(), p_out.getZ());
+			}
+			else
+			{
+				pointcloud.emplace_back(x,y,z);
+			}
 
-			pointcloud.emplace_back(p_out.getX(), p_out.getY(), p_out.getZ());
+			
 		}
 	}
 	return pointcloud;
@@ -310,9 +318,11 @@ class Localization : public rclcpp::Node
 					T_odom_curr_lidar = tf2_from_msg(
 						tf_buffer_->lookupTransform("odom", "lidar_link", msg->header.stamp, TIMEOUT)
 					);
+					/*
 					T_odom_old_lidar = tf2_from_msg(
 						tf_buffer_->lookupTransform("odom", "lidar_link", msg->header.stamp-rclcpp::Duration::from_seconds(msg->scan_time), TIMEOUT)
 					);
+					*/
 				}
 				catch (tf2::TransformException & ex)
 				{
@@ -360,6 +370,7 @@ class Localization : public rclcpp::Node
 					filtered_prev_pc_ = filtered_current_pc;
 					filtered_first_pc_ = filtered_current_pc;
 					T_odom_first_lidar_ = T_odom_prev_lidar_;
+					T_map_first_lidar_ = T_map_odom_ * T_odom_first_lidar_;
 					prev_pc_exists_ = true;
 					RCLCPP_INFO(this->get_logger(), "No previous scan available, cannot run ICP");
 					// Broadcast old map -> odom TF every time (unless it's time to update it)
@@ -428,7 +439,7 @@ class Localization : public rclcpp::Node
 				const double dy = T(1,3);
 				const double yaw = std::atan2(T(1,0), T(0,0));
 				
-				//visualize_shit(filtered_target_pc.makeShared(), filtered_current_pc.makeShared(), result.makeShared());
+				visualize_shit(filtered_target_pc.makeShared(), filtered_current_pc.makeShared(), result.makeShared());
 
 				if (fitness > 10.0) // (std::hypot(dx, dy) > 0.25 || std::abs(yaw) > 0.35 || fitness > 0.05)
 				{ 
@@ -455,7 +466,8 @@ class Localization : public rclcpp::Node
 				tf2::Transform T_map_curr_lidar = T_map_prev_lidar * T_icp;
 
 				// 6. Compute map -> odom
-				T_map_odom_ = T_map_curr_lidar * T_odom_curr_lidar.inverse();
+				//T_map_odom_ = T_map_curr_lidar * T_odom_curr_lidar.inverse();
+				T_map_odom_ = T_map_odom_ * T_icp;
 				
 				// 7. Broadcast map -> odom
 				map_to_odom_msg_.header.stamp = current_stamp;
@@ -533,6 +545,7 @@ class Localization : public rclcpp::Node
 
 		tf2::Transform T_odom_prev_lidar_;
 		tf2::Transform T_odom_first_lidar_;
+		tf2::Transform T_map_first_lidar_;
 		tf2::Transform T_map_odom_;
 		geometry_msgs::msg::TransformStamped map_to_odom_msg_;
 		
