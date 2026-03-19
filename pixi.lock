@@ -238,8 +238,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/libsystemd0-257.10-hd0affe5_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libtheora-1.1.1-h4ab18f5_1006.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libtiff-4.7.1-h9d88235_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libudev-257.10-hd0affe5_3.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libudev1-257.10-hd0affe5_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libudev-257.13-hd0affe5_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libudev1-257.13-hd0affe5_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libunwind-1.8.3-h65a8314_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/liburcu-0.14.0-hac33072_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/liburing-2.13-hb700be7_0.conda
@@ -8933,26 +8933,26 @@ packages:
   purls: []
   size: 993166
   timestamp: 1762022118895
-- conda: https://prefix.dev/conda-forge/linux-64/libudev-257.10-hd0affe5_3.conda
-  sha256: fa403c3ec7f11f868b0fa20be68b606966b1afd4fd16d544481fbb6d040f1530
-  md5: 89b3600845827a4fd57e78792f20bbe1
+- conda: https://prefix.dev/conda-forge/linux-64/libudev-257.13-hd0affe5_0.conda
+  sha256: 609b08f36bab01a5e38d5c4c8159d7168c4372e11475ae9e27dc7200f488c3d0
+  md5: ef7e1ed4ec3f9fd6efad64ddd4c7d403
   depends:
-  - libudev1 257.10 hd0affe5_3
+  - libudev1 257.13 hd0affe5_0
   license: LGPL-2.1-or-later
   purls: []
-  size: 20790
-  timestamp: 1765552782892
-- conda: https://prefix.dev/conda-forge/linux-64/libudev1-257.10-hd0affe5_3.conda
-  sha256: 977e7e4955ea1581e441e429c2c1b498bc915767f1cac77a97b283c469d5298c
-  md5: 3934f4cf65a06100d526b33395fb9cd2
+  size: 21211
+  timestamp: 1773797109555
+- conda: https://prefix.dev/conda-forge/linux-64/libudev1-257.13-hd0affe5_0.conda
+  sha256: 1a1e367c04d66030aa93b4d33905f7f6fbb59cfc292e816fe3e9c1e8b3f4d1e2
+  md5: 2c2270f93d6f9073cbf72d821dfc7d72
   depends:
   - __glibc >=2.17,<3.0.a0
   - libcap >=2.77,<2.78.0a0
   - libgcc >=14
   license: LGPL-2.1-or-later
   purls: []
-  size: 145023
-  timestamp: 1765552781358
+  size: 145087
+  timestamp: 1773797108513
 - conda: https://prefix.dev/conda-forge/linux-64/libunwind-1.8.3-h65a8314_0.conda
   sha256: 71c8b9d5c72473752a0bb6e91b01dd209a03916cb71f36cc6a564e3a2a132d7a
   md5: e179a69edd30d75c0144d7a380b88f28
@@ -17018,7 +17018,7 @@ packages:
   - libgcc >=15
   - libgcc >=15
   - libstdcxx >=15
-  - libudev1 >=257.10
+  - libudev1 >=257.13
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-LGPL
@@ -17044,7 +17044,7 @@ packages:
   - libstdcxx >=15
   - openssl >=3.6.1,<4.0a0
   - libusb >=1.0.29,<2.0a0
-  - libudev1 >=257.10
+  - libudev1 >=257.13
   - libgl >=1.7.0,<2.0a0
   - libopengl >=1.7.0,<2.0a0
   - xorg-libxext >=1.3.7,<2.0a0
