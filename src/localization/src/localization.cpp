@@ -24,7 +24,7 @@
 
 
 using namespace std::chrono_literals;
-constexpr auto TIMEOUT = 10ms; // pain
+constexpr auto TIMEOUT = 1000ms; // pain
 
 // who doesn't love global vars? :DD (it's for debugging only, relax)
 constexpr bool DO_ICP = true; // false means we do something else that didn't work at first (skill issue)
@@ -180,7 +180,7 @@ void run_icp(
     icp.setMaximumIterations(100);
     icp.setTransformationEpsilon(1e-12);
 	icp.setEuclideanFitnessEpsilon(1e-12);
-	icp.setMaxCorrespondenceDistance(0.5);
+	icp.setMaxCorrespondenceDistance(0.1);
 
     icp.align(result_pc, guess);
 	return;
@@ -203,22 +203,20 @@ static tf2::Transform tf2_from_msg(const geometry_msgs::msg::TransformStamped & 
 	return tf;
 }
 
-static Eigen::Matrix4f guess_from_TFs(const tf2::Transform & T_prev, const tf2::Transform & T_curr) 
+static Eigen::Matrix4f tf2_to_eig(const tf2::Transform & transform) 
 {
-	tf2::Transform T_initial_guess = T_prev.inverseTimes(T_curr);
+	Eigen::Matrix4f matrix = Eigen::Matrix4f::Identity();
+	const tf2::Matrix3x3& R = transform.getBasis();
+	const tf2::Vector3& t = transform.getOrigin();
 
-	Eigen::Matrix4f guess = Eigen::Matrix4f::Identity();
-	const tf2::Matrix3x3& R = T_initial_guess.getBasis();
-	const tf2::Vector3& t = T_initial_guess.getOrigin();
+	matrix(0,0) = R[0][0]; matrix(0,1) = R[0][1]; matrix(0,2) = R[0][2];
+	matrix(1,0) = R[1][0]; matrix(1,1) = R[1][1]; matrix(1,2) = R[1][2];
+	matrix(2,0) = R[2][0]; matrix(2,1) = R[2][1]; matrix(2,2) = R[2][2];
+	matrix(0,3) = static_cast<float>(t.x());
+	matrix(1,3) = static_cast<float>(t.y());
+	matrix(2,3) = static_cast<float>(t.z());
 
-	guess(0,0) = R[0][0]; guess(0,1) = R[0][1]; guess(0,2) = R[0][2];
-	guess(1,0) = R[1][0]; guess(1,1) = R[1][1]; guess(1,2) = R[1][2];
-	guess(2,0) = R[2][0]; guess(2,1) = R[2][1]; guess(2,2) = R[2][2];
-	guess(0,3) = static_cast<float>(t.x());
-	guess(1,3) = static_cast<float>(t.y());
-	guess(2,3) = static_cast<float>(t.z());
-
-	return guess;
+	return matrix;
 }
 
 visualization_msgs::msg::Marker pc_to_marker(const pcl::PointCloud<pcl::PointXYZ> & cloud, rclcpp::Time stamp) 
@@ -316,13 +314,15 @@ class Localization : public rclcpp::Node
 				try
 				{
 					T_odom_curr_lidar = tf2_from_msg(
-						tf_buffer_->lookupTransform("odom", "lidar_link", msg->header.stamp, TIMEOUT)
+						tf_buffer_->lookupTransform("odom", "lidar_link", msg->header.stamp+rclcpp::Duration::from_seconds(deskewing ? msg->scan_time : 0.0), TIMEOUT)
 					);
-					/*
-					T_odom_old_lidar = tf2_from_msg(
-						tf_buffer_->lookupTransform("odom", "lidar_link", msg->header.stamp-rclcpp::Duration::from_seconds(msg->scan_time), TIMEOUT)
-					);
-					*/
+					if (deskewing)
+					{
+						T_odom_old_lidar = tf2_from_msg(
+							tf_buffer_->lookupTransform("odom", "lidar_link", msg->header.stamp, TIMEOUT)
+						);
+					}
+					
 				}
 				catch (tf2::TransformException & ex)
 				{
@@ -336,6 +336,7 @@ class Localization : public rclcpp::Node
 					return;
 				}
 
+				/*
 				if (std::abs(ang_vel_) > 0.3) {
 					RCLCPP_INFO(this->get_logger(), "Turning too fast, skipping");
 					// Broadcast old map -> odom TF every time (unless it's time to update it)
@@ -346,6 +347,7 @@ class Localization : public rclcpp::Node
 					}
 					return;
 				}
+				*/
 
 				// 2. Convert scan to 2D points in lidar frame 
 				pcl::PointCloud<pcl::PointXYZ> current_pc = scan_to_pc(msg, T_odom_old_lidar, T_odom_curr_lidar);
@@ -391,8 +393,9 @@ class Localization : public rclcpp::Node
 				float rot_diff = static_cast<float>(tf2::getYaw(T_odom_curr_lidar.getRotation()) - tf2::getYaw(T_odom_first_lidar_.getRotation()));
 				rot_diff = std::abs(std::atan2(sin(rot_diff), cos(rot_diff))); // wrap it to [0,pi]!
 				const float dist_to_start = static_cast<float>(T_odom_curr_lidar.getOrigin().distance(T_odom_first_lidar_.getOrigin()));
-				const bool near_start_pose = false;// dist_to_start < 0.3 && rot_diff < 0.3;
-				const Eigen::Matrix4f guess = guess_from_TFs(near_start_pose ? T_odom_first_lidar_ : T_odom_prev_lidar_, T_odom_curr_lidar);
+				const bool near_start_pose = true; //dist_to_start < 0.3 && rot_diff < 0.3;
+				const tf2::Transform tf2_guess = (near_start_pose ? T_odom_first_lidar_ : T_odom_prev_lidar_).inverseTimes(T_odom_curr_lidar);
+				const Eigen::Matrix4f guess = tf2_to_eig(tf2_guess);
 				Eigen::Matrix4f T;
 				double fitness;
 				pcl::PointCloud<pcl::PointXYZ> result;
@@ -439,9 +442,9 @@ class Localization : public rclcpp::Node
 				const double dy = T(1,3);
 				const double yaw = std::atan2(T(1,0), T(0,0));
 				
-				visualize_shit(filtered_target_pc.makeShared(), filtered_current_pc.makeShared(), result.makeShared());
+				//visualize_shit(filtered_target_pc.makeShared(), filtered_current_pc.makeShared(), result.makeShared());
 
-				if (fitness > 10.0) // (std::hypot(dx, dy) > 0.25 || std::abs(yaw) > 0.35 || fitness > 0.05)
+				if (fitness > 0.1) // (std::hypot(dx, dy) > 0.25 || std::abs(yaw) > 0.35 || fitness > 0.05)
 				{ 
 					RCLCPP_WARN(this->get_logger(), "Rejecting ICP: dx=%.3f dy=%.3f yaw=%.3f fitness=%.5f", dx, dy, yaw, fitness);
 					// Broadcast old map -> odom TF every time (unless it's time to update it)
@@ -467,7 +470,8 @@ class Localization : public rclcpp::Node
 
 				// 6. Compute map -> odom
 				//T_map_odom_ = T_map_curr_lidar * T_odom_curr_lidar.inverse();
-				T_map_odom_ = T_map_odom_ * T_icp;
+				
+				T_map_odom_ = T_map_odom_ * T_icp.inverseTimes(tf2_guess); //update with the difference between guess and icp
 				
 				// 7. Broadcast map -> odom
 				map_to_odom_msg_.header.stamp = current_stamp;
