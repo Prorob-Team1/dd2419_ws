@@ -21,6 +21,7 @@ constexpr int8_t UNKNOWN_SPACE = -1;
 constexpr int8_t OCCUPIED_SPACE = 1;
 constexpr int8_t OCCUPIED_SPACE_MAX = 100;
 constexpr int8_t FREE_SPACE = 0;
+constexpr bool deskewing = false;
 
 static tf2::Transform tf2_from_msg(const geometry_msgs::msg::TransformStamped & transform_stamped)
 {
@@ -89,18 +90,26 @@ std::vector<tf2::Vector3> scan_to_vec(sensor_msgs::msg::LaserScan::SharedPtr sca
 			float y = range * sin(angle);
 			float z = 0.0;
 			
-			// Interpolate lidar point TF
-			r = std::clamp((i * scan->time_increment) / ((num_ranges - 1)*scan->time_increment), 0.0f, 1.0f);
-			p_i = tf2::lerp(T_start.getOrigin(), T_end.getOrigin(), r);
-			q_i = tf2::slerp(T_start.getRotation(), T_end.getRotation(), r);
-			T_i.setOrigin(p_i);
-			T_i.setRotation(q_i);
+			if (deskewing)
+			{
+				// Interpolate lidar point TF
+				r = std::clamp((i * scan->time_increment) / ((num_ranges - 1)*scan->time_increment), 0.0f, 1.0f);
+				p_i = tf2::lerp(T_start.getOrigin(), T_end.getOrigin(), r);
+				q_i = tf2::slerp(T_start.getRotation(), T_end.getRotation(), r);
+				T_i.setOrigin(p_i);
+				T_i.setRotation(q_i);
 
-			// TF point back to start TF
-			T_start_i = T_start.inverseTimes(T_i);
-			p_out = T_start_i * tf2::Vector3(x,y,z);
+				// TF point back to start TF
+				T_start_i = T_start.inverseTimes(T_i);
+				p_out = T_start_i * tf2::Vector3(x,y,z);
+				vec.emplace_back(p_out);
+			}
+			else 
+			{
+				vec.emplace_back(x,y,z);
+			}
 
-			vec.emplace_back(p_out);
+			
 		}
 	}
 	return vec;
@@ -224,9 +233,9 @@ class ObstacleMapper : public rclcpp::Node
 				tf2::Transform T_map_curr_lidar;
 				try
 				{	
-					// ### THIS IS THE MAJOR BOTTLENECK! ###
+					// ### THIS IS THE MAJOR BOTTLENECK IF WE DESKEW! ###
 					T_map_curr_lidar = tf2_from_msg(
-						tf_buffer_->lookupTransform("map", "lidar_link", msg->header.stamp+rclcpp::Duration::from_seconds(msg->scan_time), TIMEOUT) // We retrieve the TF for when the current scan *ends* (at least according to the source code of the lidar node)
+						tf_buffer_->lookupTransform("map", "lidar_link", msg->header.stamp+rclcpp::Duration::from_seconds(deskewing ? msg->scan_time : 0.0), TIMEOUT) // We retrieve the TF for when the current scan *ends* (at least according to the source code of the lidar node)
 					);
 				}
 				catch (tf2::TransformException & ex)
