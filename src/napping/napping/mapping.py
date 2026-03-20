@@ -14,7 +14,7 @@ from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from nav_msgs.msg import OccupancyGrid
-from napping.fov_tracking import FOVUpdater
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import (
     ObjectCandidateMsg,
@@ -104,7 +104,15 @@ class Mapper(Node):
             "/geofence",
             10,
         )
-        self.map_pub = self.create_publisher(OccupancyGrid, "/occupancy_grid", 10)
+        self.map_pub = self.create_publisher(
+            OccupancyGrid,
+            "/initial_occupancy_grid",
+            QoSProfile(
+                depth=1,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            ),
+        )
         self.object_pub = self.create_publisher(
             ObjectCandidateArrayMsg, "/object_candidates", 10
         )
@@ -138,19 +146,10 @@ class Mapper(Node):
         self.n_cubes = 3
         self.n_boxes = 2
         self.detection_mapper = DetectionMapper(self, merge_threshold=0.5)
-        self.fov_updater = FOVUpdater(self.tf_buffer, logger=self.get_logger())
 
         self.startup()
 
         # publishers
-        self.occupancy_pub_timer = self.create_timer(
-            0.5,
-            self.publish_occupancy_map,
-            callback_group=self.occupancy_callback_group,
-        )
-        self.fov_trace_timer = self.create_timer(
-            0.2, self.apply_fov_trace, callback_group=self.occupancy_callback_group
-        )
         self.marker_timer = self.create_timer(
             5.0, self.publish_workspace_perimeter_marker
         )
@@ -173,6 +172,7 @@ class Mapper(Node):
         self.publish_tf_map2odom()
         self.create_inital_object_candidates()
         self.occupancy_grid = self.create_occupancy_grid()
+        self.publish_occupancy_map()
 
     def parse_map_file(self, file: Path):
         objects = []
@@ -349,12 +349,6 @@ class Mapper(Node):
         self.get_logger().info("Initial occupancy grid created")
 
         return msg
-
-    def apply_fov_trace(self):
-        # TODO: instead of passing occupancy_grid which always needs to be converted to numpy array,
-        # we should pass the numpy array directly and only convert back to OccupancyGrid when publishing
-        if self.occupancy_grid is not None:
-            self.fov_updater.apply(self.occupancy_grid)
 
     def publish_occupancy_map(self):
         if self.occupancy_grid is not None:
