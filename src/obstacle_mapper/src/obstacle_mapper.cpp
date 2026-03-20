@@ -14,14 +14,25 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <tuple>
 
 using namespace std::chrono_literals;
 constexpr auto TIMEOUT = 100ms;
 constexpr int8_t UNKNOWN_SPACE = -1;
 constexpr int8_t OCCUPIED_SPACE = 1;
 constexpr int8_t OCCUPIED_SPACE_MAX = 100;
+constexpr int8_t OBSTACLE_THRESHOLD = 5;
 constexpr int8_t FREE_SPACE = 0;
 constexpr bool deskewing = false;
+constexpr float exploration_radius = 1.0;
+constexpr std::tuple<float, float> angle_range(-0.65, 0.65);
+
+struct RayVector
+{
+	tf2::Vector3 vec;
+	float angle;
+};
+
 
 static tf2::Transform tf2_from_msg(const geometry_msgs::msg::TransformStamped & transform_stamped)
 {
@@ -54,13 +65,13 @@ std::vector<int> VectorArgSort(std::vector<float> const & v) {
 	return retIndices;
 }
 
-std::vector<tf2::Vector3> scan_to_vec(sensor_msgs::msg::LaserScan::SharedPtr scan, const tf2::Transform & T_start, const tf2::Transform & T_end)
+std::vector<RayVector> scan_to_vec(sensor_msgs::msg::LaserScan::SharedPtr scan, const tf2::Transform & T_start, const tf2::Transform & T_end)
 {
 	/* 
 	This function deskews and converts the laser scan readings into a a vector of points in lidar frame.
 	*/
 	const size_t num_ranges = scan->ranges.size();
-	std::vector<tf2::Vector3> vec;
+	std::vector<RayVector> vec;
 	vec.reserve(num_ranges);
 	tf2::Transform T_i;
 	tf2::Transform T_start_i;
@@ -102,11 +113,11 @@ std::vector<tf2::Vector3> scan_to_vec(sensor_msgs::msg::LaserScan::SharedPtr sca
 				// TF point back to start TF
 				T_start_i = T_start.inverseTimes(T_i);
 				p_out = T_start_i * tf2::Vector3(x,y,z);
-				vec.emplace_back(p_out);
+				vec.emplace_back(RayVector{p_out, angle});
 			}
 			else 
 			{
-				vec.emplace_back(x,y,z);
+				vec.emplace_back(RayVector{tf2::Vector3(x,y,z), angle});
 			}
 
 			
@@ -128,7 +139,7 @@ GridIdx pose_to_grid_idx(const double x, const double y, const nav_msgs::msg::Oc
 	return GridIdx{x_idx, y_idx};
 }
 
-void ray_trace(const tf2::Vector3 & start, const tf2::Vector3 & end, nav_msgs::msg::OccupancyGrid & map) 
+void ray_trace(const tf2::Vector3 & start, const tf2::Vector3 & end, nav_msgs::msg::OccupancyGrid & map, nav_msgs::msg::OccupancyGrid & explorer_map, const RayVector & ray) 
 {
 	/*
 	A Fast Voxel Traversal Algorithm for Ray Tracing
@@ -187,7 +198,16 @@ void ray_trace(const tf2::Vector3 & start, const tf2::Vector3 & end, nav_msgs::m
 			if (x != x_end && y != y_end)
 			{
 				int8_t & cell = map.data.at(x + static_cast<int>(map.info.width) * y);
+				int8_t & explore_cell = explorer_map.data.at(x + static_cast<int>(explorer_map.info.width) * y);
 				cell = (cell <= FREE_SPACE || cell == UNKNOWN_SPACE) ? FREE_SPACE : --cell;
+
+				// mapping exploration in seprate map
+				float dist = std::sqrt(std::pow((current_idx.x - x)*res, 2) + std::pow((current_idx.y - y)*res, 2));
+				bool isInFOV = (ray.angle >= std::get<0>(angle_range) && ray.angle <= std::get<1>(angle_range));
+				if (!(explore_cell == UNKNOWN_SPACE && (dist > exploration_radius || !isInFOV)))
+				{
+					explore_cell = FREE_SPACE;
+				}
 			}
 		}
 		else
@@ -210,6 +230,9 @@ class ObstacleMapper : public rclcpp::Node
 				{
 					// Copy map
 					map_ = *msg;
+					original_map_ = *msg;
+					explorer_map_ = *msg;
+
 					// Fill map with unknown space
 					std::fill(map_.data.begin(), map_.data.end(), UNKNOWN_SPACE);
 					RCLCPP_INFO(this->get_logger(), "First map recieved.");
@@ -253,14 +276,14 @@ class ObstacleMapper : public rclcpp::Node
 				}
 
 				// 2. Process raw scan points
-				const std::vector<tf2::Vector3> scan_vec = scan_to_vec(msg,T_map_prev_lidar_, T_map_curr_lidar);
+				const std::vector<RayVector> scan_vec = scan_to_vec(msg,T_map_prev_lidar_, T_map_curr_lidar);
 
 				// 3. Ray-trace and populate map
 				for (size_t i = 0; i < scan_vec.size(); ++i) 
 				{
-					tf2::Vector3 vec_in_map_frame = T_map_prev_lidar_ * scan_vec.at(i);
+					tf2::Vector3 vec_in_map_frame = T_map_prev_lidar_ * scan_vec.at(i).vec;
 					// Raytrace to fill map with FREE_SPACE
-					ray_trace(T_map_prev_lidar_.getOrigin(), vec_in_map_frame, map_);
+					ray_trace(T_map_prev_lidar_.getOrigin(), vec_in_map_frame, map_, explorer_map_, scan_vec.at(i));
 					// Set end-point to OCCUPIED_SPACE
 					const GridIdx idx = pose_to_grid_idx(vec_in_map_frame.getX(), vec_in_map_frame.getY(), map_);
 					if (idx.x >= 0 && idx.x < static_cast<int>(map_.info.width) && idx.y >= 0 && idx.y < static_cast<int>(map_.info.height))
@@ -270,9 +293,18 @@ class ObstacleMapper : public rclcpp::Node
 					}
 				}
 
+				// create a merged map with accumulated information
+				nav_msgs::msg::OccupancyGrid merged_map(map_);
+				for (size_t i = 0; i < map_.data.size(); ++i)
+				{
+					merged_map.data.at(i) = std::max(merged_map.data.at(i), original_map_.data.at(i));
+					merged_map.data.at(i) = merged_map.data.at(i) >= OBSTACLE_THRESHOLD ? OCCUPIED_SPACE_MAX : FREE_SPACE;
+					merged_map.data.at(i) = merged_map.data.at(i) > FREE_SPACE ? merged_map.data.at(i) : explorer_map_.data.at(i);
+				}
+
 				// 4. Publish map
 				map_.header.stamp = msg->header.stamp;
-				map_publisher_->publish(map_);
+				map_publisher_->publish(merged_map);
 				
 				// 5. Store previous TF
 				T_map_prev_lidar_ = T_map_curr_lidar;
@@ -293,9 +325,13 @@ class ObstacleMapper : public rclcpp::Node
 			
 			tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-			map_subscription_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/occupancy_grid", 10, map_callback);
+			rclcpp::QoS inital_map_qos(1);
+			inital_map_qos.reliable();
+			inital_map_qos.transient_local();
 
-			map_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/obstacle_map", 10);
+			map_subscription_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/initial_occupancy_grid", inital_map_qos, map_callback);
+
+			map_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/occupancy_grid", 10);
 		
 			scan_subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>("/lidar/scan", 10, scan_callback);
 
@@ -313,6 +349,8 @@ class ObstacleMapper : public rclcpp::Node
 		rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
 
 		nav_msgs::msg::OccupancyGrid map_;
+		nav_msgs::msg::OccupancyGrid original_map_;
+		nav_msgs::msg::OccupancyGrid explorer_map_;
 		tf2::Transform T_map_prev_lidar_;
 		bool prev_T_exists_{false};
 		bool first_map_recieved_{false};
