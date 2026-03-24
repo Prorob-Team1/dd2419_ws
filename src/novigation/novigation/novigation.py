@@ -39,6 +39,7 @@ class Navigator(Node):
         self.tail = None
         self.aligning = False
         self._tail_mode = False
+        self._aligning_tail = False
         self._last_tail = None
         self._backup_tail = None
         self._backup_idx = 0
@@ -166,11 +167,12 @@ class Navigator(Node):
             alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
             w = 2.0 * alpha
             w = max(-self.max_w, min(w, self.max_w))
+            v = -0.15
             self.get_logger().info(
-                f'BACKUP idx={self._backup_idx}/{len(self._backup_tail)} dist={dist:.2f} w={w:.2f}',
+                f'BACKUP idx={self._backup_idx}/{len(self._backup_tail)} dist={dist:.2f} alpha={math.degrees(alpha):.1f}° v={v:.2f} w={w:.2f}',
                 throttle_duration_sec=0.5
             )
-            self.control_wheels(-0.15, w)
+            self.control_wheels(v, w)
             return
 
         if self.path is None:
@@ -252,10 +254,10 @@ class Navigator(Node):
 
         # Go tail mode once we reach the end of the A* path
         if not self._tail_mode and self.tail is not None:
-            at_path_end = (self.path_idx >= len(path) - 1 and
-                           math.hypot(path[-1][0] - rx, path[-1][1] - ry) < self.goal_tolerance * 3)
+            at_path_end = self.path_idx >= len(path) - 1
             if at_path_end:
                 self._tail_mode = True
+                self._aligning_tail = True
                 self.get_logger().info('Switching to tail/parking mode')
 
         if self._tail_mode and self.tail is not None:
@@ -266,7 +268,12 @@ class Navigator(Node):
             tail_goal_x, tail_goal_y = tail[-1]
             tail_dist = math.hypot(tail_goal_x - rx, tail_goal_y - ry)
 
-            if abs(heading_err) > math.radians(15):
+            if self._aligning_tail and abs(heading_err) < math.radians(10):
+                self._aligning_tail = False
+            elif not self._aligning_tail and abs(heading_err) > math.radians(20):
+                self._aligning_tail = True
+
+            if self._aligning_tail:
                 w = 3.0 * heading_err
                 w = max(-self.max_w, min(w, self.max_w))
                 self.get_logger().info(
