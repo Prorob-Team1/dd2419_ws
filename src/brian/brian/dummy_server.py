@@ -10,6 +10,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
 from robp_interfaces.action import DummyAction
+from std_srvs.srv import Trigger
 
 
 class DummyActionServer(Node):
@@ -23,7 +24,15 @@ class DummyActionServer(Node):
             execute_callback=self._execute_callback,
             callback_group=ReentrantCallbackGroup(),
         )
+
+        self._service = self.create_service(
+            Trigger, 
+            "dummy_service", 
+            self._service_callback, 
+            callback_group=ReentrantCallbackGroup()
+        )
         self.get_logger().info("Dummy action server started")
+
 
     def _execute_callback(self, goal_handle: ServerGoalHandle) -> DummyAction.Result:
         self.get_logger().info(f"Received goal: succeed={goal_handle.request.succeed}")
@@ -47,6 +56,13 @@ class DummyActionServer(Node):
             goal_handle.abort()
             self.get_logger().info("Goal aborted (succeed=False)")
             return result
+
+    def _service_callback(self, request, response): 
+        self.get_logger().info("Received service request")
+        response.success = True
+        time.sleep(1.0)
+        response.message = "Service call successful"
+        return response
 
 
 def main():
