@@ -184,13 +184,15 @@ class PathPlannerNode(Node):
                 plan_grid = snapped
 
             self.get_logger().info(f'Planning from {start_grid} to {plan_grid}')
+            t0 = self.get_clock().now()
             path_grid = self.astar_search(start_grid, plan_grid)
+            dt_ms = (self.get_clock().now() - t0).nanoseconds / 1e6
             if path_grid is None:
-                self.get_logger().warn('No path found')
+                self.get_logger().warn(f'No path found ({dt_ms:.1f} ms)')
                 goal_handle.abort()
                 return self._make_result(False)
 
-            self.get_logger().info(f'Path found with {len(path_grid)} grid cells')
+            self.get_logger().info(f'Path found with {len(path_grid)} grid cells in {dt_ms:.1f} ms')
             path_world = self.grid_path_to_world(path_grid)
 
             self.publish_path(path_world, goal_pose.header.frame_id)
