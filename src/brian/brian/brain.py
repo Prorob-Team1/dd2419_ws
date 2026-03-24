@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 
-import math
-from enum import Enum
-from platform import node
-
 import numpy as np
 
 import rclpy
@@ -265,8 +261,8 @@ class Brain(Node):
         self.tick_period = 0.1
 
         # Use dummy behaviors for testing BT
-        self.only_dummy_behaviors = True
-        self.debugging = True
+        self.only_dummy_behaviors = False
+        self.debugging = False
 
         # Conditions
         self.cube_found = False
@@ -279,8 +275,6 @@ class Brain(Node):
         self.valid_candidates: list[ObjectCandidateMsg] = []
         self.potential_candidates: list[ObjectCandidateMsg] = []
         self.start_pose = None
-
-        self.detection_on = True
 
         self.map_subscriber = self.create_subscription(
             OccupancyGrid,
@@ -337,8 +331,6 @@ class Brain(Node):
         self.get_logger().info(
             f"{ANSIEscClr.GREEN}{ANSIEscClr.BOLD}I AM ALIVE!{ANSIEscClr.RESET}"
         )
-
-        self.detection_pub.publish(Bool(data=self.detection_on))
 
 
     def map_callback(self, msg: OccupancyGrid):
