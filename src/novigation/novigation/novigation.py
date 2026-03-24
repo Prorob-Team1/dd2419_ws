@@ -279,9 +279,9 @@ class Navigator(Node):
         if self.tail is not None:
             dist_to_transition = math.hypot(path[-1][0] - rx, path[-1][1] - ry)
             if dist_to_transition < slowdown_dist:
-                speed = max(0.1, self.target_speed * (dist_to_transition / slowdown_dist))
+                speed = max(0.2, self.target_speed * (dist_to_transition / slowdown_dist))
         elif dist_to_goal < slowdown_dist:
-            speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
+            speed = max(0.25, self.target_speed * (dist_to_goal / slowdown_dist))
 
         if abs(alpha) > math.pi / 2:
             v = 0.0
