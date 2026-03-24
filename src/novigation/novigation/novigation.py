@@ -36,15 +36,18 @@ class Navigator(Node):
       
         self.path = None
         self.path_idx = 0  # Current progress along path
+        self.tail = None
         self.aligning = False
+        self._tail_mode = False
         self._backup_steps_remaining = 0
         self._object_candidates = []
 
-        
+
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
         self.create_subscription(Path, '/planned_path', self.path_callback, 10)
+        self.create_subscription(Path, '/tail_path', self.tail_callback, 10)
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
         self.create_subscription(ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10)
 
@@ -68,7 +71,9 @@ class Navigator(Node):
 
         self.path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         self.path_idx = 0
+        self.tail = None
         self.aligning = True
+        self._tail_mode = False
 
         if self._near_object_candidate(radius=0.6):
             self._backup_steps_remaining = 80
@@ -76,9 +81,17 @@ class Navigator(Node):
 
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
 
+    def tail_callback(self, msg: Path):
+        if len(msg.poses) >= 2:
+            self.tail = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+        else:
+            self.tail = None
+
     def cancel_callback(self, _msg: Empty):
         self.get_logger().info("Navigation cancelled")
         self.path = None
+        self.tail = None
+        self._tail_mode = False
         self._backup_steps_remaining = 0
         self.control_wheels(0.0, 0.0)
 
@@ -151,7 +164,7 @@ class Navigator(Node):
             heading_err = target_angle - rtheta
             heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
 
-            if abs(heading_err) < math.radians(15):
+            if abs(heading_err) < math.radians(10):
                 self.aligning = False
                 self.get_logger().info("Aligned, starting pure pursuit")
             else:
@@ -174,14 +187,16 @@ class Navigator(Node):
             else:
                 break
 
-        # Check if reached goal
-        goal_x, goal_y = path[-1]
+        # Check if reached final goal (tail tip if tail exists, otherwise path end)
+        final_goal = self.tail[-1] if self.tail is not None else path[-1]
+        goal_x, goal_y = final_goal
         dist_to_goal = math.hypot(goal_x - rx, goal_y - ry)
 
         if dist_to_goal < self.goal_tolerance:
             self.get_logger().info("Reached goal, stopping")
             self.control_wheels(0.0, 0.0)
             self.path = None
+            self.tail = None
             return
 
         # Find lookahead point: walk along path from path_idx
@@ -204,17 +219,46 @@ class Navigator(Node):
         if lookahead_pt is None:
             lookahead_pt = path[-1]
 
-        # Remaining arc for logging
-        remaining_arc = sum(
-            math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1])
-            for i in range(self.path_idx, len(path) - 1)
-        )
+        # Go tail mode once we reach the end of the A* path
+        if not self._tail_mode and self.tail is not None:
+            at_path_end = (self.path_idx >= len(path) - 1 and
+                           math.hypot(path[-1][0] - rx, path[-1][1] - ry) < self.goal_tolerance * 3)
+            if at_path_end:
+                self._tail_mode = True
+                self.get_logger().info('Switching to tail/parking mode')
 
-        # Parking mode:
-        lookahead_alpha = math.atan2(lookahead_pt[1] - ry, lookahead_pt[0] - rx) - rtheta
-        lookahead_alpha = (lookahead_alpha + math.pi) % (2 * math.pi) - math.pi
-        if abs(lookahead_alpha) > math.radians(55) and dist_to_goal < 1.0:
-            lookahead_pt = path[-1]
+        if self._tail_mode and self.tail is not None:
+            tail = self.tail
+            tail_heading = math.atan2(tail[-1][1] - tail[0][1], tail[-1][0] - tail[0][0])
+            heading_err = tail_heading - rtheta
+            heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
+            tail_goal_x, tail_goal_y = tail[-1]
+            tail_dist = math.hypot(tail_goal_x - rx, tail_goal_y - ry)
+
+            if abs(heading_err) > math.radians(15):
+                w = 3.0 * heading_err
+                w = max(-self.max_w, min(w, self.max_w))
+                self.get_logger().info(
+                    f"ALIGN_TAIL err={math.degrees(heading_err):.1f}° w={w:.2f}",
+                    throttle_duration_sec=0.5
+                )
+                self.control_wheels(0.0, w)
+            else:
+                alpha_p = math.atan2(tail_goal_y - ry, tail_goal_x - rx) - rtheta
+                alpha_p = (alpha_p + math.pi) % (2 * math.pi) - math.pi
+                eta = heading_err
+                beta = eta - alpha_p
+                beta = (beta + math.pi) % (2 * math.pi) - math.pi
+                v = min(1.2 * tail_dist, 0.2)
+                w = 2.5 * alpha_p + 1.0 * beta
+                w = max(-self.max_w, min(w, self.max_w))
+                self.get_logger().info(
+                    f"PARK alpha_p={math.degrees(alpha_p):.1f}° eta={math.degrees(eta):.1f}° "
+                    f"v={v:.2f} w={w:.2f} tail_dist={tail_dist:.2f}",
+                    throttle_duration_sec=0.5
+                )
+                self.control_wheels(v, w)
+            return
 
         # Pure pursuit geometry
         dx = lookahead_pt[0] - rx
@@ -229,32 +273,31 @@ class Navigator(Node):
         alpha = math.atan2(dy, dx) - rtheta
         alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
 
-        # slow down near goal
+        # slow down near transition/goal
         speed = self.target_speed
         slowdown_dist = 0.5
-        if dist_to_goal < slowdown_dist:
+        if self.tail is not None:
+            dist_to_transition = math.hypot(path[-1][0] - rx, path[-1][1] - ry)
+            if dist_to_transition < slowdown_dist:
+                speed = max(0.1, self.target_speed * (dist_to_transition / slowdown_dist))
+        elif dist_to_goal < slowdown_dist:
             speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
 
-        # Exponential decay: At alpha=90deg, k=3 gives ~17% speed.
-        k = 3.0
-        v_scale = math.exp(-k * alpha ** 2)
+        if abs(alpha) > math.pi / 2:
+            v = 0.0
+            w = 2.0 * alpha
+        else:
+            ld_for_kappa = max(ld, self.lookahead_distance)
+            kappa = 2.0 * math.sin(alpha) / ld_for_kappa
+            v = speed
+            w = speed * kappa
 
-        ld_for_kappa = max(ld, self.lookahead_distance)
-        kappa = 2.0 * math.sin(alpha) / ld_for_kappa
-
-        v = speed * v_scale
-        # Ensure minimum angular velocity when misaligneds
-        min_w = 0.8
-        raw_w = 2.0 * alpha
-        w = math.copysign(max(abs(raw_w), min_w), raw_w) if abs(alpha) > math.radians(15) else raw_w
-
-        
         v = max(0.0, min(v, self.max_v))
         w = max(-self.max_w, min(w, self.max_w))
 
         self.get_logger().info(
             f"idx={self.path_idx} alpha={math.degrees(alpha):.1f}° "
-            f"theta={math.degrees(rtheta):.1f}° arc={remaining_arc:.2f} "
+            f"theta={math.degrees(rtheta):.1f}° "
             f"v={v:.2f} w={w:.2f} dist_goal={dist_to_goal:.2f}",
             throttle_duration_sec=1.0
         )

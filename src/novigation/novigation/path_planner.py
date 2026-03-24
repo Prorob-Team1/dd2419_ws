@@ -46,6 +46,7 @@ class PathPlannerNode(Node):
         )
 
         self.path_pub = self.create_publisher(Path, '/planned_path', 10)
+        self.tail_pub = self.create_publisher(Path, '/tail_path', 10)
         self.cancel_pub = self.create_publisher(Empty, '/cancel_navigation', 10)
 
         self._action_server = ActionServer(
@@ -192,18 +193,19 @@ class PathPlannerNode(Node):
             self.get_logger().info(f'Path found with {len(path_grid)} grid cells')
             path_world = self.grid_path_to_world(path_grid)
 
-            # Append straight-line tail to the snapped free cell
+            self.publish_path(path_world, goal_pose.header.frame_id)
+
             if use_tail:
                 last_x, last_y = path_world[-1]
                 res = self.map_data.info.resolution
                 dist = sqrt((snapped_wx - last_x) ** 2 + (snapped_wy - last_y) ** 2)
                 n_steps = max(2, int(dist / res))
-                for i in range(1, n_steps + 1):
-                    t = i / n_steps
-                    path_world.append((last_x + t * (snapped_wx - last_x),
-                                       last_y + t * (snapped_wy - last_y)))
-
-            self.publish_path(path_world, goal_pose.header.frame_id)
+                tail_world = [(last_x + (i / n_steps) * (snapped_wx - last_x),
+                               last_y + (i / n_steps) * (snapped_wy - last_y))
+                              for i in range(1, n_steps + 1)]
+                self.publish_path(tail_world, goal_pose.header.frame_id, pub=self.tail_pub)
+            else:
+                self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
 
             feedback_msg.feedback = 'Navigating...'
             goal_handle.publish_feedback(feedback_msg)
@@ -385,7 +387,9 @@ class PathPlannerNode(Node):
     def grid_path_to_world(self, grid_path: list) -> list:
         return [self.grid_to_world(r, c) for r, c in grid_path]
 
-    def publish_path(self, path_world: list, frame_id: str):
+    def publish_path(self, path_world: list, frame_id: str, pub=None):
+        if pub is None:
+            pub = self.path_pub
         path_msg = Path()
         path_msg.header.frame_id = frame_id
         path_msg.header.stamp = self.get_clock().now().to_msg()
@@ -399,7 +403,7 @@ class PathPlannerNode(Node):
             pose.pose.orientation.w = 1.0
             path_msg.poses.append(pose)
 
-        self.path_pub.publish(path_msg)
+        pub.publish(path_msg)
         self.get_logger().info(f'Published path with {len(path_world)} waypoints')
 
 
