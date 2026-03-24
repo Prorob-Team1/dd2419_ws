@@ -39,7 +39,9 @@ class Navigator(Node):
         self.tail = None
         self.aligning = False
         self._tail_mode = False
-        self._backup_steps_remaining = 0
+        self._last_tail = None
+        self._backup_tail = None
+        self._backup_idx = 0
         self._object_candidates = []
 
 
@@ -71,19 +73,22 @@ class Navigator(Node):
 
         self.path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         self.path_idx = 0
-        self.tail = None
         self.aligning = True
         self._tail_mode = False
 
-        if self._near_object_candidate(radius=0.6):
-            self._backup_steps_remaining = 80
-            self.get_logger().info('Object candidate nearby, backing up before following path')
+        if self._near_object_candidate(radius=0.6) and self._last_tail is not None:
+            self._backup_tail = list(reversed(self._last_tail))
+            self._backup_idx = 0
+            self.get_logger().info('Object candidate nearby, backing up along reversed tail')
+
+        self.tail = None
 
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
 
     def tail_callback(self, msg: Path):
         if len(msg.poses) >= 2:
             self.tail = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+            self._last_tail = self.tail
         else:
             self.tail = None
 
@@ -92,7 +97,7 @@ class Navigator(Node):
         self.path = None
         self.tail = None
         self._tail_mode = False
-        self._backup_steps_remaining = 0
+        self._backup_tail = None
         self.control_wheels(0.0, 0.0)
 
     def _near_object_candidate(self, radius=0.6):
@@ -137,14 +142,7 @@ class Navigator(Node):
             return None
 
     def control_loop(self):
-        if self._backup_steps_remaining > 0:
-            self.control_wheels(-0.1, 0.0)
-            self._backup_steps_remaining -= 1
-            if self._backup_steps_remaining == 0:
-                self.get_logger().info('Backup complete, starting path following')
-            return
-
-        if self.path is None:
+        if self._backup_tail is None and self.path is None:
             return
 
         pose = self.get_robot_pose()
@@ -152,19 +150,52 @@ class Navigator(Node):
             return
 
         rx, ry, rtheta = pose
+
+        if self._backup_tail is not None:
+            tx, ty = self._backup_tail[self._backup_idx]
+            dist = math.hypot(tx - rx, ty - ry)
+            if dist < self.goal_tolerance:
+                self._backup_idx += 1
+                if self._backup_idx >= len(self._backup_tail):
+                    self._backup_tail = None
+                    self.get_logger().info('Backup complete, starting path following')
+                    return
+                tx, ty = self._backup_tail[self._backup_idx]
+            angle_to_target = math.atan2(ty - ry, tx - rx)
+            alpha = angle_to_target - (rtheta + math.pi)
+            alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
+            w = 2.0 * alpha
+            w = max(-self.max_w, min(w, self.max_w))
+            self.get_logger().info(
+                f'BACKUP idx={self._backup_idx}/{len(self._backup_tail)} dist={dist:.2f} w={w:.2f}',
+                throttle_duration_sec=0.5
+            )
+            self.control_wheels(-0.15, w)
+            return
+
+        if self.path is None:
+            return
         path = self.path
 
         # Initial alignmenn
         if self.aligning:
-            # Compute direction to a point a bit ahead on the path
-            look_idx = min(len(path) - 1, 5)
+            #advances lookahead during aligning phase.
+            while self.path_idx < len(path) - 1:
+                px, py = path[self.path_idx + 1]
+                if math.hypot(px - rx, py - ry) < math.hypot(
+                    path[self.path_idx][0] - rx, path[self.path_idx][1] - ry
+                ):
+                    self.path_idx += 1
+                else:
+                    break
+            look_idx = min(len(path) - 1, self.path_idx + 5)
             target_angle = math.atan2(
                 path[look_idx][1] - ry, path[look_idx][0] - rx
             )
             heading_err = target_angle - rtheta
             heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
 
-            if abs(heading_err) < math.radians(10):
+            if abs(heading_err) < math.radians(5):
                 self.aligning = False
                 self.get_logger().info("Aligned, starting pure pursuit")
             else:
