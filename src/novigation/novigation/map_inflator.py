@@ -24,7 +24,7 @@ class MapInflator(Node):
         self.candidates = []     
 
         self.create_subscription(
-            OccupancyGrid, '/occupancy_grid', self.grid_callback, 10
+            OccupancyGrid, '/initial_occupancy_grid', self.grid_callback, 10
         )
         self.create_subscription(
             ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10

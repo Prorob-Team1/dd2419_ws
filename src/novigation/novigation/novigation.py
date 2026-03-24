@@ -204,6 +204,18 @@ class Navigator(Node):
         if lookahead_pt is None:
             lookahead_pt = path[-1]
 
+        # Remaining arc for logging
+        remaining_arc = sum(
+            math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1])
+            for i in range(self.path_idx, len(path) - 1)
+        )
+
+        # Parking mode:
+        lookahead_alpha = math.atan2(lookahead_pt[1] - ry, lookahead_pt[0] - rx) - rtheta
+        lookahead_alpha = (lookahead_alpha + math.pi) % (2 * math.pi) - math.pi
+        if abs(lookahead_alpha) > math.radians(55) and dist_to_goal < 1.0:
+            lookahead_pt = path[-1]
+
         # Pure pursuit geometry
         dx = lookahead_pt[0] - rx
         dy = lookahead_pt[1] - ry
@@ -223,18 +235,18 @@ class Navigator(Node):
         if dist_to_goal < slowdown_dist:
             speed = max(0.2, self.target_speed * (dist_to_goal / slowdown_dist))
 
-        # When heading is very off
-        if abs(alpha) > math.pi / 2:
-            
-            v = 0.0
-            w = 2.0 * alpha  
-        else:
-            #Pure pursuit
-            ld_for_kappa = max(ld, self.lookahead_distance)
-            kappa = 2.0 * math.sin(alpha) / ld_for_kappa
-            
-            v = speed
-            w = speed * kappa
+        # Exponential decay: At alpha=90deg, k=3 gives ~17% speed.
+        k = 3.0
+        v_scale = math.exp(-k * alpha ** 2)
+
+        ld_for_kappa = max(ld, self.lookahead_distance)
+        kappa = 2.0 * math.sin(alpha) / ld_for_kappa
+
+        v = speed * v_scale
+        # Ensure minimum angular velocity when misaligneds
+        min_w = 0.8
+        raw_w = 2.0 * alpha
+        w = math.copysign(max(abs(raw_w), min_w), raw_w) if abs(alpha) > math.radians(15) else raw_w
 
         
         v = max(0.0, min(v, self.max_v))
@@ -242,6 +254,7 @@ class Navigator(Node):
 
         self.get_logger().info(
             f"idx={self.path_idx} alpha={math.degrees(alpha):.1f}° "
+            f"theta={math.degrees(rtheta):.1f}° arc={remaining_arc:.2f} "
             f"v={v:.2f} w={w:.2f} dist_goal={dist_to_goal:.2f}",
             throttle_duration_sec=1.0
         )

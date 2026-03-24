@@ -31,7 +31,7 @@ class SimRobot(Node):
         self.declare_parameter('start_y', 50.0)
 
         # Robot constants (must match navigator)
-        self.wheel_base = 0.3
+        self.wheel_base = 0.3125
         self.wheel_radius = 0.04921
         self.max_v = 0.5
         self.max_w = 2 * math.pi / 5
