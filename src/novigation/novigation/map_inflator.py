@@ -47,6 +47,7 @@ class MapInflator(Node):
     def _rebuild_and_publish(self):
         if self.base_grid is None:
             return
+        t0 = self.get_clock().now()
 
         info = self.base_grid.info
         resolution = info.resolution
@@ -127,6 +128,8 @@ class MapInflator(Node):
         out.info = info
         out.data = grid.flatten().tolist()
         self.map_pub.publish(out)
+        dt_ms = (self.get_clock().now() - t0).nanoseconds / 1e6
+        self.get_logger().info(f'Map inflated and published in {dt_ms:.1f} ms', throttle_duration_sec=5.0)
 
 
 def main(args=None):
