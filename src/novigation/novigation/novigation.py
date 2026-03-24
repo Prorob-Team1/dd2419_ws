@@ -91,6 +91,7 @@ class Navigator(Node):
             self.tail = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
             self._last_tail = self.tail
         else:
+            self._last_tail = None
             self.tail = None
 
     def cancel_callback(self, _msg: Empty):
