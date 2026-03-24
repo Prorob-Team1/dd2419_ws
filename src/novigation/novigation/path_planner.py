@@ -204,7 +204,7 @@ class PathPlannerNode(Node):
                 n_steps = max(2, int(dist / res))
                 tail_world = [(last_x + (i / n_steps) * (snapped_wx - last_x),
                                last_y + (i / n_steps) * (snapped_wy - last_y))
-                              for i in range(1, n_steps + 1)]
+                              for i in range(n_steps + 1)]
                 self.publish_path(tail_world, goal_pose.header.frame_id, pub=self.tail_pub)
             else:
                 self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
