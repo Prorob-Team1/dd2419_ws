@@ -153,26 +153,22 @@ class Navigator(Node):
         rx, ry, rtheta = pose
 
         if self._backup_tail is not None:
-            tx, ty = self._backup_tail[self._backup_idx]
+            tx, ty = self._backup_tail[-1]
             dist = math.hypot(tx - rx, ty - ry)
             if dist < self.goal_tolerance:
-                self._backup_idx += 1
-                if self._backup_idx >= len(self._backup_tail):
-                    self._backup_tail = None
-                    self.get_logger().info('Backup complete, starting path following')
-                    return
-                tx, ty = self._backup_tail[self._backup_idx]
+                self._backup_tail = None
+                self.get_logger().info('Backup complete, starting path following')
+                return
             angle_to_target = math.atan2(ty - ry, tx - rx)
             alpha = angle_to_target - (rtheta + math.pi)
             alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
             w = 2.0 * alpha
             w = max(-self.max_w, min(w, self.max_w))
-            v = -0.15
             self.get_logger().info(
-                f'BACKUP idx={self._backup_idx}/{len(self._backup_tail)} dist={dist:.2f} alpha={math.degrees(alpha):.1f}° v={v:.2f} w={w:.2f}',
+                f'BACKUP dist={dist:.2f} alpha={math.degrees(alpha):.1f}° w={w:.2f}',
                 throttle_duration_sec=0.5
             )
-            self.control_wheels(v, w)
+            self.control_wheels(-0.15, w)
             return
 
         if self.path is None:
