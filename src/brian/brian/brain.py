@@ -379,14 +379,14 @@ class Brain(Node):
         if self.map is None:
             self.get_logger().error("Cannot compute pose without map timestamp")
             return None
-        stamp = self.map.header.stamp
+        #stamp = self.map.header.stamp
         from_frame_rel = "odom"
         to_frame_rel = self.map.header.frame_id
         try:
             tf = self.tf_buffer.lookup_transform(
                 target_frame=to_frame_rel,
                 source_frame=from_frame_rel,
-                time=Time().from_msg(stamp),
+                time=Time(seconds=0), # latest TF available
                 timeout=Duration(seconds=1)
             )
         except Exception as ex:
