@@ -118,7 +118,7 @@ class MapInflator(Node):
                     shifted[:, dc:] = False
                 cost = int(90 * (1.0 - dist / cost_radius_cells))
                
-                update_mask = shifted & ~inflated & (grid >= 0) & (grid < cost)
+                update_mask = shifted & ~inflated & (grid >= -1) & (grid < cost)
                 grid[update_mask] = cost
 
         out = OccupancyGrid()
