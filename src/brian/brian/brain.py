@@ -406,7 +406,7 @@ class Brain(Node):
             tf = self.tf_buffer.lookup_transform(
                 target_frame=to_frame_rel,
                 source_frame=from_frame_rel,
-                time=Time().from_msg(stamp),
+                time=Time(seconds=0),
                 timeout=Duration(seconds=1)
             )
         except Exception as ex:
