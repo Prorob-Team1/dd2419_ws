@@ -197,7 +197,7 @@ class Navigator(Node):
             heading_err = target_angle - rtheta
             heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
 
-            if abs(heading_err) < math.radians(5):
+            if abs(heading_err) < math.radians(10):
                 self.aligning = False
                 self.get_logger().info("Aligned, starting pure pursuit")
             else:
