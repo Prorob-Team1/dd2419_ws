@@ -283,7 +283,7 @@ class Navigator(Node):
                 eta = heading_err
                 beta = eta - alpha_p
                 beta = (beta + math.pi) % (2 * math.pi) - math.pi
-                v = max(0.08, min(1.2 * tail_dist, 0.2))
+                v = max(0.15, min(1.2 * tail_dist, 0.2))
                 w = 2.5 * alpha_p + 1.0 * beta
                 w = max(-self.max_w, min(w, self.max_w))
                 self.get_logger().info(
