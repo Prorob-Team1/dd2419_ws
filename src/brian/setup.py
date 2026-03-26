@@ -25,6 +25,7 @@ setup(
         "console_scripts": [
             "brain = brian.brain:main",
             "dummy_server = brian.dummy_server:main",
+            "get_map = brian.get_map:main",
         ],
     },
 )
