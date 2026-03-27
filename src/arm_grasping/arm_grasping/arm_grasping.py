@@ -494,7 +494,11 @@ class ArmGraspingServer(Node):
         col_var_smooth = col_var_smooth.flatten()
         x = np.arange(col_var_smooth.shape[0])
         # center of mass column
-        col_com = np.sum(col_var_smooth * x) / np.sum(col_var_smooth)
+        var_sum = np.sum(col_var_smooth)
+        if abs(var_sum) < 1e-5:
+            self.get_logger().warn("No features detected for drop-off.")
+            return None
+        col_com = np.sum(col_var_smooth * x) / var_sum
 
         cv2.line(
             img,
