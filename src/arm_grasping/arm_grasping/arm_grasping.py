@@ -124,7 +124,7 @@ class ArmGraspingServer(Node):
         self.curr_pos = [0.06, 0.0, 0.12] 
         self.prepare_pos = [0.06, 0.0, 0.14]
         self.hold_pos = [0.14, 0.0, 0.12] 
-        self.drop_pos = [0.06, 0.0, 0.22]
+        self.drop_pos = [0.08, 0.0, 0.22]
         self.Y_LIMIT = 0.15 
         self.Z_MIN = 0.12
         self.Z_MAX = 0.22
@@ -278,6 +278,25 @@ class ArmGraspingServer(Node):
             return True
         return False
     
+    def send_dropoff_arm_cmd(self, gripper_angle, base, time_ms=1500):
+        max_base_angle = 50
+        if abs(base) > max_base_angle:
+            self.get_logger().error("Base angle too large, clipping")
+            base = np.clip(base, -max_base_angle, max_base_angle)
+        msg = ArmControl()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        hw = [0.0] * 6
+        hw[0] = gripper_angle
+        hw[1] = 120.0
+        hw[2] = 24.522165
+        hw[3] = 120.0   
+        hw[4] = 65.47784
+        hw[5] = 120.0 + base  
+        msg.position = hw
+        msg.time = [int(time_ms)] * 6 
+        self.control_pub.publish(msg)
+    
+    
     def execute_grasp(self,angle):
         self.get_logger().info(">>> STARTING GRASP SEQUENCE <<<")
         
@@ -316,18 +335,23 @@ class ArmGraspingServer(Node):
         self.grasp_Event.set()
 
 
-    def execute_drop(self):
+    def execute_drop(self, box_center):
+        if box_center is None:
+            box_center = 0
 
-        self.get_logger().info("Start Dropping...")
+        base_angle = np.clip(-box_center * 1.5 * 50, -50, 50)
+        self.get_logger().info(f"Start Dropping at angle {base_angle}...")
 
-        self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 108.0, 0.0, time_ms=1000)
-        time.sleep(1.5)
+        #self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 108.0, 0.0, time_ms=2000, log=True)
+        self.send_dropoff_arm_cmd(gripper_angle=108.0, base=base_angle, time_ms=2000)
+        time.sleep(2.0)
 
-        self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 30.0, 0.0, time_ms=1000)
-        time.sleep(1.5)
+        # self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 30.0, 0.0, time_ms=2000)
+        self.send_dropoff_arm_cmd(gripper_angle=30.0, base=base_angle, time_ms=2000)
+        time.sleep(2.0)
 
-        self.send_arm_cmd(self.init_pos[0], self.init_pos[1], self.init_pos[2], 30.0, 0.0, time_ms=1000)
-        time.sleep(1.5)
+        self.send_arm_cmd(self.init_pos[0], self.init_pos[1], self.init_pos[2], 30.0, 0.0, time_ms=2000)
+        time.sleep(2.0)
 
         self.curr_pos = list(self.init_pos)
         
@@ -441,6 +465,52 @@ class ArmGraspingServer(Node):
         self._publish_debug_image(img)
         
         return None
+    
+    def process_vision_dropoff(self):
+        if self.cv_image is None: return None
+        
+        img = self.cv_image.copy()
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 13, 20
+        )
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        thresh = cv2.dilate(thresh, kernel, iterations=1)
+        h, w = thresh.shape
+        cv2.rectangle(thresh, (0,h*3//4), (w,h), (0,0), -1)
+
+        # compute the variance for each column
+        col_var = np.var(thresh, axis=0)
+
+        # reshape to (1, N) so OpenCV treats it as an image row
+        col_var_2d = col_var.reshape(1, -1)
+
+        # apply Gaussian blur
+        col_var_smooth = cv2.GaussianBlur(col_var_2d, (3, 1), 0)
+
+        # flatten back to 1D
+        col_var_smooth = col_var_smooth.flatten()
+        x = np.arange(col_var_smooth.shape[0])
+        # center of mass column
+        var_sum = np.sum(col_var_smooth)
+        if abs(var_sum) < 1e-5:
+            self.get_logger().warn("No features detected for drop-off.")
+            return None
+        col_com = np.sum(col_var_smooth * x) / var_sum
+
+        cv2.line(
+            img,
+            (int(col_com), 0),
+            (int(col_com), img.shape[0]),
+            (0, 255, 0),
+            2,
+        )
+        relative_box_col_com = np.clip(((col_com / w) - 0.5) * 2, -1, 1)
+        self._publish_debug_image(img)
+        return relative_box_col_com
+
 
     def _publish_debug_image(self, img):
         now = time.time()
@@ -463,7 +533,8 @@ class ArmGraspingServer(Node):
                 continue
 
             if self.state == "DROPPING":
-                self.execute_drop()
+                box_center = self.process_vision_dropoff()
+                self.execute_drop(box_center)
                 continue
 
 
