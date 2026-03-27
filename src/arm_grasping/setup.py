@@ -24,8 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'arm_grasping = arm_grasping.arm_grasping:main',
-            'box_detector = arm_grasping.box_detection:main'
+            'arm_grasping = arm_grasping.arm_grasping:main'
         ],
     },
 )
