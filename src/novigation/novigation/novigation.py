@@ -24,12 +24,12 @@ class Navigator(Node):
       
         self.lookahead_distance = 0.5
         self.target_speed = 0.3
-        self.goal_tolerance = 0.05
+        self.goal_tolerance = 0.04 # 0.05 is this needed? Path planner already checks this
         self.max_off_path_distance = 0.5
 
        
         self.wheel_base = 0.3125
-        self.wheel_radius = 0.04921
+        self.wheel_radius = 0.04921 #- 0.001
         self.max_v = 0.5
         self.max_w = 2 * math.pi / 5
 
@@ -87,7 +87,7 @@ class Navigator(Node):
         self.get_logger().info(f"Received new path with {len(self.path)} waypoints")
 
     def tail_callback(self, msg: Path):
-        if len(msg.poses) >= 2:
+        if len(msg.poses) > 1:
             self.tail = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
             self._last_tail = self.tail
         else:

@@ -77,7 +77,7 @@ def find_tail(inflated_map: OccupancyGrid, goal_pose: PoseStamped, tail_length: 
 			path = cells
 		#print_cells(cells, inflated_map) # for debugging
 
-	return path
+	return [path[0],path[-1]]
 
 	
 

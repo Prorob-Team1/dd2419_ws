@@ -20,7 +20,7 @@ from math import sqrt
 import heapq
 
 from tf_transformations import euler_from_quaternion
-from novigation.novigation.tail_maker import find_tail, bresenham
+from novigation.tail_maker import find_tail, bresenham
 
 
 class PathPlannerNode(Node):
@@ -31,7 +31,7 @@ class PathPlannerNode(Node):
         self.declare_parameter('map_topic', '/map')
         self.declare_parameter('planning_timeout', 5.0)
 
-        self.goal_tolerance = 0.05
+        self.goal_tolerance = 0.06
 
         self._active_goal_handle = None
         self._goal_lock = threading.Lock()
@@ -140,23 +140,27 @@ class PathPlannerNode(Node):
             # Use a straight-line approach tail when orientation is explicitly set
             q = goal_pose.pose.orientation
             use_tail = (abs(q.w - 1.0) > 1e-4 or abs(q.x) > 1e-4
-                        or abs(q.y) > 1e-4 or abs(q.z) > 1e-4)
+                        or abs(q.y) > 1e-4 or abs(q.z) > 1e-4) or True
+            
             tail_path = list()
             if use_tail:
                 # Find tail
                 tail_length = 0.5
                 tail_path = find_tail(self.map_data, goal_pose, tail_length)
                 snap_ref_grid = tail_path[0]
-                snapped = self.find_nearest_free_cell(goal_grid, snap_ref_grid)
+                snapped = self.find_nearest_free_cell(snap_ref_grid, start_grid)
+                snapped_from_goal = self.find_nearest_free_cell(goal_grid, snap_ref_grid)
+                #tail_path[-1] = snapped_from_goal
             else:
                 snapped = self.find_nearest_free_cell(goal_grid, start_grid)
+                snapped_from_goal = snapped
 
-            if snapped is None:
+            if snapped is None or snapped_from_goal is None:
                 self.get_logger().warn('No free cell found near goal')
                 goal_handle.abort()
                 return self._make_result(False)
 
-            snapped_wx, snapped_wy = self.grid_to_world(snapped[0], snapped[1])
+            snapped_wx, snapped_wy = self.grid_to_world(snapped_from_goal[0], snapped_from_goal[1])
             goal_in_obstacle = (snapped != goal_grid)
             if goal_in_obstacle:
                 self.get_logger().info(f'Goal in obstacle, snapped from {goal_grid} to {snapped}')
@@ -174,11 +178,11 @@ class PathPlannerNode(Node):
 
             self.get_logger().info(f'Path found with {len(path_grid)} grid cells in {dt_ms:.1f} ms')
             path_world = self.grid_path_to_world(path_grid)
-
+            tail_path_world = self.grid_path_to_world(tail_path)
             self.publish_path(path_world, goal_pose.header.frame_id)
 
             if use_tail:
-                self.publish_path(tail_path, goal_pose.header.frame_id, pub=self.tail_pub)
+                self.publish_path(tail_path_world, goal_pose.header.frame_id, pub=self.tail_pub)
             else:
                 self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
 

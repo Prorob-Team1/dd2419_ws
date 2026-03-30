@@ -431,6 +431,8 @@ class Mapper(Node):
                 marker.pose.position.x = candidate.avg_pose.x
                 marker.pose.position.y = candidate.avg_pose.y
                 marker.pose.position.z = 0.01
+                if candidate.picked_up:
+                    marker.pose.position.z = 0.2
                 q = quaternion_from_euler(0, 0, candidate.avg_pose.angle)
                 marker.pose.orientation.x = q[0]
                 marker.pose.orientation.y = q[1]
