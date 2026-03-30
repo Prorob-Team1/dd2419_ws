@@ -23,7 +23,7 @@ def bresenham(x0: int, y0: int, x1: int, y1: int, gridmap: OccupancyGrid):
 	cells = []
 	cost = 0
 	while True:
-		cells.append((x0, y0))
+		cells.append((y0, x0)) # y=row, x=col
 		t = gridmap.data[x0 + gridmap.info.width*y0]
 		cost += t if t >= 0 else 0
 		e2 = 2 * error

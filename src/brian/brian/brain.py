@@ -240,10 +240,10 @@ class GoalProvider:
             return robot_pose
         x, y, _ = closest_pose
         robot_x, robot_y, robot_yaw = robot_pose
-        #yaw = np.atan2(y - robot_y, x - robot_x)
-        yaw = 0
-        if goal_type == BOX_GOAL:
-            yaw = -np.pi/2
+        yaw = np.atan2(y - robot_y, x - robot_x)
+        #yaw = 0
+        #if goal_type == BOX_GOAL:
+        #    yaw = -np.pi/2
         self.logger.debug(f"Created object goal at (x={x:.2f},y={y:.2f},yaw={yaw:.2f})")
         if goal_type == CUBE_GOAL:
             self.target_cube = closest_obj
