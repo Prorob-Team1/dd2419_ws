@@ -77,6 +77,23 @@ class GoalProvider:
     def create_goal_marker(self, x: float, y: float, yaw: float, goal_type: int):
         goal_marker = Marker()
         goal_marker.header.frame_id = "map"
+        q = quaternion_from_euler(0.0, 0.0, yaw) if yaw != 0 else quaternion_from_euler(0.0, -np.pi/2, 0.0) 
+        goal_marker.pose.orientation.x = q[0]
+        goal_marker.pose.orientation.y = q[1]
+        goal_marker.pose.orientation.z = q[2]
+        goal_marker.pose.orientation.w = q[3]
+        goal_marker.ns = "goal"
+        goal_marker.id = 0
+        goal_marker.color.a = 1.0
+        goal_marker.type = Marker.ARROW
+        goal_marker.action = Marker.ADD
+        goal_marker.pose.position.x = x
+        goal_marker.pose.position.y = y
+        goal_marker.pose.position.z = 0.03
+        goal_marker.scale.x = 0.2
+        goal_marker.scale.y = 0.03
+        goal_marker.scale.z = 0.03
+
         if goal_type == EXPLORE_GOAL:
             goal_marker.color.r = 0.0
             goal_marker.color.g = 1.0
@@ -89,22 +106,6 @@ class GoalProvider:
             goal_marker.color.r = 0.0
             goal_marker.color.g = 0.0
             goal_marker.color.b = 1.0
-        goal_marker.ns = "goal"
-        goal_marker.id = 0
-        goal_marker.color.a = 1.0
-        goal_marker.type = Marker.ARROW
-        goal_marker.action = Marker.ADD
-        goal_marker.pose.position.x = x
-        goal_marker.pose.position.y = y
-        goal_marker.pose.position.z = 0.03
-        q = quaternion_from_euler(0.0, 0.0, yaw)
-        goal_marker.pose.orientation.x = q[0]
-        goal_marker.pose.orientation.y = q[1]
-        goal_marker.pose.orientation.z = q[2]
-        goal_marker.pose.orientation.w = q[3]
-        goal_marker.scale.x = 0.2
-        goal_marker.scale.y = 0.03
-        goal_marker.scale.z = 0.03
         
         return goal_marker
 
@@ -242,10 +243,16 @@ class GoalProvider:
         robot_x, robot_y, robot_yaw = robot_pose
         yaw = np.atan2(y - robot_y, x - robot_x)
         if goal_type == BOX_GOAL:
-            yaw = -np.pi/2 # should send the orientation of the box
+            q = [
+                closest_obj.pose.orientation.x,
+                closest_obj.pose.orientation.y,
+                closest_obj.pose.orientation.z,
+                closest_obj.pose.orientation.w
+            ]
+            yaw = euler_from_quaternion(q)[2] - np.pi/2 
         elif goal_type == EXPLORE_GOAL:
             yaw = 0
-            
+
         self.logger.debug(f"Created object goal at (x={x:.2f},y={y:.2f},yaw={yaw:.2f})")
         if goal_type == CUBE_GOAL:
             self.target_cube = closest_obj
