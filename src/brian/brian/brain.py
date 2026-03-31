@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -181,7 +182,7 @@ class GoalProvider:
                     candidate.pose.orientation.w,
                 ])[2]
                 self.logger.debug(f"Sending goal at ({x=},{y=},{yaw=})")
-                return x, y, 0.0#yaw
+                return x, y, 0.0 #yaw
 
         # Go to a new frontier
         robot_x, robot_y, robot_yaw = robot_pose
@@ -307,6 +308,7 @@ class Brain(Node):
 
         # Publishers
         self.goal_marker_publisher = self.create_publisher(Marker, "/nav_goal", 1)
+        self.goal_obj_publisher = self.create_publisher(ObjectCandidateMsg, "/current_goal_obj", 10)
         self.caught_cubes_publisher = self.create_publisher(ObjectCandidateArrayMsg, "/caught_cubes", 10)
         detection_qos = QoSProfile(depth=1, history=QoSHistoryPolicy.KEEP_LAST, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.detection_publisher = self.create_publisher(Bool, "/detection_on", detection_qos)
@@ -759,6 +761,28 @@ class Nav2GoalB(Behaviour):
         goal.goal.pose.position.y = y
         q = quaternion_from_euler(0.0,0.0,yaw)
         
+        best_candidate = None
+        if self.goal_type == CUBE_GOAL and self.node.goal_provider.target_cube is not None:
+            goal.goal_label = self.node.goal_provider.target_cube.class_name
+            best_candidate = self.node.goal_provider.target_cube
+        elif self.goal_type == BOX_GOAL:
+            min_dist = np.inf
+            for candidate in self.node.valid_candidates:
+                if candidate.class_name != ObjectClassification.BOX.value:
+                    continue
+                x_c = candidate.pose.position.x
+                y_c = candidate.pose.position.y
+                dist = (x-x_c)**2 + (y-y_c)**2 
+                if dist < min_dist:
+                    min_dist = dist
+                    goal.goal_label = candidate.class_name
+                    best_candidate = candidate
+        if best_candidate is not None:
+            self.node.goal_obj_publisher.publish(best_candidate)
+        else:
+            self.node.goal_obj_publisher.publish(ObjectCandidateMsg(id=""))
+        
+        time.sleep(1) # let the map inflator update before sending goal
         goal.goal.pose.orientation.z = q[2]
         goal.goal.pose.orientation.w = q[3]
         goal.goal.header.frame_id = "map"

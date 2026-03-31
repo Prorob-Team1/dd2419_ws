@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
-from robp_interfaces.msg import ObjectCandidateArrayMsg
+from robp_interfaces.msg import ObjectCandidateArrayMsg, ObjectCandidateMsg
 
 import numpy as np
 from math import sqrt
@@ -21,13 +21,18 @@ class MapInflator(Node):
         self.cost_inflation_radius_m = 0.4
 
         self.base_grid = None    
-        self.candidates = []     
+        self.candidates = []
+        self.goal_candidate = None
 
         self.create_subscription(
             OccupancyGrid, '/occupancy_grid', self.grid_callback, 10
         )
         self.create_subscription(
             ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10
+        )
+
+        self.create_subscription(
+            ObjectCandidateMsg, '/current_goal_obj', self.goal_candidate_callback, 10
         )
 
         self.map_pub = self.create_publisher(OccupancyGrid, '/map', 10)
@@ -42,6 +47,10 @@ class MapInflator(Node):
 
     def candidates_callback(self, msg: ObjectCandidateArrayMsg):
         self.candidates = list(msg.candidates)
+        self._rebuild_and_publish()
+
+    def goal_candidate_callback(self, msg: ObjectCandidateMsg):
+        self.goal_candidate = msg
         self._rebuild_and_publish()
 
     def _rebuild_and_publish(self):
@@ -61,6 +70,14 @@ class MapInflator(Node):
         
         for candidate in self.candidates:
             
+            if self.goal_candidate is not None:
+                if candidate.id == self.goal_candidate.id:
+                    # Do not inflate the goal, we want it nice and thin
+                    continue
+            
+            if candidate.picked_up:
+                continue
+
             cx = candidate.pose.position.x
             
             cy = candidate.pose.position.y
