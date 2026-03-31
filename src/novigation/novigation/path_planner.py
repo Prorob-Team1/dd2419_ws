@@ -22,6 +22,8 @@ import heapq
 from tf_transformations import euler_from_quaternion
 from novigation.tail_maker import find_tail, bresenham
 
+from napping.mapping import ObjectClassification
+
 
 class PathPlannerNode(Node):
 
@@ -126,6 +128,7 @@ class PathPlannerNode(Node):
         self.get_logger().info('Executing path planning...')
 
         goal_pose = goal_handle.request.goal
+        goal_label = goal_handle.request.goal_label
         
         feedback_msg = Navigation.Feedback()
 
@@ -142,6 +145,10 @@ class PathPlannerNode(Node):
                 start_grid = self.world_to_grid(current_pose)
             goal_grid = self.world_to_grid(goal_pose)
 
+            
+            snapped = self.find_nearest_free_cell(goal_grid, start_grid)
+
+            """
             # Use a straight-line approach tail when orientation is explicitly set
             q = [
                 goal_pose.pose.orientation.x,
@@ -177,6 +184,7 @@ class PathPlannerNode(Node):
             if goal_in_obstacle:
                 self.get_logger().info(f'Goal in obstacle, snapped from {goal_grid} to {snapped}')
 
+            """
             plan_grid = snapped
 
             self.get_logger().info(f'Planning from {start_grid} to {plan_grid}')
@@ -190,20 +198,23 @@ class PathPlannerNode(Node):
 
             self.get_logger().info(f'Path found with {len(path_grid)} grid cells in {dt_ms:.1f} ms')
             path_world = self.grid_path_to_world(path_grid)
-            tail_path_world = self.grid_path_to_world(tail_path)
+            #tail_path_world = self.grid_path_to_world(tail_path)
             self.publish_path(path_world, goal_pose.header.frame_id)
 
-            if use_tail:
-                self.publish_path(tail_path_world, goal_pose.header.frame_id, pub=self.tail_pub)
-            else:
-                self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
-
+            #if use_tail:
+            #    self.publish_path(tail_path_world, goal_pose.header.frame_id, pub=self.tail_pub)
+            #else:
+            #    self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
+            self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
             feedback_msg.feedback = 'Navigating...'
             goal_handle.publish_feedback(feedback_msg)
 
-            # Track to snapped free cell
-            goal_x, goal_y = snapped_wx, snapped_wy
+            # Track to radius around goal
+            goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y # snapped_wx, snapped_wy
             rate = self.create_rate(10)
+
+            goal_tolerance = 0.3 if goal_label == ObjectClassification.BOX.value else 0.2
+
 
             while rclpy.ok():
                 if not goal_handle.is_active:
@@ -224,7 +235,7 @@ class PathPlannerNode(Node):
                     dist = sqrt(dx * dx + dy * dy)
                     feedback_msg.feedback = f'dist_to_goal={dist:.2f}'
                     goal_handle.publish_feedback(feedback_msg)
-                    if dist < self.goal_tolerance:
+                    if dist < goal_tolerance:
                         self.cancel_pub.publish(Empty())  
                         goal_handle.succeed()
                         self._clear_active_handle(goal_handle)

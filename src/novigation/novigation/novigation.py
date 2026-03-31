@@ -249,21 +249,23 @@ class Navigator(Node):
         if lookahead_pt is None:
             lookahead_pt = path[-1]
 
-        # Go tail mode once we reach the end of the A* path
-        if not self._tail_mode and self.tail is not None:
+        # Go into parking mode once we're close enough
+        if not self._tail_mode:# and self.tail is not None:
             at_path_end = self.path_idx >= len(path) - 1
-            if at_path_end:
+            close_enough = (rx-goal_x)**2 + (ry-goal_y)**2 < 0.5**2
+            if close_enough:
                 self._tail_mode = True
                 self._aligning_tail = True
                 self.get_logger().info('Switching to tail/parking mode')
 
-        if self._tail_mode and self.tail is not None:
+        if self._tail_mode:# and self.tail is not None:
             tail = self.tail
-            tail_heading = math.atan2(tail[-1][1] - tail[0][1], tail[-1][0] - tail[0][0])
+            # actually not the tail heading
+            tail_heading = math.atan2(goal_y - ry, goal_x - rx,)#math.atan2(tail[-1][1] - tail[0][1], tail[-1][0] - tail[0][0])
             heading_err = tail_heading - rtheta
             heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
-            tail_goal_x, tail_goal_y = tail[-1]
-            tail_dist = math.hypot(tail_goal_x - rx, tail_goal_y - ry)
+            #tail_goal_x, tail_goal_y = tail[-1]
+            tail_dist = math.hypot(goal_x - rx, goal_y - ry)
 
             if self._aligning_tail and abs(heading_err) < math.radians(10):
                 self._aligning_tail = False
@@ -279,7 +281,7 @@ class Navigator(Node):
                 )
                 self.control_wheels(0.0, w)
             else:
-                alpha_p = math.atan2(tail_goal_y - ry, tail_goal_x - rx) - rtheta
+                alpha_p = math.atan2(goal_y - ry, goal_x - rx) - rtheta
                 alpha_p = (alpha_p + math.pi) % (2 * math.pi) - math.pi
                 eta = heading_err
                 beta = eta - alpha_p
