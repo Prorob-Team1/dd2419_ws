@@ -39,6 +39,8 @@ class PathPlannerNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
+        self.prev_tail = None
+
         self.map_data = None
 
         self.map_sub = self.create_subscription(
@@ -133,20 +135,29 @@ class PathPlannerNode(Node):
                 self.get_logger().error('Cannot get robot pose from TF')
                 goal_handle.abort()
                 return self._make_result(False)
-
-            start_grid = self.world_to_grid(current_pose)
+            
+            if self.prev_tail is not None:
+                start_grid = self.prev_tail[0]
+            else:
+                start_grid = self.world_to_grid(current_pose)
             goal_grid = self.world_to_grid(goal_pose)
 
             # Use a straight-line approach tail when orientation is explicitly set
-            q = goal_pose.pose.orientation
-            use_tail = (abs(q.w - 1.0) > 1e-4 or abs(q.x) > 1e-4
-                        or abs(q.y) > 1e-4 or abs(q.z) > 1e-4) or True
+            q = [
+                goal_pose.pose.orientation.x,
+                goal_pose.pose.orientation.y,
+                goal_pose.pose.orientation.z,
+                goal_pose.pose.orientation.w
+            ]
+            goal_yaw = euler_from_quaternion(q)[2]
+            use_tail = goal_yaw != 0
             
             tail_path = list()
             if use_tail:
                 # Find tail
                 tail_length = 0.5
                 tail_path = find_tail(self.map_data, goal_pose, tail_length)
+                self.prev_tail = tail_path
                 snap_ref_grid = tail_path[0]
                 snapped = self.find_nearest_free_cell(snap_ref_grid, start_grid)
                 snapped_from_goal = self.find_nearest_free_cell(goal_grid, snap_ref_grid)
@@ -154,6 +165,7 @@ class PathPlannerNode(Node):
             else:
                 snapped = self.find_nearest_free_cell(goal_grid, start_grid)
                 snapped_from_goal = snapped
+                self.prev_tail = None
 
             if snapped is None or snapped_from_goal is None:
                 self.get_logger().warn('No free cell found near goal')
