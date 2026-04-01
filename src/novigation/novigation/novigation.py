@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import math
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -14,7 +15,7 @@ from tf_transformations import euler_from_quaternion
 from robp_interfaces.msg import DutyCycles, ObjectCandidateArrayMsg
 from nav_msgs.msg import Path
 from std_msgs.msg import Empty
-
+from geometry_msgs.msg import Point
 
 class Navigator(Node):
 
@@ -45,6 +46,7 @@ class Navigator(Node):
         self._backup_idx = 0
         self._object_candidates = []
 
+        self._prev_tail = None
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
@@ -53,8 +55,9 @@ class Navigator(Node):
         self.create_subscription(Path, '/tail_path', self.tail_callback, 10)
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
         self.create_subscription(ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10)
+        self.create_subscription(Point, '/move_dist', self.move_dist_callback, 10)
 
-       
+
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
         )
@@ -142,6 +145,30 @@ class Navigator(Node):
         except Exception as e:
             self.get_logger().debug(f"TF lookup failed: {e}")
             return None
+        
+    def move_dist_callback(self, msg: Point):
+        # Uses velocity commands to move robot a distance in x (and y) relative to it's current position.
+        # x < 0: drive backwards
+        # x >= 0: drive forwards
+        # y < 0: turn right
+        # y >= 0: turn left
+        self.get_logger().info(f"Received request to move x={msg.x}, y={msg.y}")
+        v = 0.2 if msg.x >= 0 else -0.2
+        linear_dist = msg.x
+        if msg.y != 0 and msg.x >= 0:
+            # Align
+            angle_diff = math.atan2(msg.y, msg.x)
+            w = 0.1 if angle_diff >= 0 else -0.1
+            angular_command_duration = angle_diff/w
+            self.control_wheels(0.0, w)
+            time.sleep(angular_command_duration)
+            linear_dist = math.sqrt(msg.x**2 + msg.y**2) 
+
+        # Move linearly
+        linear_command_duration = linear_dist/v
+        self.control_wheels(v, 0.0)
+        time.sleep(linear_command_duration)
+        self.control_wheels(0.0, 0.0)
 
     def control_loop(self):
         if self._backup_tail is None and self.path is None:
@@ -154,7 +181,7 @@ class Navigator(Node):
         rx, ry, rtheta = pose
 
         if self._backup_tail is not None:
-            tx, ty = self._backup_tail[-1]
+            tx, ty = self._prev_tail
             dist = math.hypot(tx - rx, ty - ry)
             if dist < self.goal_tolerance:
                 self._backup_tail = None
@@ -254,6 +281,7 @@ class Navigator(Node):
             at_path_end = self.path_idx >= len(path) - 1
             close_enough = (rx-goal_x)**2 + (ry-goal_y)**2 < 0.5**2
             if close_enough:
+                self._prev_tail = pose
                 self._tail_mode = True
                 self._aligning_tail = True
                 self.get_logger().info('Switching to tail/parking mode')

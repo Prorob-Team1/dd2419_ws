@@ -26,16 +26,16 @@ launch:
 
 
   # Joystick
-  - node:
-      pkg: joy
-      exec: joy_node
-      name: joy_node
+  #- node:
+  #    pkg: joy
+  #    exec: joy_node
+  #    name: joy_node
 
   # RC control
-  - node:
-      pkg: rc_control
-      exec: rc
-      name: rc_control
+  #- node:
+  #    pkg: rc_control
+  #    exec: rc
+  #    name: rc_control
 
   # Odometry
   - node:

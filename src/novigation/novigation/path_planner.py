@@ -159,11 +159,12 @@ class PathPlannerNode(Node):
             goal_yaw = euler_from_quaternion(q)[2]
             use_tail = goal_yaw != 0
             
-            tail_path = list()
+            
             if use_tail:
                 # Find tail
                 tail_length = 0.5
                 tail_path = find_tail(self.map_data, goal_pose, tail_length)
+            
                 self.prev_tail = tail_path
                 snap_ref_grid = tail_path[0]
                 snapped = self.find_nearest_free_cell(snap_ref_grid, start_grid)
@@ -198,11 +199,11 @@ class PathPlannerNode(Node):
 
             self.get_logger().info(f'Path found with {len(path_grid)} grid cells in {dt_ms:.1f} ms')
             path_world = self.grid_path_to_world(path_grid)
-            #tail_path_world = self.grid_path_to_world(tail_path)
             self.publish_path(path_world, goal_pose.header.frame_id)
 
             #if use_tail:
-            #    self.publish_path(tail_path_world, goal_pose.header.frame_id, pub=self.tail_pub)
+            #   tail_path_world = self.grid_path_to_world(tail_path)
+            #   self.publish_path(tail_path_world, goal_pose.header.frame_id, pub=self.tail_pub)
             #else:
             #    self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
             self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
