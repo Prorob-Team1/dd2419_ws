@@ -194,7 +194,7 @@ private:
 
 		// if the robot is far away from the reference pose, then skip ICP
 		float initial_distance = (T_map_lidar_1_guess.block<3,1>(0,3) - T_map_lidar_0_.block<3,1>(0,3)).norm();
-		if (initial_distance > 0.6) return;  // tune this threshold for your environment
+		if (initial_distance > 1.0) return;  // tune this threshold for your environment
 			
 		
 
@@ -225,14 +225,13 @@ private:
 		RCLCPP_DEBUG(this->get_logger(), "ICP converged, score: %.4f", icp.getFitnessScore());
 
 		// Step 5: Update T_map_odom
-		// T_map_lidar_1_true comes from ICP
-		Eigen::Matrix4f T_map_lidar_1_true = icp.getFinalTransformation();
+		Eigen::Matrix4f T_map_lidar_1_icp = icp.getFinalTransformation();
 
-		// T_map_base_1_true = T_map_lidar_1_true * T_base_lidar^-1
-		Eigen::Matrix4f T_map_base_1_true = T_map_lidar_1_true * T_base_lidar_.inverse();
+		Eigen::Matrix4f T_map_base_1_icp = T_map_lidar_1_icp * T_base_lidar_.inverse();
 
-		// T_map_odom_new = T_map_base_1_true * T_odom_base^-1
-		T_map_odom_ = T_map_base_1_true * T_odom_base.inverse();
+		const float alpha = 0.2f;
+		Eigen::Matrix4f T_map_odom_icp = T_map_base_1_icp * T_odom_base.inverse();
+		T_map_odom_ = interpolateTransform(T_map_odom_, T_map_odom_icp, alpha);
 
 		CloudT::Ptr aligned_ptr(new CloudT(aligned));
 		publishCloud(aligned_ptr, "map", pub_scan_aligned_);
@@ -248,6 +247,24 @@ private:
 		ror.setMinNeighborsInRadius(2);
 		ror.filter(*filtered);
 		return filtered;                // returns shared_ptr, no copy of point data
+	}
+
+	Eigen::Matrix4f interpolateTransform(const Eigen::Matrix4f & A,
+                                      const Eigen::Matrix4f & B,
+                                      float alpha)
+	{
+		// Translation: lerp
+		Eigen::Vector3f t = (1.f - alpha) * A.block<3,1>(0,3) + alpha * B.block<3,1>(0,3);
+
+		// Rotation: slerp
+		Eigen::Quaternionf qa(A.block<3,3>(0,0));
+		Eigen::Quaternionf qb(B.block<3,3>(0,0));
+		Eigen::Quaternionf q = qa.slerp(alpha, qb);
+
+		Eigen::Matrix4f result = Eigen::Matrix4f::Identity();
+		result.block<3,3>(0,0) = q.toRotationMatrix();
+		result.block<3,1>(0,3) = t;
+		return result;
 	}
 
     void publishMapToOdom()
