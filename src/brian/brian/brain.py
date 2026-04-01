@@ -490,7 +490,7 @@ class Brain(Node):
                 grab_cube_fallback,
                 BackUpFromCubeB(self),
             ],
-            memory = False
+            memory = True
         )
 
         catch_fallback = Selector(
