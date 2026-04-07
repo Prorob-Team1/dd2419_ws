@@ -211,8 +211,9 @@ class PathPlannerNode(Node):
             feedback_msg.feedback = 'Navigating...'
             goal_handle.publish_feedback(feedback_msg)
 
-            # Track to radius around goal
-            goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y # snapped_wx, snapped_wy
+            # Track to radius around goal — use snapped point
+            snapped_wx, snapped_wy = self.grid_to_world(snapped[0], snapped[1])
+            goal_x, goal_y = snapped_wx, snapped_wy
             rate = self.create_rate(10)
 
             if goal_label == ObjectClassification.BOX.value:
