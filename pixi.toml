@@ -28,6 +28,9 @@ joy = { cmd = "ros2 run joy joy_node" }
 rc_control = { cmd = "ros2 run rc_control rc" }
 odometry = { cmd = "ros2 run odometry odometry" }
 
+MS3 = { cmd = "ros2 launch robp_launch MS3_launch.yaml" }
+brian = { cmd = "ros2 run brian brain" }
+
 [tasks.install_udev_rules]
 cmd = '''
 echo "Copying udev rules" &&
