@@ -16847,7 +16847,7 @@ packages:
   - numpy >=1.23,<3
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=22
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
 - conda: src/learning_tf2_py
   name: ros-jazzy-learning-tf2-py
@@ -18500,7 +18500,7 @@ packages:
   - ros-jazzy-std-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=22
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/rc_control
@@ -20503,7 +20503,7 @@ packages:
   depends:
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=22
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
