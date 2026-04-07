@@ -9,6 +9,7 @@
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <visualization_msgs/msg/marker.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <cmath>
 #include <vector>
 #include <algorithm>
@@ -223,6 +224,10 @@ class ObstacleMapper : public rclcpp::Node
 	public:
 		ObstacleMapper() : Node("obstacle_mapper")
 		{
+			auto activate_obstacle_detection_callback = [this](const std_msgs::msg::Bool::SharedPtr msg) -> void
+			{
+				obstacle_detection_active_ = msg->data;
+			};
 
 			auto map_callback = [this](const nav_msgs::msg::OccupancyGrid::SharedPtr msg) -> void
 			{
@@ -248,6 +253,7 @@ class ObstacleMapper : public rclcpp::Node
 					RCLCPP_INFO(this->get_logger(), "No map available, skipping");
 					return;
 				}
+				if (!obstacle_detection_active_) return;
 				
 				const auto start_time = this->get_clock()->now().nanoseconds();
 
@@ -329,11 +335,16 @@ class ObstacleMapper : public rclcpp::Node
 			inital_map_qos.reliable();
 			inital_map_qos.transient_local();
 
+			rclcpp::QoS detection_on_qos(1);
+			detection_on_qos.transient_local();
+
 			map_subscription_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/initial_occupancy_grid", inital_map_qos, map_callback);
 
 			map_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/occupancy_grid", 10);
 		
 			scan_subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>("/lidar/scan", 10, scan_callback);
+			
+			activate_obstacle_detection_subscription_ = this->create_subscription<std_msgs::msg::Bool>("/detection_on", detection_on_qos, activate_obstacle_detection_callback);
 
 			RCLCPP_INFO(this->get_logger(), "ObstacleMapper node has been started.");
 
@@ -347,6 +358,7 @@ class ObstacleMapper : public rclcpp::Node
 		rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_subscription_;
 		rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_publisher_;
 		rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
+		rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr activate_obstacle_detection_subscription_;
 
 		nav_msgs::msg::OccupancyGrid map_;
 		nav_msgs::msg::OccupancyGrid original_map_;
@@ -354,6 +366,7 @@ class ObstacleMapper : public rclcpp::Node
 		tf2::Transform T_map_prev_lidar_;
 		bool prev_T_exists_{false};
 		bool first_map_recieved_{false};
+		bool obstacle_detection_active_{true};
 };
 
 int main(int argc, char ** argv)

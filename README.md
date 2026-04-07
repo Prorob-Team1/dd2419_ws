@@ -59,3 +59,9 @@ Static transform for the lidar:
     pixi run ros2 run brian dummy_server
     pixi run ros2 service call /Start_Grasping std_srvs/srv/Trigger
 
+## Milestone 3
+    pixi run rviz2 -d rviz_config.rviz 
+    pixi run MS3
+    pixi run brian
+
+For debugging, comment out the specific part you want to debug in the launch file (MS3_launch.yaml)

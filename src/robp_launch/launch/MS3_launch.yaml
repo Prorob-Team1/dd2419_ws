@@ -1,0 +1,40 @@
+%YAML 1.2
+---
+launch:
+  # LAUNCH EVERYTHING (EXCEPT BRIAN)
+
+  # Basics
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/basics_launch.yaml"
+
+  # Mapping
+  - node:
+      pkg: "napping"
+      exec: "mapping"
+      name: "mapping"
+      output: "screen"
+
+  # Obstacle Mapper
+  - node:
+      pkg: "obstacle_mapper"
+      exec: "obstacle_mapper"
+      name: "obstacle_mapper"
+      output: "screen"
+      
+  # Novigation
+  - include:
+      file: "$(find-pkg-share robp_launch)/launch/navigation_launch.yaml"
+
+  # Arm
+  - node:
+      pkg: "arm_grasping"
+      exec: "arm_grasping"
+      name: "arm_grasping"
+      output: "screen"
+
+  # Detection
+  - node:
+      pkg: "detection"
+      exec: "pointcloud_filter"
+      name: "pointcloud_filter"
+      output: "screen"

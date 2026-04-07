@@ -24,4 +24,10 @@ launch:
       name: "mapping"
       output: "screen"
 
+  # Obstacle Mapper
+  - node:
+      pkg: "obstacle_mapper"
+      exec: "obstacle_mapper"
+      name: "obstacle_mapper"
+      output: "screen"
       

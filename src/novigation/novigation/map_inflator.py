@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
-from robp_interfaces.msg import ObjectCandidateArrayMsg
+from robp_interfaces.msg import ObjectCandidateArrayMsg, ObjectCandidateMsg
 
 import numpy as np
 from math import sqrt
@@ -17,17 +17,22 @@ class MapInflator(Node):
         super().__init__('map_inflator')
 
       
-        self.inflation_radius_m = 0.100
+        self.inflation_radius_m = 0.15
         self.cost_inflation_radius_m = 0.4
 
         self.base_grid = None    
-        self.candidates = []     
+        self.candidates = []
+        self.goal_candidate = None
 
         self.create_subscription(
             OccupancyGrid, '/occupancy_grid', self.grid_callback, 10
         )
         self.create_subscription(
             ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10
+        )
+
+        self.create_subscription(
+            ObjectCandidateMsg, '/current_goal_obj', self.goal_candidate_callback, 10
         )
 
         self.map_pub = self.create_publisher(OccupancyGrid, '/map', 10)
@@ -44,9 +49,14 @@ class MapInflator(Node):
         self.candidates = list(msg.candidates)
         self._rebuild_and_publish()
 
+    def goal_candidate_callback(self, msg: ObjectCandidateMsg):
+        self.goal_candidate = msg
+        self._rebuild_and_publish()
+
     def _rebuild_and_publish(self):
         if self.base_grid is None:
             return
+        t0 = self.get_clock().now()
 
         info = self.base_grid.info
         resolution = info.resolution
@@ -60,6 +70,14 @@ class MapInflator(Node):
         
         for candidate in self.candidates:
             
+            if self.goal_candidate is not None:
+                if candidate.id == self.goal_candidate.id:
+                    # Do not inflate the goal, we want it nice and thin
+                    continue
+            
+            if candidate.picked_up:
+                continue
+
             cx = candidate.pose.position.x
             
             cy = candidate.pose.position.y
@@ -118,7 +136,7 @@ class MapInflator(Node):
                     shifted[:, dc:] = False
                 cost = int(90 * (1.0 - dist / cost_radius_cells))
                
-                update_mask = shifted & ~inflated & (grid >= 0) & (grid < cost)
+                update_mask = shifted & ~inflated & (grid >= -1) & (grid < cost)
                 grid[update_mask] = cost
 
         out = OccupancyGrid()
@@ -127,6 +145,8 @@ class MapInflator(Node):
         out.info = info
         out.data = grid.flatten().tolist()
         self.map_pub.publish(out)
+        dt_ms = (self.get_clock().now() - t0).nanoseconds / 1e6
+        self.get_logger().info(f'Map inflated and published in {dt_ms:.1f} ms', throttle_duration_sec=5.0)
 
 
 def main(args=None):

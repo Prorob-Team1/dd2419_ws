@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -18,8 +19,7 @@ from visualization_msgs.msg import Marker
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 
-from robp_interfaces.action import Navigation
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Point
 from rclpy.action.client import ActionClient
 from rclpy.executors import MultiThreadedExecutor
 
@@ -30,8 +30,8 @@ from py_trees.common import Status
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import Bool
 
-from robp_interfaces.action import DummyAction
-from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg
+from robp_interfaces.action import DummyAction, Navigation
+from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg, DutyCycles
 
 from napping.mapping import ObjectClassification
 
@@ -77,18 +77,11 @@ class GoalProvider:
     def create_goal_marker(self, x: float, y: float, yaw: float, goal_type: int):
         goal_marker = Marker()
         goal_marker.header.frame_id = "map"
-        if goal_type == EXPLORE_GOAL:
-            goal_marker.color.r = 0.0
-            goal_marker.color.g = 1.0
-            goal_marker.color.b = 0.0
-        elif goal_type == CUBE_GOAL:
-            goal_marker.color.r = 1.0
-            goal_marker.color.g = 0.0
-            goal_marker.color.b = 0.0
-        elif goal_type == BOX_GOAL:
-            goal_marker.color.r = 0.0
-            goal_marker.color.g = 0.0
-            goal_marker.color.b = 1.0
+        q = quaternion_from_euler(0.0, 0.0, yaw) if yaw != 0 else quaternion_from_euler(0.0, np.pi/2, 0.0) 
+        goal_marker.pose.orientation.x = q[0]
+        goal_marker.pose.orientation.y = q[1]
+        goal_marker.pose.orientation.z = q[2]
+        goal_marker.pose.orientation.w = q[3]
         goal_marker.ns = "goal"
         goal_marker.id = 0
         goal_marker.color.a = 1.0
@@ -97,14 +90,23 @@ class GoalProvider:
         goal_marker.pose.position.x = x
         goal_marker.pose.position.y = y
         goal_marker.pose.position.z = 0.03
-        q = quaternion_from_euler(0.0, 0.0, yaw)
-        goal_marker.pose.orientation.x = q[0]
-        goal_marker.pose.orientation.y = q[1]
-        goal_marker.pose.orientation.z = q[2]
-        goal_marker.pose.orientation.w = q[3]
         goal_marker.scale.x = 0.2
         goal_marker.scale.y = 0.03
         goal_marker.scale.z = 0.03
+
+        if goal_type == EXPLORE_GOAL:
+            goal_marker.color.r = 0.0
+            goal_marker.color.g = 1.0
+            goal_marker.color.b = 0.0
+            goal_marker.pose.position.z = 0.23
+        elif goal_type == CUBE_GOAL:
+            goal_marker.color.r = 1.0
+            goal_marker.color.g = 0.0
+            goal_marker.color.b = 0.0
+        elif goal_type == BOX_GOAL:
+            goal_marker.color.r = 0.0
+            goal_marker.color.g = 0.0
+            goal_marker.color.b = 1.0
         
         return goal_marker
 
@@ -180,7 +182,7 @@ class GoalProvider:
                     candidate.pose.orientation.w,
                 ])[2]
                 self.logger.debug(f"Sending goal at ({x=},{y=},{yaw=})")
-                return x, y, 0.0#yaw
+                return x, y, 0.0 #yaw
 
         # Go to a new frontier
         robot_x, robot_y, robot_yaw = robot_pose
@@ -240,10 +242,18 @@ class GoalProvider:
             return robot_pose
         x, y, _ = closest_pose
         robot_x, robot_y, robot_yaw = robot_pose
-        #yaw = np.atan2(y - robot_y, x - robot_x)
-        yaw = 0
+        yaw = np.atan2(y - robot_y, x - robot_x)
         if goal_type == BOX_GOAL:
-            yaw = -np.pi/2
+            q = [
+                closest_obj.pose.orientation.x,
+                closest_obj.pose.orientation.y,
+                closest_obj.pose.orientation.z,
+                closest_obj.pose.orientation.w
+            ]
+            yaw = euler_from_quaternion(q)[2] - np.pi/2 
+        elif goal_type == EXPLORE_GOAL:
+            yaw = 0
+
         self.logger.debug(f"Created object goal at (x={x:.2f},y={y:.2f},yaw={yaw:.2f})")
         if goal_type == CUBE_GOAL:
             self.target_cube = closest_obj
@@ -264,17 +274,24 @@ class Brain(Node):
         self.only_dummy_behaviors = False
         self.debugging = False
 
+        # Mission info
+        self.start_time = self.get_clock().now()
+        self.mission_duration = Duration(seconds=300) # 5 minutes, then it's over :(
+
         # Conditions
         self.cube_found = False
         self.in_pickup_range = False
         self.cube_in_gripper = False
         self.in_dropoff_range = False
 
+        self.has_backed_up = True
+
         # Map / object tracking
         self.map = None
         self.valid_candidates: list[ObjectCandidateMsg] = []
         self.potential_candidates: list[ObjectCandidateMsg] = []
         self.start_pose = None
+        self.robot_stopped = True
 
         self.map_subscriber = self.create_subscription(
             OccupancyGrid,
@@ -296,12 +313,22 @@ class Brain(Node):
             10
         )
 
+        self.robot_in_motion_sub = self.create_subscription(
+            DutyCycles,
+            "/phidgets/motor/duty_cycles",
+            self.robot_in_motion_callback,
+            10
+        )
+
         # Publishers
         self.goal_marker_publisher = self.create_publisher(Marker, "/nav_goal", 1)
+        self.goal_obj_publisher = self.create_publisher(ObjectCandidateMsg, "/current_goal_obj", 10)
         self.caught_cubes_publisher = self.create_publisher(ObjectCandidateArrayMsg, "/caught_cubes", 10)
         detection_qos = QoSProfile(depth=1, history=QoSHistoryPolicy.KEEP_LAST, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.detection_publisher = self.create_publisher(Bool, "/detection_on", detection_qos)
         self.detection_publisher.publish(Bool(data=True)) # turn on detection
+
+        self.move_publisher = self.create_publisher(Point, "/move_dist", 10)
 
         # caught cubes
         self.caught_cubes: ObjectCandidateArrayMsg = ObjectCandidateArrayMsg()
@@ -332,6 +359,11 @@ class Brain(Node):
             f"{ANSIEscClr.GREEN}{ANSIEscClr.BOLD}I AM ALIVE!{ANSIEscClr.RESET}"
         )
 
+    def robot_in_motion_callback(self, msg: DutyCycles):
+        if msg.duty_cycle_left == 0.0 and msg.duty_cycle_right == 0.0:
+            self.robot_stopped = True
+        else:
+            self.robot_stopped = False
 
     def map_callback(self, msg: OccupancyGrid):
         self.map = msg
@@ -406,7 +438,7 @@ class Brain(Node):
             tf = self.tf_buffer.lookup_transform(
                 target_frame=to_frame_rel,
                 source_frame=from_frame_rel,
-                time=Time().from_msg(stamp),
+                time=Time(seconds=0),
                 timeout=Duration(seconds=1)
             )
         except Exception as ex:
@@ -491,17 +523,58 @@ class Brain(Node):
             memory = False
         )
 
-        # Connect both subtrees (catch and release)
-        return Sequence(
-            name="Root Sequence",
+        # backed up check
+        backed_up_fallback = Selector(
+            name="Backed Up Fallback",
             children = [
+                BackedUpCondition(self),
+                BackUpFromObjectB(self),
+            ],
+            memory = False
+        )
+
+        # Connect both subtrees (catch and release + backed up check)
+        main_sequence = Sequence(
+            name="Main Sequence",
+            children = [
+                backed_up_fallback,
                 catch_fallback,
                 release_fallback,
             ],
             memory = False
         )
 
+        timer_sequence = Sequence(
+            name="Timer Sequence",
+            children = [
+                TimeIsUpCondition(self),
+                MakeResultsB(self),
+            ],
+            memory = False
+        )
 
+        # Main Fallback
+        return Selector(
+            name="Root Fallback",
+            children = [
+                timer_sequence,
+                main_sequence,
+            ],
+            memory = False
+        )
+
+class BackedUpCondition(Behaviour):
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+
+    def update(self):
+        if self.node.has_backed_up:
+            return Status.SUCCESS
+        else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail back up")
+            return Status.FAILURE
 
 class CubePickedUpCondition(Behaviour):
 
@@ -514,6 +587,8 @@ class CubePickedUpCondition(Behaviour):
         if self.node.cube_in_gripper:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail pick up")
             return Status.FAILURE
 
 class CubeFoundCondition(Behaviour):
@@ -526,7 +601,10 @@ class CubeFoundCondition(Behaviour):
         if self.node.cube_found:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail find cube")
             return Status.FAILURE
+            
 
 class InPickupRangeCondition(Behaviour):
 
@@ -539,6 +617,8 @@ class InPickupRangeCondition(Behaviour):
         if self.node.in_pickup_range:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail get close pick")
             return Status.FAILURE
 
 class BoxInDropOffRangeCondition(Behaviour):
@@ -552,6 +632,8 @@ class BoxInDropOffRangeCondition(Behaviour):
         if self.node.in_dropoff_range:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail get close drop")
             return Status.FAILURE
 
 class CubeReleasedCondition(Behaviour):
@@ -565,6 +647,23 @@ class CubeReleasedCondition(Behaviour):
         if not self.node.cube_in_gripper:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail release")
+            return Status.FAILURE
+        
+class TimeIsUpCondition(Behaviour):
+
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+
+    def update(self):
+        mission_time = self.node.get_clock().now() - self.node.start_time
+        if mission_time >= self.node.mission_duration:
+            return Status.SUCCESS
+        else:
+            if self.node.debugging:
+                self.node.get_logger().info("time ok")
             return Status.FAILURE
 
 class DummyB(Behaviour):
@@ -699,7 +798,6 @@ class ArmB(Behaviour):
     def update_postcondition(self):
         pass
         
-
 class Nav2GoalB(Behaviour):
 
     def __init__(self, node: Brain, name, goal_type, done_status=Status.SUCCESS):
@@ -725,6 +823,8 @@ class Nav2GoalB(Behaviour):
         self.current_status = Status.RUNNING
         if self.node.map is None:
             self.current_status = Status.FAILURE
+            if self.node.debugging:
+                self.node.get_logger().info(f"{self.name}: no map :(")
             return
 
         if self.node.debugging:
@@ -750,6 +850,28 @@ class Nav2GoalB(Behaviour):
         goal.goal.pose.position.y = y
         q = quaternion_from_euler(0.0,0.0,yaw)
         
+        best_candidate = None
+        if self.goal_type == CUBE_GOAL and self.node.goal_provider.target_cube is not None:
+            goal.goal_label = self.node.goal_provider.target_cube.class_name
+            best_candidate = self.node.goal_provider.target_cube
+        elif self.goal_type == BOX_GOAL:
+            min_dist = np.inf
+            for candidate in self.node.valid_candidates:
+                if candidate.class_name != ObjectClassification.BOX.value:
+                    continue
+                x_c = candidate.pose.position.x
+                y_c = candidate.pose.position.y
+                dist = (x-x_c)**2 + (y-y_c)**2 
+                if dist < min_dist:
+                    min_dist = dist
+                    goal.goal_label = candidate.class_name
+                    best_candidate = candidate
+        if best_candidate is not None:
+            self.node.goal_obj_publisher.publish(best_candidate)
+        else:
+            self.node.goal_obj_publisher.publish(ObjectCandidateMsg(id=""))
+        
+        time.sleep(1) # let the map inflator update before sending goal
         goal.goal.pose.orientation.z = q[2]
         goal.goal.pose.orientation.w = q[3]
         goal.goal.header.frame_id = "map"
@@ -852,6 +974,7 @@ class GrabCubeB(ArmB):
             self.node.cube_in_gripper = True
         else:
             self.node.cube_in_gripper = False
+        self.node.has_backed_up = False 
         self.node.detection_publisher.publish(Bool(data=True))
 
 class ReleaseCubeB(ArmB):
@@ -861,13 +984,81 @@ class ReleaseCubeB(ArmB):
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
             self.node.cube_in_gripper = False
-            self.node.in_pickup_range = False
-            self.node.in_dropoff_range = False
         else:
             self.node.cube_in_gripper = True
+        self.node.has_backed_up = False
         self.node.detection_publisher.publish(Bool(data=True))
         
+class MoveRobotB(Behaviour):
+    def __init__(self, node: Brain, name, x_distance: float, y_distance: float = 0.0):
+        super().__init__(name)
+        self.node = node
+        self.current_status = Status.RUNNING
+        self.x_distance = x_distance
+        self.y_distance = y_distance
 
+        self.init_time = 0
+
+
+    def terminate(self, new_status):
+        self.node.get_logger().debug(f"Terminated arm action: {new_status}")
+        pass
+
+    def update(self):
+        #self.logger.info(f"{self.name}: Checking feedback")
+        time_diff = self.node.get_clock().now().to_msg().sec - self.init_time
+        if time_diff > 1 and self.node.robot_stopped:
+            # We wait until it's been at least 1 second before checking if backup is complete
+            self.current_status = Status.SUCCESS
+            self.update_postcondition()
+        return self.current_status
+    
+    def initialise(self):
+        self.current_status = Status.RUNNING
+        self.init_time = self.node.get_clock().now().to_msg().sec
+        msg = Point()
+        msg.x = self.x_distance
+        msg.y = self.y_distance
+        self.log_action()
+        self.node.move_publisher.publish(msg)
+
+    def log_action(self):
+        pass
+
+    def update_postcondition(self):
+        pass
+    
+class BackUpFromObjectB(MoveRobotB):
+    def __init__(self, node: Brain):
+        super().__init__(node, __class__.__name__, x_distance=-0.5, y_distance=0.0)
+    def log_action(self):
+        self.node.get_logger().info("--> Backing up...")
+
+    def update_postcondition(self):
+        if self.current_status == Status.SUCCESS:
+            self.node.get_logger().info("--> DONE!")
+            self.node.has_backed_up = True
+            self.node.in_dropoff_range = False
+            self.node.in_pickup_range = False
+        else:
+            self.node.has_backed_up = False
+        
+class MakeResultsB(Behaviour):
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+        self.current_status = Status.RUNNING
+
+    def update(self):
+        return self.current_status
+
+    def terminate(self, new_status):
+        pass
+
+
+    def initialise(self):
+        self.node.get_logger().info("TIME'S UP, MAGGOT")
+        pass
 
 def main():
     rclpy.init()
