@@ -29,8 +29,8 @@ class Navigator(Node):
         self.max_off_path_distance = 0.5
 
        
-        self.wheel_base = 0.3125
-        self.wheel_radius = 0.04921 #- 0.001
+        self.wheel_base = 0.3135
+        self.wheel_radius = 0.04921 - 0.001
         self.max_v = 0.5
         self.max_w = 2 * math.pi / 5
 
