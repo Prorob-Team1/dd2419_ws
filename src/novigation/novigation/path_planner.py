@@ -14,7 +14,7 @@ from robp_interfaces.action import Navigation
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path, OccupancyGrid
 from geometry_msgs.msg import PoseStamped as PathPose
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Bool
 
 from math import sqrt
 import heapq
@@ -55,6 +55,7 @@ class PathPlannerNode(Node):
         self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.tail_pub = self.create_publisher(Path, '/tail_path', 10)
         self.cancel_pub = self.create_publisher(Empty, '/cancel_navigation', 10)
+        self.parking_pub = self.create_publisher(Bool, '/use_parking', 10)
 
         self._action_server = ActionServer(
             self,
@@ -214,8 +215,16 @@ class PathPlannerNode(Node):
             goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y # snapped_wx, snapped_wy
             rate = self.create_rate(10)
 
-            goal_tolerance = 0.3 if goal_label == ObjectClassification.BOX.value else 0.2
-
+            if goal_label == ObjectClassification.BOX.value:
+                goal_tolerance = 0.3
+                use_parking = True
+            elif goal_label == "":  # explore goal
+                goal_tolerance = 0.5
+                use_parking = False
+            else:  # cube goal
+                goal_tolerance = 0.2
+                use_parking = True
+            self.parking_pub.publish(Bool(data=use_parking))
 
             while rclpy.ok():
                 if not goal_handle.is_active:

@@ -14,7 +14,7 @@ from tf_transformations import euler_from_quaternion
 
 from robp_interfaces.msg import DutyCycles, ObjectCandidateArrayMsg
 from nav_msgs.msg import Path
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Bool
 from geometry_msgs.msg import Point
 
 class Navigator(Node):
@@ -47,11 +47,13 @@ class Navigator(Node):
         self._object_candidates = []
 
         self._prev_tail = None
+        self._parking_enabled = True
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
         self.create_subscription(Path, '/planned_path', self.path_callback, 10)
+        self.create_subscription(Bool, '/use_parking', self.parking_callback, 10)
         self.create_subscription(Path, '/tail_path', self.tail_callback, 10)
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
         self.create_subscription(ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10)
@@ -69,6 +71,9 @@ class Navigator(Node):
 
     def candidates_callback(self, msg: ObjectCandidateArrayMsg):
         self._object_candidates = msg.candidates
+
+    def parking_callback(self, msg: Bool):
+        self._parking_enabled = msg.data
 
     def path_callback(self, msg: Path):
         if len(msg.poses) < 2:
@@ -103,6 +108,7 @@ class Navigator(Node):
         self.tail = None
         self._tail_mode = False
         self._backup_tail = None
+        self._parking_enabled = True
         self.control_wheels(0.0, 0.0)
 
     def _near_object_candidate(self, radius=0.6):
@@ -249,12 +255,7 @@ class Navigator(Node):
         goal_x, goal_y = final_goal
         dist_to_goal = math.hypot(goal_x - rx, goal_y - ry)
 
-        if dist_to_goal < self.goal_tolerance:
-            self.get_logger().info("Reached goal, stopping")
-            self.control_wheels(0.0, 0.0)
-            self.path = None
-            self.tail = None
-            return
+        
 
         # Find lookahead point: walk along path from path_idx
         lookahead_pt = None
@@ -277,7 +278,7 @@ class Navigator(Node):
             lookahead_pt = path[-1]
 
         # Go into parking mode once we're close enough
-        if not self._tail_mode:# and self.tail is not None:
+        if not self._tail_mode and self._parking_enabled:# and self.tail is not None:
             at_path_end = self.path_idx >= len(path) - 1
             close_enough = (rx-goal_x)**2 + (ry-goal_y)**2 < 0.5**2
             if close_enough:
@@ -330,9 +331,7 @@ class Navigator(Node):
         dy = lookahead_pt[1] - ry
         ld = math.hypot(dx, dy)
 
-        if ld < 1e-6:
-            self.control_wheels(0.0, 0.0)
-            return
+        
 
         # Angle from robot heading to lookahead point
         alpha = math.atan2(dy, dx) - rtheta
@@ -341,6 +340,9 @@ class Navigator(Node):
         # slow down near transition/goal
         speed = self.target_speed
         slowdown_dist = 0.5
+        #if not self._parking_enabled:
+            #slowdown_dist = 1 # without parking last 0.5 of path is skipped because pure pursuit, this way it stil
+
         if self.tail is not None:
             dist_to_transition = math.hypot(path[-1][0] - rx, path[-1][1] - ry)
             if dist_to_transition < slowdown_dist:
