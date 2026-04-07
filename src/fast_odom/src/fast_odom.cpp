@@ -17,6 +17,10 @@
 #include <thread>
 
 constexpr bool USE_IMU = true; // if we want to use the IMU or not 
+constexpr double TICKS_PER_REV = 48 * 64;
+constexpr double WHEEL_RADIUS = 0.04921 - 0.001;
+constexpr double BASE = 0.3135;
+
 
 class FastOdom : public rclcpp::Node
 {
@@ -27,9 +31,9 @@ class FastOdom : public rclcpp::Node
 		
 		void calibrate_imu(const sensor_msgs::msg::Imu::SharedPtr msg);
 
-		const double get_yaw(const u_int32_t stamp);
+		const double get_yaw(const rclcpp::Time stamp);
 
-		const std::pair<u_int32_t, u_int32_t> encoder_delta(const robp_interfaces::msg::Encoders::SharedPtr msg);
+		const std::pair<double, double> encoder_delta(const robp_interfaces::msg::Encoders::SharedPtr msg);
 
 		void broadcast_transform(const rclcpp::Time stamp, const double x, const double y, const double yaw);
 		void publish_path(const rclcpp::Time stamp, const double x, const double y, const double yaw);
@@ -49,7 +53,7 @@ class FastOdom : public rclcpp::Node
 				[this](const robp_interfaces::msg::Encoders::SharedPtr msg){encoder_callback(msg);}
 			);
 			
-      		path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/driven_path", 10);
+      		path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/path", 10);
 
 			tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -65,17 +69,17 @@ class FastOdom : public rclcpp::Node
 		rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
 
 		// IMU stuff
-		u_int32_t last_imu_stamp_{0};
+		rclcpp::Time last_imu_stamp_{};
 		double yaw_imu_{0};
 		double yaw_bias_{0};
-		std::deque<std::pair<double,u_int32_t>> yaw_queue_;
+		std::deque<std::pair<double,rclcpp::Time>> yaw_queue_;
 		bool calibrated_{false};
-		double cum_vel_readings_;
+		double cum_vel_readings_{0};
 		size_t reading_counter_{0};
 
 		// Encoder stuff
-		u_int32_t last_encoder_left_{0};
-		u_int32_t last_encoder_right_{0};
+		double last_encoder_left_{0};
+		double last_encoder_right_{0};
 
 		// 2D pose
 		double x_{0.0};
@@ -93,18 +97,18 @@ void FastOdom::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
 		calibrate_imu(msg);
 		return;
 	}
-	if (last_imu_stamp_ == 0) 
+	if (last_imu_stamp_.nanoseconds() == 0) 
 	{
-		last_imu_stamp_ = msg->header.stamp.nanosec;
+		last_imu_stamp_ = msg->header.stamp;
 		return;
 	}
 
 	const double w_z = -(msg->angular_velocity.z - yaw_bias_);
-	u_int32_t dt_nanosec = msg->header.stamp.nanosec - last_imu_stamp_;
-	double yaw = yaw_imu_ + w_z * dt_nanosec / 1e9;
+	const rclcpp::Duration dt = rclcpp::Time(msg->header.stamp) - last_imu_stamp_;
+	double yaw = yaw_imu_ + w_z * dt.nanoseconds() / 1e9;
 	// Wrap angle
-	yaw_imu_ = std::fmod(yaw + M_PI, 2.0*M_PI) - M_PI;
-	last_imu_stamp_ = msg->header.stamp.nanosec;
+	yaw_imu_ = std::atan2(std::sin(yaw), std::cos(yaw));
+	last_imu_stamp_ = msg->header.stamp;
 
 	yaw_queue_.emplace_back(yaw_imu_,last_imu_stamp_);
 	if (yaw_queue_.size() > 20) 
@@ -126,13 +130,13 @@ void FastOdom::encoder_callback(const robp_interfaces::msg::Encoders::SharedPtr 
 	msg -- An encoders ROS message. To see more information about it
 	run 'ros2 interface show robp_interfaces/msg/Encoders' in a terminal.
 	*/
-	const u_int32_t ticks_per_rev = 48 * 64;
-	const double wheel_radius = 0.04921 - 0.001;
-	const double base = 0.3135;
+	const double ticks_per_rev = TICKS_PER_REV;
+	const double wheel_radius = WHEEL_RADIUS;
+	const double base = BASE;
 
-	const std::pair<u_int32_t, u_int32_t> encoder_deltas = encoder_delta(msg);
-	const u_int32_t delta_ticks_left = encoder_deltas.first;
-	const u_int32_t delta_ticks_right = encoder_deltas.second;
+	const std::pair<double, double> encoder_deltas = encoder_delta(msg);
+	const double delta_ticks_left = encoder_deltas.first;
+	const double delta_ticks_right = encoder_deltas.second;
 
 	const double delta_phi_r = 2.0 * M_PI * (delta_ticks_right / ticks_per_rev); 
 	const double delta_phi_l = 2.0 * M_PI * (delta_ticks_left / ticks_per_rev);
@@ -144,11 +148,11 @@ void FastOdom::encoder_callback(const robp_interfaces::msg::Encoders::SharedPtr 
 	if (!USE_IMU) 
 	{
 		yaw_ += wheel_radius * (delta_phi_r - delta_phi_l) / base;
-		yaw_ = std::fmod(yaw_ + M_PI, 2.0*M_PI) - M_PI;
+		yaw_ = std::atan2(std::sin(yaw_), std::cos(yaw_));
 	}
 	else
 	{
-		yaw_ = get_yaw(msg->header.stamp.nanosec);
+		yaw_ = get_yaw(msg->header.stamp);
 	}
 
 	auto stamp = msg->header.stamp;
@@ -171,18 +175,19 @@ void FastOdom::calibrate_imu(const sensor_msgs::msg::Imu::SharedPtr msg)
 	RCLCPP_INFO(this->get_logger(), "IMU (gyro) calibrated using %lu readings. Calculated bias: %.6f", reading_counter_, yaw_bias_);
 }
 
-const double FastOdom::get_yaw(const u_int32_t t_enc)
+const double FastOdom::get_yaw(const rclcpp::Time t_enc)
 {
 	if (yaw_queue_.empty())
 	{
 		RCLCPP_INFO(this->get_logger(), "No gyro readings available, returning last known yaw");
 		return yaw_imu_;
 	}
-	u_int32_t min_t_diff = UINT32_MAX;
+	double min_t_diff = DBL_MAX;
 	double closest_reading = yaw_imu_;
-	for (size_t i = 0; i<yaw_queue_.size(); ++i) {
-		const double t_imu = yaw_queue_.at(i).second;
-		const u_int32_t t_diff = abs(t_imu - t_enc);
+	for (size_t i = 0; i<yaw_queue_.size(); ++i) 
+	{
+		const rclcpp::Time t_imu = yaw_queue_.at(i).second;
+		const double t_diff = abs(t_imu.nanoseconds() - t_enc.nanoseconds());
 		if (t_diff < min_t_diff) 
 		{
 			closest_reading = yaw_queue_.at(i).first;
@@ -190,10 +195,11 @@ const double FastOdom::get_yaw(const u_int32_t t_enc)
 		}
 
 	}
+
 	return closest_reading;
 }
 
-const std::pair<u_int32_t, u_int32_t> FastOdom::encoder_delta(const robp_interfaces::msg::Encoders::SharedPtr msg) 
+const std::pair<double, double> FastOdom::encoder_delta(const robp_interfaces::msg::Encoders::SharedPtr msg) 
 {
 	double delta_left, delta_right;
 	if (last_encoder_left_ == 0.0 || last_encoder_right_ == 0.0)
@@ -209,7 +215,7 @@ const std::pair<u_int32_t, u_int32_t> FastOdom::encoder_delta(const robp_interfa
 	last_encoder_left_ = msg->encoder_left;
 	last_encoder_right_ = msg->encoder_right;
 
-	return {delta_left, delta_right};
+	return {static_cast<double>(delta_left), static_cast<double>(delta_right)};
 }
 
 void FastOdom::broadcast_transform(const rclcpp::Time stamp, const double x, const double y, const double yaw) 
