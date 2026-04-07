@@ -274,14 +274,17 @@ class Brain(Node):
         self.only_dummy_behaviors = False
         self.debugging = False
 
+        # Mission info
+        self.start_time = self.get_clock().now()
+        self.mission_duration = Duration(seconds=300) # 5 minutes, then it's over :(
+
         # Conditions
         self.cube_found = False
         self.in_pickup_range = False
         self.cube_in_gripper = False
         self.in_dropoff_range = False
 
-        self.backed_up_from_box = False
-        self.backed_up_from_cube = False
+        self.has_backed_up = True
 
         # Map / object tracking
         self.map = None
@@ -473,30 +476,20 @@ class Brain(Node):
             memory = False
         )
 
-        grab_cube_fallback = Selector(
-            name = "Grab Cube Fallback",
-            children= [
-                CubePickedUpCondition(self),
-                GrabCubeB(self)
-            ],
-            memory=False
-        )
-
         grab_cube_sequence = Sequence(
             name = "Grab Cube Sequence",
             children = [
                 explore_fallback,
                 nav_to_cube_fallback,
-                grab_cube_fallback,
-                BackUpFromCubeB(self),
+                GrabCubeB(self)
             ],
-            memory = True
+            memory = False
         )
 
         catch_fallback = Selector(
             name = "Catch Fallback",
             children = [
-                BackUpFromCubeCondition(self),
+                CubePickedUpCondition(self),
                 grab_cube_sequence
             ],
             memory = False
@@ -512,65 +505,75 @@ class Brain(Node):
             memory = False
         )
 
-        release_fallback = Selector(
-            name = "Release Cube Fallback",
-            children = [
-                CubeReleasedCondition(self),
+        release_sequence = Sequence(
+            name = "Release Cube Sequence",
+            children  = [
+                box_in_drop_off_range_fallback,
                 ReleaseCubeB(self)
             ],
             memory = False
         )
 
-        release_sequence = Sequence(
-            name = "Release Cube Sequence",
-            children = [
-                box_in_drop_off_range_fallback,
-                release_fallback,
-                BackUpFromBoxB(self)
-            ],
-            memory = False
-        )
-
         release_fallback = Selector(
             name = "Release Cube Fallback",
             children = [
-                BackUpFromBoxCondition(self),
+                CubeReleasedCondition(self),
                 release_sequence
             ],
             memory = False
         )
 
-        # Connect both subtrees (catch and release)
-        return Sequence(
-            name="Root Sequence",
+        # backed up check
+        backed_up_fallback = Selector(
+            name="Backed Up Fallback",
             children = [
+                BackedUpCondition(self),
+                BackUpFromObjectB(self),
+            ],
+            memory = False
+        )
+
+        # Connect both subtrees (catch and release + backed up check)
+        main_sequence = Sequence(
+            name="Main Sequence",
+            children = [
+                backed_up_fallback,
                 catch_fallback,
                 release_fallback,
             ],
             memory = False
         )
 
+        timer_sequence = Sequence(
+            name="Timer Sequence",
+            children = [
+                TimeIsUpCondition(self),
+                MakeResultsB(self),
+            ],
+            memory = False
+        )
 
-class BackUpFromCubeCondition(Behaviour):
+        # Main Fallback
+        return Selector(
+            name="Root Fallback",
+            children = [
+                timer_sequence,
+                main_sequence,
+            ],
+            memory = False
+        )
+
+class BackedUpCondition(Behaviour):
     def __init__(self, node: Brain):
         super().__init__(__class__.__name__)
         self.node = node
 
     def update(self):
-        if self.node.backed_up_from_cube:
+        if self.node.has_backed_up:
             return Status.SUCCESS
         else:
-            return Status.FAILURE
-
-class BackUpFromBoxCondition(Behaviour):
-    def __init__(self, node: Brain):
-        super().__init__(__class__.__name__)
-        self.node = node
-
-    def update(self):
-        if self.node.backed_up_from_box:
-            return Status.SUCCESS
-        else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail back up")
             return Status.FAILURE
 
 class CubePickedUpCondition(Behaviour):
@@ -584,6 +587,8 @@ class CubePickedUpCondition(Behaviour):
         if self.node.cube_in_gripper:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail pick up")
             return Status.FAILURE
 
 class CubeFoundCondition(Behaviour):
@@ -596,7 +601,10 @@ class CubeFoundCondition(Behaviour):
         if self.node.cube_found:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail find cube")
             return Status.FAILURE
+            
 
 class InPickupRangeCondition(Behaviour):
 
@@ -609,6 +617,8 @@ class InPickupRangeCondition(Behaviour):
         if self.node.in_pickup_range:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail get close pick")
             return Status.FAILURE
 
 class BoxInDropOffRangeCondition(Behaviour):
@@ -622,6 +632,8 @@ class BoxInDropOffRangeCondition(Behaviour):
         if self.node.in_dropoff_range:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail get close drop")
             return Status.FAILURE
 
 class CubeReleasedCondition(Behaviour):
@@ -635,6 +647,23 @@ class CubeReleasedCondition(Behaviour):
         if not self.node.cube_in_gripper:
             return Status.SUCCESS
         else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail release")
+            return Status.FAILURE
+        
+class TimeIsUpCondition(Behaviour):
+
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+
+    def update(self):
+        mission_time = self.node.get_clock().now() - self.node.start_time
+        if mission_time >= self.node.mission_duration:
+            return Status.SUCCESS
+        else:
+            if self.node.debugging:
+                self.node.get_logger().info("time ok")
             return Status.FAILURE
 
 class DummyB(Behaviour):
@@ -794,6 +823,8 @@ class Nav2GoalB(Behaviour):
         self.current_status = Status.RUNNING
         if self.node.map is None:
             self.current_status = Status.FAILURE
+            if self.node.debugging:
+                self.node.get_logger().info(f"{self.name}: no map :(")
             return
 
         if self.node.debugging:
@@ -941,9 +972,9 @@ class GrabCubeB(ArmB):
         if self.current_status == Status.SUCCESS:
             self.node.update_caught_cubes()
             self.node.cube_in_gripper = True
-            self.node.backed_up_from_cube = False
         else:
             self.node.cube_in_gripper = False
+        self.node.has_backed_up = False 
         self.node.detection_publisher.publish(Bool(data=True))
 
 class ReleaseCubeB(ArmB):
@@ -953,9 +984,9 @@ class ReleaseCubeB(ArmB):
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
             self.node.cube_in_gripper = False
-            self.node.backed_up_from_box = False
         else:
             self.node.cube_in_gripper = True
+        self.node.has_backed_up = False
         self.node.detection_publisher.publish(Bool(data=True))
         
 class MoveRobotB(Behaviour):
@@ -997,34 +1028,37 @@ class MoveRobotB(Behaviour):
     def update_postcondition(self):
         pass
     
-class BackUpFromBoxB(MoveRobotB):
+class BackUpFromObjectB(MoveRobotB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, x_distance=-0.4, y_distance=0.0)
+        super().__init__(node, __class__.__name__, x_distance=-0.5, y_distance=0.0)
     def log_action(self):
-        self.node.get_logger().info("--> Backing up from box...")
+        self.node.get_logger().info("--> Backing up...")
 
     def update_postcondition(self):
         if self.current_status == Status.SUCCESS:
-            self.node.backed_up_from_box = True
+            self.node.get_logger().info("--> DONE!")
+            self.node.has_backed_up = True
             self.node.in_dropoff_range = False
-            self.node.backed_up_from_cube = False
-        else:
-            self.node.backed_up_from_box = False
-
-class BackUpFromCubeB(MoveRobotB):
-    def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, x_distance=-0.3, y_distance=0.0)
-    def log_action(self):
-        self.node.get_logger().info("--> Backing up from cube...")
-
-    def update_postcondition(self):
-        if self.current_status == Status.SUCCESS:
-            self.node.backed_up_from_cube = True
-            self.node.backed_up_from_box = False
             self.node.in_pickup_range = False
         else:
-            self.node.backed_up_from_cube = False
+            self.node.has_backed_up = False
         
+class MakeResultsB(Behaviour):
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+        self.current_status = Status.RUNNING
+
+    def update(self):
+        return self.current_status
+
+    def terminate(self, new_status):
+        pass
+
+
+    def initialise(self):
+        self.node.get_logger().info("TIME'S UP, MAGGOT")
+        pass
 
 def main():
     rclpy.init()
