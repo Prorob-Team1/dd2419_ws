@@ -214,8 +214,12 @@ class PathPlannerNode(Node):
             goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y # snapped_wx, snapped_wy
             rate = self.create_rate(10)
 
-            goal_tolerance = 0.3 if goal_label == ObjectClassification.BOX.value else 0.2
-
+            if goal_label == ObjectClassification.BOX.value: 
+                goal_tolerance = 0.3 
+            elif goal_label == "": #explore goal
+                goal_tolerance = 0.6 
+            else: #cube goal
+                goal_tolerance = 0.2 
 
             while rclpy.ok():
                 if not goal_handle.is_active:
