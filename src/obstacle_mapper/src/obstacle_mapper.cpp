@@ -94,7 +94,7 @@ std::vector<RayVector> scan_to_vec(sensor_msgs::msg::LaserScan::SharedPtr scan, 
 	for (size_t i = 0; i < num_ranges; ++i) 
 	{
 		float range = ranges.at(i);
-		if (range >= scan->range_min && range <= scan->range_max) 
+		if (range >= 0.2 && range <= scan->range_max) 
 		{
 			// Convert (range,angle) to (x,y,z)
 			float angle = scan->angle_min + indices.at(i) * scan->angle_increment;
@@ -318,7 +318,7 @@ class ObstacleMapper : public rclcpp::Node
 				// 6. Report processing time.
 				const auto runtime = this->get_clock()->now().nanoseconds() - start_time;
 
-				RCLCPP_INFO(this->get_logger(), "-> Processed scan: %li ns", runtime);
+				//RCLCPP_INFO(this->get_logger(), "-> Processed scan: %li ns", runtime);
 
 				if (runtime > worst_time_)
 				{

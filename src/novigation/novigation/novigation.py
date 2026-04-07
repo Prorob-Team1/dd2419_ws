@@ -255,12 +255,7 @@ class Navigator(Node):
         goal_x, goal_y = final_goal
         dist_to_goal = math.hypot(goal_x - rx, goal_y - ry)
 
-        if dist_to_goal < self.goal_tolerance:
-            self.get_logger().info("Reached goal, stopping")
-            self.control_wheels(0.0, 0.0)
-            self.path = None
-            self.tail = None
-            return
+        
 
         # Find lookahead point: walk along path from path_idx
         lookahead_pt = None
@@ -336,9 +331,7 @@ class Navigator(Node):
         dy = lookahead_pt[1] - ry
         ld = math.hypot(dx, dy)
 
-        if ld < 1e-6:
-            self.control_wheels(0.0, 0.0)
-            return
+        
 
         # Angle from robot heading to lookahead point
         alpha = math.atan2(dy, dx) - rtheta
@@ -347,6 +340,9 @@ class Navigator(Node):
         # slow down near transition/goal
         speed = self.target_speed
         slowdown_dist = 0.5
+        #if not self._parking_enabled:
+            #slowdown_dist = 1 # without parking last 0.5 of path is skipped because pure pursuit, this way it stil
+
         if self.tail is not None:
             dist_to_transition = math.hypot(path[-1][0] - rx, path[-1][1] - ry)
             if dist_to_transition < slowdown_dist:
