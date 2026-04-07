@@ -122,7 +122,7 @@ class Odometry(Node):
         # The kinematic parameters for the differential configuration
         # dt = 50 / 1000
         ticks_per_rev = 48 * 64
-        wheel_radius = 0.04921  # TODO: Fill in
+        wheel_radius = 0.04921 - 0.001  # TODO: Fill in
         base = 0.3135 # TODO: Fill in
 
         # Ticks since last message
