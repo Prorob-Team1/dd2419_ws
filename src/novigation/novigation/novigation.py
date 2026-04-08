@@ -22,7 +22,7 @@ class Navigator(Node):
     def __init__(self):
         super().__init__("navigation")
 
-        self.lookahead_distance = 0.5
+        self.lookahead_distance = 0.3
         self.target_speed = 0.3
         self.goal_tolerance = 0.04
         self.max_off_path_distance = 0.5
