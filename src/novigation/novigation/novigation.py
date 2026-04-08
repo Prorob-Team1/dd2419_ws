@@ -211,12 +211,12 @@ class Navigator(Node):
 
         # Initial alignmenn
         if self.aligning:
-            #advances lookahead during aligning phase.
             while self.path_idx < len(path) - 1:
-                px, py = path[self.path_idx + 1]
-                if math.hypot(px - rx, py - ry) < math.hypot(
-                    path[self.path_idx][0] - rx, path[self.path_idx][1] - ry
-                ):
+                sx, sy = path[self.path_idx]
+                ex, ey = path[self.path_idx + 1]
+                dx, dy = ex - sx, ey - sy
+                t = ((rx - sx) * dx + (ry - sy) * dy) / (dx * dx + dy * dy + 1e-9)
+                if t > 0.5:
                     self.path_idx += 1
                 else:
                     break
@@ -242,10 +242,11 @@ class Navigator(Node):
 
         # Advance path_idx
         while self.path_idx < len(path) - 1:
-            px, py = path[self.path_idx + 1]
-            if math.hypot(px - rx, py - ry) < math.hypot(
-                path[self.path_idx][0] - rx, path[self.path_idx][1] - ry
-            ):
+            sx, sy = path[self.path_idx]
+            ex, ey = path[self.path_idx + 1]
+            dx, dy = ex - sx, ey - sy
+            t = ((rx - sx) * dx + (ry - sy) * dy) / (dx * dx + dy * dy + 1e-9)
+            if t > 0.5:
                 self.path_idx += 1
             else:
                 break
