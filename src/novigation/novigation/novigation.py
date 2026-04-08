@@ -22,7 +22,7 @@ class Navigator(Node):
     def __init__(self):
         super().__init__("navigation")
 
-        self.lookahead_distance = 0.3
+        self.lookahead_distance = 0.5
         self.target_speed = 0.3
         self.goal_tolerance = 0.04
         self.max_off_path_distance = 0.5
@@ -203,7 +203,7 @@ class Navigator(Node):
             heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
             park_dist = math.hypot(goal_x - rx, goal_y - ry)
 
-            if self._aligning_parking and abs(heading_err) < math.radians(10):
+            if self._aligning_parking and (abs(heading_err) < math.radians(10) or park_dist < 0.08):
                 self._aligning_parking = False
             elif not self._aligning_parking and abs(heading_err) > math.radians(20):
                 self._aligning_parking = True
