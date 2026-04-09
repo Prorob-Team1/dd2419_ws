@@ -25,7 +25,7 @@ class MapInflator(Node):
         self.goal_candidate = None
 
         self.create_subscription(
-            OccupancyGrid, '/initial_occupancy_grid', self.grid_callback, 10
+            OccupancyGrid, '/occupancy_grid', self.grid_callback, 10
         )
         self.create_subscription(
             ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10
@@ -144,7 +144,7 @@ class MapInflator(Node):
                 row_min = max(0, int((cy - BOX_HALF_Y - origin_y) / resolution))
                 row_max = min(height - 1, int((cy + BOX_HALF_Y - origin_y) / resolution))
                 grid[row_min:row_max + 1, col_min:col_max + 1] = 100
-                box_candidates.append(candidate)
+                
             else:
                 col = int((cx - origin_x) / resolution)
                 row = int((cy - origin_y) / resolution)
