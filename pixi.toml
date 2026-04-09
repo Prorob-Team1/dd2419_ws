@@ -93,6 +93,7 @@ ros-jazzy-napping = { path = "src/napping" }
 ros-jazzy-arm-grasping = { path = "src/arm_grasping"}
 ros-jazzy-brian = { path = "src/brian" }
 ros-jazzy-obstacle-mapper = { path = "src/obstacle_mapper" }
+ros-jazzy-fast-odom = { path = "src/fast_odom" }
 
 
 # Other

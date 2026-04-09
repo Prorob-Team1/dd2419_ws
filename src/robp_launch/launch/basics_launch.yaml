@@ -39,6 +39,6 @@ launch:
 
   # Odometry
   - node:
-      pkg: odometry
-      exec: odometry
-      name: odometry
+      pkg: fast_odom #odometry
+      exec: fast_odom #odometry
+      name: fast_odom #odometry
