@@ -16,11 +16,11 @@ class MapInflator(Node):
     def __init__(self):
         super().__init__('map_inflator')
 
-      
         self.inflation_radius_m = 0.25
         self.cost_inflation_radius_m = 0.4
+        self.box_cost_radius_m = 1
 
-        self.base_grid = None    
+        self.base_grid = None
         self.candidates = []
         self.goal_candidate = None
 
@@ -30,12 +30,13 @@ class MapInflator(Node):
         self.create_subscription(
             ObjectCandidateArrayMsg, '/object_candidates', self.candidates_callback, 10
         )
-
         self.create_subscription(
             ObjectCandidateMsg, '/current_goal_obj', self.goal_candidate_callback, 10
         )
 
         self.map_pub = self.create_publisher(OccupancyGrid, '/map', 10)
+
+        self.create_timer(0.2, self._rebuild_and_publish)  # rebuild at 5 Hz
 
         self.get_logger().info(
             f'Map inflator initialized, inflation_radius={self.inflation_radius_m:.3f}m'
@@ -43,15 +44,69 @@ class MapInflator(Node):
 
     def grid_callback(self, msg: OccupancyGrid):
         self.base_grid = msg
-        self._rebuild_and_publish()
 
     def candidates_callback(self, msg: ObjectCandidateArrayMsg):
         self.candidates = list(msg.candidates)
-        self._rebuild_and_publish()
 
     def goal_candidate_callback(self, msg: ObjectCandidateMsg):
         self.goal_candidate = msg
-        self._rebuild_and_publish()
+
+    def _yaw_from_quat(self, q):
+        return np.arctan2(2.0 * (q.w * q.z + q.x * q.y),
+                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+    def _paint_box_corridor_cost(self, grid, candidate, resolution, origin_x, origin_y, width, height, inflated_mask):
+        cx = candidate.pose.position.x
+        cy = candidate.pose.position.y
+        yaw = self._yaw_from_quat(candidate.pose.orientation)
+
+        cos_y, sin_y = np.cos(yaw), np.sin(yaw)
+
+        radius_cells = int(self.box_cost_radius_m / resolution)
+        col_center = int((cx - origin_x) / resolution)
+        row_center = int((cy - origin_y) / resolution)
+
+        r_lo = max(0, row_center - radius_cells)
+        r_hi = min(height - 1, row_center + radius_cells)
+        c_lo = max(0, col_center - radius_cells)
+        c_hi = min(width - 1, col_center + radius_cells)
+
+        cols = np.arange(c_lo, c_hi + 1)
+        rows = np.arange(r_lo, r_hi + 1)
+        cc, rr = np.meshgrid(cols, rows)
+
+        dx = cc * resolution + origin_x - cx
+        dy = rr * resolution + origin_y - cy
+
+        local_x = dx * cos_y + dy * sin_y
+        local_y = -dx * sin_y + dy * cos_y
+
+        dist = np.hypot(dx, dy)
+        max_dist = radius_cells * resolution
+
+        region = grid[r_lo:r_hi + 1, c_lo:c_hi + 1]
+        region_inflated = inflated_mask[r_lo:r_hi + 1, c_lo:c_hi + 1]
+        free = (~region_inflated) & (dist <= max_dist) & (dist > 1e-6)
+
+        corridor_half_length = BOX_HALF_X
+        fade_width = 0.2
+
+        abs_local_x = np.abs(local_x)
+
+        in_corridor = abs_local_x < corridor_half_length
+        in_fade = (abs_local_x >= corridor_half_length) & (abs_local_x < corridor_half_length + fade_width)
+        in_block = abs_local_x >= corridor_half_length + fade_width
+
+        fade_cost = (80 * (abs_local_x - corridor_half_length) / fade_width).astype(np.int8)
+
+        block_mask = free & in_block & (region < 80)
+        region[block_mask] = 80
+
+        fade_mask = free & in_fade & (fade_cost > region)
+        region[fade_mask] = fade_cost[fade_mask]
+
+        clear_mask = free & in_corridor & (region > 0) & (region < 100)
+        region[clear_mask] = 0
 
     def _rebuild_and_publish(self):
         if self.base_grid is None:
@@ -67,33 +122,31 @@ class MapInflator(Node):
 
         grid = np.array(self.base_grid.data, dtype=np.int8).reshape((height, width))
 
-        
+        box_candidates = []
+
         for candidate in self.candidates:
-            
             if self.goal_candidate is not None:
                 if candidate.id == self.goal_candidate.id:
                     # Do not inflate the goal, we want it nice and thin
+                    if candidate.class_name == 'BOX':
+                        box_candidates.append(candidate)   #include corridor cost for box goals
                     continue
             
             if candidate.picked_up:
                 continue
 
             cx = candidate.pose.position.x
-            
             cy = candidate.pose.position.y
 
             if candidate.class_name == 'BOX':
                 col_min = max(0, int((cx - BOX_HALF_X - origin_x) / resolution))
                 col_max = min(width - 1, int((cx + BOX_HALF_X - origin_x) / resolution))
-                
                 row_min = max(0, int((cy - BOX_HALF_Y - origin_y) / resolution))
                 row_max = min(height - 1, int((cy + BOX_HALF_Y - origin_y) / resolution))
-                
                 grid[row_min:row_max + 1, col_min:col_max + 1] = 100
-            else:
-                # cubes
-                col = int((cx - origin_x) / resolution)
                 
+            else:
+                col = int((cx - origin_x) / resolution)
                 row = int((cy - origin_y) / resolution)
                 if 0 <= row < height and 0 <= col < width:
                     grid[row, col] = 100
@@ -119,6 +172,7 @@ class MapInflator(Node):
                 inflated |= shifted
         grid[inflated] = 100
 
+        # cost inflation for all obstacles
         cost_radius_cells = int(self.cost_inflation_radius_m / resolution)
         for dr in range(-cost_radius_cells, cost_radius_cells + 1):
             for dc in range(-cost_radius_cells, cost_radius_cells + 1):
@@ -135,9 +189,14 @@ class MapInflator(Node):
                 elif dc < 0:
                     shifted[:, dc:] = False
                 cost = int(90 * (1.0 - dist / cost_radius_cells))
-               
                 update_mask = shifted & ~inflated & (grid >= -1) & (grid < cost)
                 grid[update_mask] = cost
+
+        # Corridor cost for boxes
+        for candidate in box_candidates:
+            self._paint_box_corridor_cost(
+                grid, candidate, resolution, origin_x, origin_y, width, height, inflated
+            )
 
         out = OccupancyGrid()
         out.header.frame_id = self.base_grid.header.frame_id

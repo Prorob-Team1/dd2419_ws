@@ -679,6 +679,8 @@ environments:
         build: hb0f4dca_0
       - conda: src/detection
         build: hb0f4dca_0
+      - conda: src/fast_odom
+        build: hb0f4dca_0
       - conda: src/learning_tf2_py
         build: hb0f4dca_0
       - conda: src/librealsense
@@ -1290,6 +1292,8 @@ environments:
         build: h60d57d3_0
       - conda: src/detection
         build: h60d57d3_0
+      - conda: src/fast_odom
+        build: h60d57d3_0
       - conda: src/learning_tf2_py
         build: h60d57d3_0
       - conda: src/napping
@@ -1866,6 +1870,8 @@ environments:
       - conda: src/brian
         build: ha41a7fa_0
       - conda: src/detection
+        build: ha41a7fa_0
+      - conda: src/fast_odom
         build: ha41a7fa_0
       - conda: src/learning_tf2_py
         build: ha41a7fa_0
@@ -15365,6 +15371,75 @@ packages:
   license: Apache-2.0
   size: 471005
   timestamp: 1768989696861
+- conda: src/fast_odom
+  name: ros-jazzy-fast-odom
+  version: 0.0.0
+  build: h60d57d3_0
+  subdir: osx-arm64
+  variants:
+    target_platform: osx-arm64
+  depends:
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-visualization-msgs
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-nav-msgs
+  - ros-jazzy-rclcpp
+  - ros-jazzy-tf-transformations
+  - ros-jazzy-tf2-ros
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libcxx >=22
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
+- conda: src/fast_odom
+  name: ros-jazzy-fast-odom
+  version: 0.0.0
+  build: ha41a7fa_0
+  subdir: win-64
+  variants:
+    c_compiler: vs2022
+    cxx_compiler: vs2022
+    target_platform: win-64
+  depends:
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-visualization-msgs
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-nav-msgs
+  - ros-jazzy-rclcpp
+  - ros-jazzy-tf-transformations
+  - ros-jazzy-tf2-ros
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
+- conda: src/fast_odom
+  name: ros-jazzy-fast-odom
+  version: 0.0.0
+  build: hb0f4dca_0
+  subdir: linux-64
+  variants:
+    target_platform: linux-64
+  depends:
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-visualization-msgs
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-nav-msgs
+  - ros-jazzy-rclcpp
+  - ros-jazzy-tf-transformations
+  - ros-jazzy-tf2-ros
+  - ros2-distro-mutex >=0.13,<0.14
+  - ros2-distro-mutex >=0.13.0,<0.14.0a0
+  - libgcc >=15
+  - libgcc >=15
+  - libstdcxx >=15
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.23,<3
+  license: LicenseRef-MIT
 - conda: https://prefix.dev/robostack-jazzy/linux-64/ros-jazzy-fastcdr-2.2.5-np2py312h2ed9cc7_14.conda
   sha256: 3ac561ca2fe4b128f27aca8aa16ea67937c82bce7adf874ad7cd2730e1119a1d
   md5: a50c063080d7508d868127bc8d9f0060
@@ -16847,7 +16922,7 @@ packages:
   - numpy >=1.23,<3
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=22
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
 - conda: src/learning_tf2_py
   name: ros-jazzy-learning-tf2-py
@@ -18500,7 +18575,7 @@ packages:
   - ros-jazzy-std-msgs
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=22
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
   license: LicenseRef-MIT
 - conda: src/rc_control
@@ -20503,7 +20578,7 @@ packages:
   depends:
   - ros2-distro-mutex >=0.13,<0.14
   - ros2-distro-mutex >=0.13.0,<0.14.0a0
-  - libcxx >=22
+  - libcxx >=21
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
   license: LicenseRef-MIT
