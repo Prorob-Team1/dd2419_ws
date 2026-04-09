@@ -585,14 +585,9 @@ class GoalIsClosestCondition(Behaviour):
     def __init__(self, node: Brain):
         super().__init__(__class__.__name__)
         self.node = node
+        self.last_valid_candidate_count = 0
 
-    def update(self):
-        if self.node.has_backed_up:
-            return Status.SUCCESS
-        else:
-            if self.node.debugging:
-                self.node.get_logger().info("fail back up")
-            return Status.FAILURE
+
 
 class BackedUpCondition(Behaviour):
     def __init__(self, node: Brain):
@@ -958,6 +953,36 @@ class ExploreB(Nav2GoalB):
 class Nav2CubeB(Nav2GoalB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, CUBE_GOAL)
+        self.last_valid_candidate_count = 0
+
+    def update(self):
+        # Make sure goal is the closest available cube
+        if self.last_valid_candidate_count == len(self.node.valid_candidates):
+            # only check candidate list if it has changed
+            return self.current_status
+        self.last_valid_candidate_count = len(self.node.valid_candidates)
+
+        if self.node.goal_provider.target_obj is None:
+            # If no target selected
+            return self.current_status
+        robot_pose = self.node.get_robot_pose()
+        if robot_pose is not None:
+            r_x, r_y, _ = robot_pose
+            closest_candidate = self.node.goal_provider.target_obj
+            closest_dist = np.inf
+            for candidate in self.node.valid_candidates:
+                if candidate.class_name != ObjectClassification.BOX.value:
+                    x = candidate.pose.position.x
+                    y = candidate.pose.position.y
+                    dist = (x-r_x)**2 + (y-r_y)**2
+                    if dist < closest_dist:
+                        closest_candidate = candidate
+                        closest_dist = dist
+
+            if closest_candidate.id != self.node.goal_provider.target_obj.id:
+                # closer object found
+                self.current_status = Status.FAILURE
+        return self.current_status
 
     def update_postcondition(self):
         self.node.in_dropoff_range = False
