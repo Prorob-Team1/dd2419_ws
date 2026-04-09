@@ -205,7 +205,9 @@ class Navigator(Node):
 
             if self._aligning_parking and (abs(heading_err) < math.radians(10) or park_dist < 0.08):
                 self._aligning_parking = False
-            elif not self._aligning_parking and abs(heading_err) > math.radians(20):
+            elif not self._aligning_parking and abs(heading_err) > math.radians(20) and park_dist > 0.15:
+                
+
                 self._aligning_parking = True
 
             if self._aligning_parking:
