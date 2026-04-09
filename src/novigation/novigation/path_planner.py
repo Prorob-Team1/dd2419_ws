@@ -149,8 +149,9 @@ class PathPlannerNode(Node):
             
             snapped = self.find_nearest_free_cell(goal_grid)
 
-            
             plan_grid = snapped
+            if snapped != goal_grid:
+                self.get_logger().warn(f'Goal {goal_grid} is occupied, snapped to nearest free cell {snapped}')
 
             self.get_logger().info(f'Planning from {start_grid} to {plan_grid}')
             t0 = self.get_clock().now()
@@ -175,16 +176,18 @@ class PathPlannerNode(Node):
             goal_handle.publish_feedback(feedback_msg)
 
             # Track to radius around goal
-            goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y # snapped_wx, snapped_wy
             rate = self.create_rate(10)
 
             if goal_label == ObjectClassification.BOX.value:
+                goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y
                 goal_tolerance = 0.3
                 use_parking = True
             elif goal_label == "":  # explore goal
+                goal_x, goal_y = self.grid_to_world(*snapped)
                 goal_tolerance = 0.3
                 use_parking = False
             else:  # cube goal
+                goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y
                 goal_tolerance = 0.2
                 use_parking = True
             self.parking_pub.publish(Bool(data=use_parking))
