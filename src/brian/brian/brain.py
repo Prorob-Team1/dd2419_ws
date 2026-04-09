@@ -50,6 +50,8 @@ EXPLORE_GOAL = 0
 CUBE_GOAL = 1
 BOX_GOAL = 2
 
+MAX_NAV_ATTEMPTS = 5
+
 def format_goal_text(goal_type: int, target_obj: ObjectCandidateMsg):
     # Informative and fancy message string :)))))
     message = ""
@@ -237,10 +239,6 @@ class GoalProvider:
                     if self.target_obj.id == obj.id:
                         # Do not try the same goal two times in a row
                         continue
-                if obj.id in self.nav_attempts.keys():
-                    if self.nav_attempts[obj.id] > 5:
-                        # Give up after 5 failed attempts
-                        continue
 
                 closest_pose = pose
                 closest_dist = new_dist
@@ -391,6 +389,10 @@ class Brain(Node):
         for candidate in msg.candidates:
             candidate: ObjectCandidateMsg
             if candidate.picked_up == False or candidate.class_name == ObjectClassification.BOX.value:
+                if candidate.id in self.goal_provider.nav_attempts.keys():
+                    if self.goal_provider.nav_attempts[candidate.id] > MAX_NAV_ATTEMPTS:
+                        # Ignore cube after 5 failed navigation attempts
+                        continue
                 valid_candidates.append(candidate)
                 if candidate.class_name != ObjectClassification.BOX.value:
                     self.cube_found = True
