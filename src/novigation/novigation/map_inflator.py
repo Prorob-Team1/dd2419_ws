@@ -18,9 +18,9 @@ class MapInflator(Node):
 
         self.inflation_radius_m = 0.25
         self.cost_inflation_radius_m = 0.4
-        self.box_cost_radius_m = 0.7
+        self.box_cost_radius_m = 1
 
-        self.base_grid = None    
+        self.base_grid = None
         self.candidates = []
         self.goal_candidate = None
 
@@ -36,21 +36,20 @@ class MapInflator(Node):
 
         self.map_pub = self.create_publisher(OccupancyGrid, '/map', 10)
 
+        self.create_timer(0.2, self._rebuild_and_publish)  # rebuild at 5 Hz
+
         self.get_logger().info(
             f'Map inflator initialized, inflation_radius={self.inflation_radius_m:.3f}m'
         )
 
     def grid_callback(self, msg: OccupancyGrid):
         self.base_grid = msg
-        self._rebuild_and_publish()
 
     def candidates_callback(self, msg: ObjectCandidateArrayMsg):
         self.candidates = list(msg.candidates)
-        self._rebuild_and_publish()
 
     def goal_candidate_callback(self, msg: ObjectCandidateMsg):
         self.goal_candidate = msg
-        self._rebuild_and_publish()
 
     def _yaw_from_quat(self, q):
         return np.arctan2(2.0 * (q.w * q.z + q.x * q.y),
@@ -89,11 +88,22 @@ class MapInflator(Node):
         region_inflated = inflated_mask[r_lo:r_hi + 1, c_lo:c_hi + 1]
         free = (~region_inflated) & (dist <= max_dist) & (dist > 1e-6)
 
-        corridor_half_length = BOX_HALF_X + 0.02
-        in_corridor = (np.abs(local_x) < corridor_half_length)
+        corridor_half_length = BOX_HALF_X
+        fade_width = 0.2
 
-        block_mask = free & ~in_corridor & (region < 95)
-        region[block_mask] = 95
+        abs_local_x = np.abs(local_x)
+
+        in_corridor = abs_local_x < corridor_half_length
+        in_fade = (abs_local_x >= corridor_half_length) & (abs_local_x < corridor_half_length + fade_width)
+        in_block = abs_local_x >= corridor_half_length + fade_width
+
+        fade_cost = (80 * (abs_local_x - corridor_half_length) / fade_width).astype(np.int8)
+
+        block_mask = free & in_block & (region < 80)
+        region[block_mask] = 80
+
+        fade_mask = free & in_fade & (fade_cost > region)
+        region[fade_mask] = fade_cost[fade_mask]
 
         clear_mask = free & in_corridor & (region > 0) & (region < 100)
         region[clear_mask] = 0
