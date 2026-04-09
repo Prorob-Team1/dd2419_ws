@@ -147,46 +147,9 @@ class PathPlannerNode(Node):
             goal_grid = self.world_to_grid(goal_pose)
 
             
-            snapped = self.find_nearest_free_cell(goal_grid, start_grid)
+            snapped = self.find_nearest_free_cell(goal_grid)
 
-            """
-            # Use a straight-line approach tail when orientation is explicitly set
-            q = [
-                goal_pose.pose.orientation.x,
-                goal_pose.pose.orientation.y,
-                goal_pose.pose.orientation.z,
-                goal_pose.pose.orientation.w
-            ]
-            goal_yaw = euler_from_quaternion(q)[2]
-            use_tail = goal_yaw != 0
             
-            
-            if use_tail:
-                # Find tail
-                tail_length = 0.5
-                tail_path = find_tail(self.map_data, goal_pose, tail_length)
-            
-                self.prev_tail = tail_path
-                snap_ref_grid = tail_path[0]
-                snapped = self.find_nearest_free_cell(snap_ref_grid, start_grid)
-                snapped_from_goal = self.find_nearest_free_cell(goal_grid, snap_ref_grid)
-                #tail_path[-1] = snapped_from_goal
-            else:
-                snapped = self.find_nearest_free_cell(goal_grid, start_grid)
-                snapped_from_goal = snapped
-                self.prev_tail = None
-
-            if snapped is None or snapped_from_goal is None:
-                self.get_logger().warn('No free cell found near goal')
-                goal_handle.abort()
-                return self._make_result(False)
-
-            snapped_wx, snapped_wy = self.grid_to_world(snapped_from_goal[0], snapped_from_goal[1])
-            goal_in_obstacle = (snapped != goal_grid)
-            if goal_in_obstacle:
-                self.get_logger().info(f'Goal in obstacle, snapped from {goal_grid} to {snapped}')
-
-            """
             plan_grid = snapped
 
             self.get_logger().info(f'Planning from {start_grid} to {plan_grid}')
@@ -353,7 +316,8 @@ class PathPlannerNode(Node):
             return False
         return True
 
-    def find_nearest_free_cell(self, goal, start):
+    def find_nearest_free_cell(self, goal):
+        """BFS search"""
         width = self.map_data.info.width
         height = self.map_data.info.height
         map_data = self.map_data.data
@@ -361,18 +325,25 @@ class PathPlannerNode(Node):
         if map_data[goal[0] * width + goal[1]] != 100:
             return goal
 
-        gr, gc = goal
-        sr, sc = start
-        dr = sr - gr
-        dc = sc - gc
-        steps = max(abs(dr), abs(dc))
+        from collections import deque
+        visited = set()
+        queue = deque()
+        queue.append(goal)
+        visited.add(goal)
 
-        for i in range(1, steps + 1):
-            nr = gr + round(dr * i / steps)
-            nc = gc + round(dc * i / steps)
-            if 0 <= nr < height and 0 <= nc < width:
+        while queue:
+            r, c = queue.popleft()
+            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1),
+                           (-1, -1), (-1, 1), (1, -1), (1, 1)):
+                nr, nc = r + dr, c + dc
+                if (nr, nc) in visited:
+                    continue
+                if not (0 <= nr < height and 0 <= nc < width):
+                    continue
+                visited.add((nr, nc))
                 if map_data[nr * width + nc] != 100:
                     return (nr, nc)
+                queue.append((nr, nc))
 
         return None
 
