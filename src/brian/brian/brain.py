@@ -593,14 +593,6 @@ class Brain(Node):
             memory = False
         )
 
-class GoalIsClosestCondition(Behaviour):
-    # Continiously check if the current goal is the closest
-    def __init__(self, node: Brain):
-        super().__init__(__class__.__name__)
-        self.node = node
-        self.last_valid_candidate_count = 0
-
-
 
 class BackedUpCondition(Behaviour):
     def __init__(self, node: Brain):
