@@ -24,7 +24,7 @@ class Navigator(Node):
 
         self.lookahead_distance = 0.5
         self.target_speed = 0.3
-        self.goal_tolerance = 0.04
+        self.goal_tolerance = 0.10
         self.max_off_path_distance = 0.5
 
         self.wheel_base = 0.3135
@@ -121,15 +121,26 @@ class Navigator(Node):
         self.control_wheels(0.0, 0.0)
 
     def _advance_path_idx(self, path, rx, ry):
-        while self.path_idx < len(path) - 1:
-            sx, sy = path[self.path_idx]
-            ex, ey = path[self.path_idx + 1]
+        # Find the closest segment on the remaining path (never go backward).
+        # This handles off-path recovery: when the robot drifts, the current
+        # segment's projection may never cross 0.5, so we search all remaining
+        # segments for the geometrically nearest one.
+        best_idx = self.path_idx
+        best_dist = float('inf')
+        for i in range(self.path_idx, len(path) - 1):
+            sx, sy = path[i]
+            ex, ey = path[i + 1]
             dx, dy = ex - sx, ey - sy
-            t = ((rx - sx) * dx + (ry - sy) * dy) / (dx * dx + dy * dy + 1e-9)
-            if t > 0.5:
-                self.path_idx += 1
-            else:
-                break
+            seg_len2 = dx * dx + dy * dy + 1e-9
+            t = ((rx - sx) * dx + (ry - sy) * dy) / seg_len2
+            t = max(0.0, min(1.0, t))
+            cx = sx + t * dx
+            cy = sy + t * dy
+            dist = math.hypot(rx - cx, ry - cy)
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = i
+        self.path_idx = best_idx
 
     def control_loop(self):
         if self.path is None:
@@ -169,6 +180,13 @@ class Navigator(Node):
 
         goal_x, goal_y = path[-1]
         dist_to_goal = math.hypot(goal_x - rx, goal_y - ry)
+
+        if dist_to_goal < self.goal_tolerance:
+            self.get_logger().info(f"Goal reached (dist={dist_to_goal:.3f}m)")
+            self.path = None
+            self._parking_mode = False
+            self.control_wheels(0.0, 0.0)
+            return
 
         # Find lookahead point
         lookahead_pt = None
