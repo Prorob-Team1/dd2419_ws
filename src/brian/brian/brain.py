@@ -161,7 +161,7 @@ class GoalProvider:
                     for n in range(i-search_width, i+search_width):
                         for m in range(j-search_width, j+search_width):
                             try:
-                                if map_array[n][m] == 0:
+                                if map_array[n][m] >= 0:
                                     cost += 1
                             except IndexError:
                                 pass
