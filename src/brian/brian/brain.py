@@ -872,9 +872,11 @@ class Nav2GoalB(Behaviour):
 
         # Informative and fancy message :)))))
         goal_str = format_goal_text(self.goal_type, self.node.goal_provider.target_obj)
-        self.node.get_logger().info(
-            f"Sent {goal_str} goal at {ANSIEscClr.BOLD}({x=:.2f}, {y=:.2f}){ANSIEscClr.RESET}"
-        )
+        msg_str = f"Sent {goal_str} goal at {ANSIEscClr.BOLD}({x=:.2f}, {y=:.2f}){ANSIEscClr.RESET}"
+        if self.goal_type == CUBE_GOAL:
+            if self.node.goal_provider.target_obj.id in self.node.goal_provider.nav_attempts.keys():
+                msg_str += f" (attempt no.{self.node.goal_provider.nav_attempts[self.node.goal_provider.target_obj.id]})"
+        self.node.get_logger().info(msg_str)
         goal = Navigation.Goal()
         goal.goal.pose.position.x = x
         goal.goal.pose.position.y = y
@@ -938,6 +940,10 @@ class Nav2GoalB(Behaviour):
                 self.node.get_logger().error(
                     f"{self.name}: Navigation failed with status: {response.status}"
                 )
+                # I assume this is because we cancelled a goal (for some reason, maybe another closer cube was found)
+                if self.goal_type == CUBE_GOAL and self.node.goal_provider.target_obj is not None:
+                    if self.node.goal_provider.target_obj.id in self.node.goal_provider.nav_attempts.keys():
+                        self.node.goal_provider.nav_attempts[self.node.goal_provider.target_obj.id] -= 1 # don't count this as a nav attempt
                 self.current_status = Status.FAILURE
             
             self.nav_goal_handle = None
