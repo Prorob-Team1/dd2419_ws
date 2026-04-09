@@ -143,6 +143,7 @@ class GoalProvider:
 
     def find_frontiers(self, map_array):
         frontier_cells = []
+        costs = []
         def is_frontier(i, j) -> bool:
             for k in range(i - 1, i + 2):
                 for l in range(j - 1, j + 2):
@@ -154,7 +155,18 @@ class GoalProvider:
             for j in range(1, w - 1):
                 if map_array[i][j] == 0 and is_frontier(i, j):
                     frontier_cells.append((i, j))
-        return frontier_cells
+                    cost = 0
+                    # Count the number of "free space" (aka "seen") cells near the frontier cell
+                    search_width = 30
+                    for n in range(i-search_width, i+search_width):
+                        for m in range(j-search_width, j+search_width):
+                            try:
+                                if map_array[n][m] == 0:
+                                    cost += 1
+                            except IndexError:
+                                pass
+                    costs.append(cost)
+        return np.array(frontier_cells), np.array(costs)
 
     def get_explore_goal(self, robot_pose, map_obj: OccupancyGrid, candidates):
         if map_obj is None or len(map_obj.data) < 1:
@@ -165,7 +177,7 @@ class GoalProvider:
             return None
 
         r = np.random.rand()
-        frontiers = np.array(self.find_frontiers(map_arr))
+        frontiers, costs = self.find_frontiers(map_arr)
         if frontiers.size == 0:
             if len(candidates) < 1:
                 self.logger.warning("No frontiers available, returning fallback goal (start position)")
@@ -196,12 +208,13 @@ class GoalProvider:
         grid_row = int(min(grid_y, map_obj.info.height - 1))
         
         rs = np.sum(([grid_row, grid_col] - frontiers) ** 2, axis=1)
-        mask = (rs > 0.5 / map_obj.info.resolution)
+        mask = (rs > 0.5 / map_obj.info.resolution) # we want frontiers that are further away than 0.5 m
         frontiers = frontiers[mask]
+        costs = costs[mask]
         if frontiers.size == 0:
             self.logger.warning("No distant frontiers available, returning fallback goal")
             return robot_x, robot_y, robot_yaw
-        idx = np.random.choice(len(frontiers))
+        idx = np.argmin(costs) # idx = np.random.choice(len(frontiers))
         row, col = frontiers[idx]
         x = col * map_obj.info.resolution + map_obj.info.origin.position.x
         y = row * map_obj.info.resolution + map_obj.info.origin.position.y
@@ -995,6 +1008,8 @@ class Nav2BoxB(Nav2GoalB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, BOX_GOAL)
 
+    # TODO: add update() to work like in Nav2CubeB but for box goals
+
     def update_postcondition(self):
         self.node.in_pickup_range = False
         if self.current_status == Status.SUCCESS:
@@ -1093,9 +1108,9 @@ class MakeResultsB(Behaviour):
     def terminate(self, new_status):
         pass
 
-
     def initialise(self):
         self.node.get_logger().info("TIME'S UP, MAGGOT")
+        # TODO: Logic that compares our output map with the true map (if we want it, can check it manually as well)
         pass
 
 def main():
