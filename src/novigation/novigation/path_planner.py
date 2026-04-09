@@ -219,7 +219,7 @@ class PathPlannerNode(Node):
                 goal_tolerance = 0.3
                 use_parking = True
             elif goal_label == "":  # explore goal
-                goal_tolerance = 0.5
+                goal_tolerance = 0.3
                 use_parking = False
             else:  # cube goal
                 goal_tolerance = 0.2
