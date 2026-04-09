@@ -322,7 +322,7 @@ class PathPlannerNode(Node):
                 if nb in closed_set:
                     continue
 
-                tentative_g = cur_g + cost + cell_cost * 0.05
+                tentative_g = cur_g + cost + cell_cost * 0.2
 
                 if nb not in g_score or tentative_g < g_score[nb]:
                     came_from[nb] = current
