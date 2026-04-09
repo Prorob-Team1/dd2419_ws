@@ -50,29 +50,31 @@ EXPLORE_GOAL = 0
 CUBE_GOAL = 1
 BOX_GOAL = 2
 
-def format_goal_text(goal_type: int, target_cube: ObjectCandidateMsg):
+def format_goal_text(goal_type: int, target_obj: ObjectCandidateMsg):
     # Informative and fancy message string :)))))
     message = ""
     if goal_type == EXPLORE_GOAL:
         message = f"{ANSIEscClr.BOLD}EXPLORATION{ANSIEscClr.RESET}"
     elif goal_type == CUBE_GOAL:
         clr = ""
-        if target_cube.class_name == ObjectClassification.CUBE_RED.value: clr = ANSIEscClr.RED
-        elif target_cube.class_name == ObjectClassification.CUBE_GREEN.value: clr = ANSIEscClr.GREEN
-        elif target_cube.class_name == ObjectClassification.CUBE_BLUE.value: clr = ANSIEscClr.BLUE
-        elif target_cube.class_name == ObjectClassification.CUBE_WOOD.value: clr = ANSIEscClr.WOOD
+        if target_obj.class_name == ObjectClassification.CUBE_RED.value: clr = ANSIEscClr.RED
+        elif target_obj.class_name == ObjectClassification.CUBE_GREEN.value: clr = ANSIEscClr.GREEN
+        elif target_obj.class_name == ObjectClassification.CUBE_BLUE.value: clr = ANSIEscClr.BLUE
+        elif target_obj.class_name == ObjectClassification.CUBE_WOOD.value: clr = ANSIEscClr.WOOD
         else: clr = ANSIEscClr.UNKNOWN
         message = f"{ANSIEscClr.BOLD}{clr}CUBE{ANSIEscClr.RESET}"
     elif goal_type == BOX_GOAL:
         message = f"{ANSIEscClr.BOLD}{ANSIEscClr.GRAY}BOX{ANSIEscClr.RESET}"
     return message    
-    
+
 class GoalProvider:
     """Provides exploration/object goals"""
     def __init__(self, logger, start_pose):
         self.logger = logger
         self.start_pose = start_pose
-        self.target_cube = None
+        self.target_obj = None
+
+        self.nav_attempts = dict()
 
     def create_goal_marker(self, x: float, y: float, yaw: float, goal_type: int):
         goal_marker = Marker()
@@ -231,9 +233,15 @@ class GoalProvider:
             ]
             new_dist = self.calc_dist(robot_pose, pose)
             if new_dist < closest_dist:
-                if self.target_cube is not None:
-                    if self.target_cube.id == obj.id:
+                if self.target_obj is not None:
+                    if self.target_obj.id == obj.id:
+                        # Do not try the same goal two times in a row
                         continue
+                if obj.id in self.nav_attempts.keys():
+                    if self.nav_attempts[obj.id] > 5:
+                        # Give up after 5 failed attempts
+                        continue
+
                 closest_pose = pose
                 closest_dist = new_dist
                 closest_obj = obj
@@ -255,8 +263,14 @@ class GoalProvider:
             yaw = 0
 
         self.logger.debug(f"Created object goal at (x={x:.2f},y={y:.2f},yaw={yaw:.2f})")
-        if goal_type == CUBE_GOAL:
-            self.target_cube = closest_obj
+        if goal_type != EXPLORE_GOAL:
+            self.target_obj = closest_obj
+            if goal_type != BOX_GOAL:
+                # We assume that we can always navigate to boxes
+                if closest_obj.id in self.nav_attempts.keys():
+                    self.nav_attempts[closest_obj.id] += 1
+                else:
+                    self.nav_attempts[closest_obj.id] = 1
         return x, y, yaw
 
     def calc_dist(self, pose1: list[float], pose2: list[float]):
@@ -392,10 +406,11 @@ class Brain(Node):
         self.potential_candidates = potential_candidates
 
     def update_caught_cubes(self):
-        if self.goal_provider.target_cube is not None:
-            self.caught_cubes.candidates.append(self.goal_provider.target_cube)
-            self.caught_cubes.header.stamp = self.get_clock().now().to_msg()
-            self.caught_cubes_publisher.publish(self.caught_cubes)
+        if self.goal_provider.target_obj is not None:
+            if self.goal_provider.target_obj.class_name != ObjectClassification.BOX.value:
+                self.caught_cubes.candidates.append(self.goal_provider.target_obj)
+                self.caught_cubes.header.stamp = self.get_clock().now().to_msg()
+                self.caught_cubes_publisher.publish(self.caught_cubes)
 
     def get_start_pose(self):
         if self.start_pose is not None:
@@ -563,6 +578,20 @@ class Brain(Node):
             memory = False
         )
 
+class GoalIsClosestCondition(Behaviour):
+    # Continiously check if the current goal is the closest
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+
+    def update(self):
+        if self.node.has_backed_up:
+            return Status.SUCCESS
+        else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail back up")
+            return Status.FAILURE
+
 class BackedUpCondition(Behaviour):
     def __init__(self, node: Brain):
         super().__init__(__class__.__name__)
@@ -604,7 +633,6 @@ class CubeFoundCondition(Behaviour):
             if self.node.debugging:
                 self.node.get_logger().info("fail find cube")
             return Status.FAILURE
-            
 
 class InPickupRangeCondition(Behaviour):
 
@@ -650,7 +678,7 @@ class CubeReleasedCondition(Behaviour):
             if self.node.debugging:
                 self.node.get_logger().info("fail release")
             return Status.FAILURE
-        
+
 class TimeIsUpCondition(Behaviour):
 
     def __init__(self, node: Brain):
@@ -778,7 +806,7 @@ class ArmB(Behaviour):
             self.current_status = Status.FAILURE
             self.node.get_logger().warning("Never got a valid response from the arm.")
             return
-        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_cube)
+        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_obj)
 
         message = ""
         if response.success:
@@ -797,7 +825,7 @@ class ArmB(Behaviour):
 
     def update_postcondition(self):
         pass
-        
+
 class Nav2GoalB(Behaviour):
 
     def __init__(self, node: Brain, name, goal_type, done_status=Status.SUCCESS):
@@ -841,7 +869,7 @@ class Nav2GoalB(Behaviour):
         self.node.goal_marker_publisher.publish(marker)
 
         # Informative and fancy message :)))))
-        goal_str = format_goal_text(self.goal_type, self.node.goal_provider.target_cube)
+        goal_str = format_goal_text(self.goal_type, self.node.goal_provider.target_obj)
         self.node.get_logger().info(
             f"Sent {goal_str} goal at {ANSIEscClr.BOLD}({x=:.2f}, {y=:.2f}){ANSIEscClr.RESET}"
         )
@@ -850,23 +878,9 @@ class Nav2GoalB(Behaviour):
         goal.goal.pose.position.y = y
         q = quaternion_from_euler(0.0,0.0,yaw)
         
-        best_candidate = None
-        if self.goal_type == CUBE_GOAL and self.node.goal_provider.target_cube is not None:
-            goal.goal_label = self.node.goal_provider.target_cube.class_name
-            best_candidate = self.node.goal_provider.target_cube
-        elif self.goal_type == BOX_GOAL:
-            min_dist = np.inf
-            for candidate in self.node.valid_candidates:
-                if candidate.class_name != ObjectClassification.BOX.value:
-                    continue
-                x_c = candidate.pose.position.x
-                y_c = candidate.pose.position.y
-                dist = (x-x_c)**2 + (y-y_c)**2 
-                if dist < min_dist:
-                    min_dist = dist
-                    goal.goal_label = candidate.class_name
-                    best_candidate = candidate
-        if best_candidate is not None:
+        if self.goal_type != EXPLORE_GOAL and self.node.goal_provider.target_obj is not None:
+            goal.goal_label = self.node.goal_provider.target_obj.class_name
+            best_candidate = self.node.goal_provider.target_obj
             self.node.goal_obj_publisher.publish(best_candidate)
         else:
             self.node.goal_obj_publisher.publish(ObjectCandidateMsg(id=""))
@@ -876,10 +890,7 @@ class Nav2GoalB(Behaviour):
         goal.goal.pose.orientation.w = q[3]
         goal.goal.header.frame_id = "map"
         goal.goal.header.stamp = self.node.get_clock().now().to_msg()
-        #if self.goal_type == BOX_GOAL:
-        #    goal.goal.goal_label = "BOX"
-        #elif self.goal_type == CUBE_GOAL:
-        #    goal.goal.goal_label = "CUBE"
+
         if self.node.only_dummy_behaviors:
             self.node.dummy_client.wait_for_server()
             nav_request_future = self.node.dummy_client.send_goal_async(
@@ -907,7 +918,7 @@ class Nav2GoalB(Behaviour):
         result_future = self.nav_goal_handle.get_result_async()
         result_future.add_done_callback(self.nav_done_callback)
 
-        goal_str = format_goal_text(self.goal_type, self.node.goal_provider.target_cube)
+        goal_str = format_goal_text(self.goal_type, self.node.goal_provider.target_obj)
         message = f"--> Navigating to {goal_str}"
         if self.goal_type == EXPLORE_GOAL:
             message += "-goal"
