@@ -946,7 +946,7 @@ class Nav2CubeB(Nav2GoalB):
                 goal_str = format_goal_text(self.goal_type, closest_candidate)
                 current_target_str = format_goal_text(self.goal_type, self.node.goal_provider.target_obj)
                 self.node.get_logger().info(
-                    f"--> Found a {goal_str} closer to me than the current target {current_target_str}, re-planning..."
+                    f"--> Found a {goal_str} closer than my target {current_target_str}, re-planning..."
                 )
                 self.current_status = Status.FAILURE
         return self.current_status
@@ -977,6 +977,7 @@ class ArmB(Behaviour):
         self.node = node
         self.current_status = Status.RUNNING
         self.grabbing = grabbing
+        self.target_cube = None
 
 
     def terminate(self, new_status):
@@ -1002,6 +1003,7 @@ class ArmB(Behaviour):
         
         # Update grasp attempts if grabbing
         if self.grabbing:
+            self.target_cube = self.node.goal_provider.target_obj
             if self.node.goal_provider.target_obj.id in self.node.grasp_attempts.keys():
                 self.node.grasp_attempts[self.node.goal_provider.target_obj.id] += 1
             else:
@@ -1019,7 +1021,7 @@ class ArmB(Behaviour):
             self.current_status = Status.FAILURE
             self.node.get_logger().warning("Never got a valid response from the arm.")
             return
-        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_obj)
+        goal_msg = format_goal_text(CUBE_GOAL, self.target_cube)
 
         message = ""
         if response.success:
