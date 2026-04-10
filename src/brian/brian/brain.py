@@ -51,6 +51,7 @@ CUBE_GOAL = 1
 BOX_GOAL = 2
 
 MAX_NAV_ATTEMPTS = 5
+MAX_GRAB_ATTEMPTS = 2
 
 def format_goal_text(goal_type: int, target_obj: ObjectCandidateMsg):
     # Informative and fancy message string :)))))
@@ -311,6 +312,9 @@ class Brain(Node):
 
         self.has_backed_up = True
 
+        # Track grasp attempts
+        self.grasp_attempts = dict()
+
         # Map / object tracking
         self.map = None
         self.valid_candidates: list[ObjectCandidateMsg] = []
@@ -402,9 +406,13 @@ class Brain(Node):
         for candidate in msg.candidates:
             candidate: ObjectCandidateMsg
             if candidate.picked_up == False or candidate.class_name == ObjectClassification.BOX.value:
+                # Ignore cube after X failed navigation attempts
                 if candidate.id in self.goal_provider.nav_attempts.keys():
                     if self.goal_provider.nav_attempts[candidate.id] > MAX_NAV_ATTEMPTS:
-                        # Ignore cube after 5 failed navigation attempts
+                        continue
+                # Ignore cube after Y failed grasp attempts
+                if candidate.id in self.grasp_attempts.keys():
+                    if self.grasp_attempts[candidate.id] > MAX_GRAB_ATTEMPTS:
                         continue
                 valid_candidates.append(candidate)
                 if candidate.class_name != ObjectClassification.BOX.value:
@@ -989,9 +997,16 @@ class ArmB(Behaviour):
         client = self.node.dropping_client
         if self.grabbing:
             client = self.node.grabbing_client
-        if self.node.only_dummy_behaviors or True:
+        if self.node.only_dummy_behaviors:
             client = self.node.dummy_arm_client
-            
+        
+        # Update grasp attempts if grabbing
+        if self.grabbing:
+            if self.node.goal_provider.target_obj.id in self.node.grasp_attempts.keys():
+                self.node.grasp_attempts[self.node.goal_provider.target_obj.id] += 1
+            else:
+                self.node.grasp_attempts[self.node.goal_provider.target_obj.id] = 1
+
         client.wait_for_service(timeout_sec=1)
         if self.node.debugging:
             self.node.get_logger().info("Sent request to arm")
@@ -1009,15 +1024,17 @@ class ArmB(Behaviour):
         message = ""
         if response.success:
             self.current_status = Status.SUCCESS
-            message = "Successfully dropped "
+            message = f"{ANSIEscClr.GREEN}Successfully{ANSIEscClr.RESET} dropped "
             if self.grabbing:
-                message = "Successfully grabbed "
+                message = f"{ANSIEscClr.GREEN}Successfully{ANSIEscClr.RESET} grabbed "
         else:
             self.current_status = Status.FAILURE
-            message = "Failed to drop "
+            message = f"{ANSIEscClr.RED}Failed{ANSIEscClr.RESET} to drop "
             if self.grabbing:
-                message = "Failed to grab "
+                message = f"{ANSIEscClr.RED}Failed{ANSIEscClr.RESET} to grab "
         message += goal_msg
+        if self.grabbing:
+            message += f" (attempt no.{self.node.grasp_attempts[self.node.goal_provider.target_obj.id]})"
         self.node.get_logger().info(message)
         self.update_postcondition()
 
@@ -1032,9 +1049,12 @@ class GrabCubeB(ArmB):
         if self.current_status == Status.SUCCESS:
             self.node.update_caught_cubes()
             self.node.cube_in_gripper = True
+            self.node.has_backed_up = False 
         else:
             self.node.cube_in_gripper = False
-        self.node.has_backed_up = False 
+            if self.node.grasp_attempts[self.node.goal_provider.target_obj.id] > MAX_GRAB_ATTEMPTS:
+                self.node.has_backed_up = False
+
         self.node.detection_publisher.publish(Bool(data=True))
 
 class ReleaseCubeB(ArmB):
