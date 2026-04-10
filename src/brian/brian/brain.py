@@ -767,67 +767,6 @@ class DummyB(Behaviour):
     def update_postcondition(self):
         pass
 
-class ArmB(Behaviour):
-    def __init__(self, node: Brain, name, grabbing: bool):
-        super().__init__(name)
-        self.node = node
-        self.current_status = Status.RUNNING
-        self.grabbing = grabbing
-
-
-    def terminate(self, new_status):
-        self.node.get_logger().debug(f"Terminated arm action: {new_status}")
-        self.node.detection_publisher.publish(Bool(data=True))
-        pass # this could POTENTIALLY be a problem if we terminate in the middle of grasping
-
-    def update(self):
-        #self.logger.info(f"{self.name}: Checking feedback")
-        return self.current_status
-    
-    def initialise(self):
-        self.current_status = Status.RUNNING
-
-        self.node.detection_publisher.publish(Bool(data=False))
-
-        request = Trigger.Request()
-        client = self.node.dropping_client
-        if self.grabbing:
-            client = self.node.grabbing_client
-        if self.node.only_dummy_behaviors:
-            client = self.node.dummy_arm_client
-            
-        client.wait_for_service(timeout_sec=1)
-        if self.node.debugging:
-            self.node.get_logger().info("Sent request to arm")
-        future = client.call_async(request)
-        future.add_done_callback(self.arm_callback)
-
-    def arm_callback(self, future):
-        response = future.result()
-        if response is None:
-            self.current_status = Status.FAILURE
-            self.node.get_logger().warning("Never got a valid response from the arm.")
-            return
-        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_obj)
-
-        message = ""
-        if response.success:
-            self.current_status = Status.SUCCESS
-            message = "Successfully dropped "
-            if self.grabbing:
-                message = "Successfully grabbed "
-        else:
-            self.current_status = Status.FAILURE
-            message = "Failed to drop "
-            if self.grabbing:
-                message = "Failed to grab "
-        message += goal_msg
-        self.node.get_logger().info(message)
-        self.update_postcondition()
-
-    def update_postcondition(self):
-        pass
-
 class Nav2GoalB(Behaviour):
 
     def __init__(self, node: Brain, name, goal_type, done_status=Status.SUCCESS):
@@ -936,14 +875,18 @@ class Nav2GoalB(Behaviour):
             if response.status == GoalStatus.STATUS_SUCCEEDED:
                 self.node.get_logger().info(f"--> DONE!")
                 self.current_status = self.done_status
+
+            elif response.status == GoalStatus.STATUS_CANCELED:
+                if self.goal_type == CUBE_GOAL and self.node.goal_provider.target_obj is not None and response.status == GoalStatus.STATUS_CANCELED:
+                    if self.node.goal_provider.target_obj.id in self.node.goal_provider.nav_attempts.keys():
+                        self.node.goal_provider.nav_attempts[self.node.goal_provider.target_obj.id] -= 1 # don't count this as a nav attempt
+                self.current_status = Status.FAILURE
             else:
                 self.node.get_logger().error(
                     f"{self.name}: Navigation failed with status: {response.status}"
                 )
-                # I assume this is because we cancelled a goal (for some reason, maybe another closer cube was found)
-                if self.goal_type == CUBE_GOAL and self.node.goal_provider.target_obj is not None:
-                    if self.node.goal_provider.target_obj.id in self.node.goal_provider.nav_attempts.keys():
-                        self.node.goal_provider.nav_attempts[self.node.goal_provider.target_obj.id] -= 1 # don't count this as a nav attempt
+        
+                
                 self.current_status = Status.FAILURE
             
             self.nav_goal_handle = None
@@ -992,6 +935,11 @@ class Nav2CubeB(Nav2GoalB):
 
             if closest_candidate.id != self.node.goal_provider.target_obj.id:
                 # closer object found
+                goal_str = format_goal_text(self.goal_type, closest_candidate)
+                current_target_str = format_goal_text(self.goal_type, self.node.goal_provider.target_obj)
+                self.node.get_logger().info(
+                    f"--> Found a {goal_str} closer to me than the current target {current_target_str}, re-planning..."
+                )
                 self.current_status = Status.FAILURE
         return self.current_status
 
@@ -1014,6 +962,67 @@ class Nav2BoxB(Nav2GoalB):
             self.node.in_dropoff_range = True
         else:
             self.node.in_dropoff_range = False
+
+class ArmB(Behaviour):
+    def __init__(self, node: Brain, name, grabbing: bool):
+        super().__init__(name)
+        self.node = node
+        self.current_status = Status.RUNNING
+        self.grabbing = grabbing
+
+
+    def terminate(self, new_status):
+        self.node.get_logger().debug(f"Terminated arm action: {new_status}")
+        self.node.detection_publisher.publish(Bool(data=True))
+        pass # this could POTENTIALLY be a problem if we terminate in the middle of grasping
+
+    def update(self):
+        #self.logger.info(f"{self.name}: Checking feedback")
+        return self.current_status
+    
+    def initialise(self):
+        self.current_status = Status.RUNNING
+
+        self.node.detection_publisher.publish(Bool(data=False))
+
+        request = Trigger.Request()
+        client = self.node.dropping_client
+        if self.grabbing:
+            client = self.node.grabbing_client
+        if self.node.only_dummy_behaviors or True:
+            client = self.node.dummy_arm_client
+            
+        client.wait_for_service(timeout_sec=1)
+        if self.node.debugging:
+            self.node.get_logger().info("Sent request to arm")
+        future = client.call_async(request)
+        future.add_done_callback(self.arm_callback)
+
+    def arm_callback(self, future):
+        response = future.result()
+        if response is None:
+            self.current_status = Status.FAILURE
+            self.node.get_logger().warning("Never got a valid response from the arm.")
+            return
+        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_obj)
+
+        message = ""
+        if response.success:
+            self.current_status = Status.SUCCESS
+            message = "Successfully dropped "
+            if self.grabbing:
+                message = "Successfully grabbed "
+        else:
+            self.current_status = Status.FAILURE
+            message = "Failed to drop "
+            if self.grabbing:
+                message = "Failed to grab "
+        message += goal_msg
+        self.node.get_logger().info(message)
+        self.update_postcondition()
+
+    def update_postcondition(self):
+        pass
 
 class GrabCubeB(ArmB):
     def __init__(self, node: Brain):
