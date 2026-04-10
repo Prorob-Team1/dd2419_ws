@@ -290,9 +290,6 @@ private:
         tf_broadcaster_->sendTransform(tf_msg);
     }
 
-    // -------------------------------------------------------------------------
-    // Utility functions
-    // -------------------------------------------------------------------------
     CloudT::Ptr laserScanToCloud(const sensor_msgs::msg::LaserScan::SharedPtr msg) const
     {
         CloudT::Ptr cloud(new CloudT());
