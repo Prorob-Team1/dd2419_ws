@@ -13,6 +13,7 @@ import threading
 from std_srvs.srv import Trigger
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from geometry_msgs.msg import Point
 
 
 
@@ -118,7 +119,7 @@ class ArmGraspingServer(Node):
 
         # State management
         self.stable_count = 0
-        self.STABLE_LIMIT = 18
+        self.STABLE_LIMIT = 6
         self.lost_target_count = 0
         
         # Current arm position 
@@ -128,7 +129,7 @@ class ArmGraspingServer(Node):
         self.hold_pos = [0.14, 0.0, 0.12] 
         self.drop_pos = [0.08, 0.0, 0.22]
         self.Y_LIMIT = 0.15 
-        self.Z_MIN = 0.12
+        self.Z_MIN = 0.14
         self.Z_MAX = 0.22
 
         self.state = "IDLE"
@@ -620,6 +621,20 @@ class ArmGraspingServer(Node):
                     self.stable_count = 0 
                     self.state = "TRACKING"
                 
+                    # Check if we are stuck reaching for an object that's too far away
+                    near_z_limit = self.curr_pos[2] > (self.Z_MAX - 0.003) or self.curr_pos[2] < (self.Z_MIN + 0.003)
+                    still_far_in_image = e_y < -self.DEADZONE
+
+                    if near_z_limit and still_far_in_image:
+                        # Send motor commands and sleep to allow for them to complete
+                        x_distance = -e_y * 1e-3
+                        y_distance = -e_x * 1e-5 
+                        msg = Point()
+                        msg.x = x_distance
+                        msg.y = y_distance
+                        self.move_publisher.publish(msg)
+                        time.sleep(1.5)
+                    
                     # === PID Calculation ===
                     self.pid_lateral.update(cx)
                     self.pid_depth.update(cy)
