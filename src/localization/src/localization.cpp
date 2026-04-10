@@ -254,13 +254,6 @@ private:
 		}
     }
 
-    // -------------------------------------------------------------------------
-    // Keyframe helpers
-    // -------------------------------------------------------------------------
-
-    // Accumulate scans into the anchor (keyframe 0).
-    // Each call transforms the scan to map frame and appends; the last call
-    // also runs the outlier filter over the full accumulated cloud.
     void accumulateAnchor(const CloudT::Ptr & scan_lidar, const Eigen::Matrix4f & T_map_lidar)
     {
         if (keyframes_.empty()) {
@@ -282,8 +275,6 @@ private:
         }
     }
 
-    // Returns true when the robot has moved far enough from the last keyframe
-    // to warrant adding a new one.
     bool shouldAddKeyframe(const Eigen::Matrix4f & T_map_lidar_now) const
     {
 		if (std::abs(ang_vel_) > maxAngularVelForGoodScan) {
@@ -294,7 +285,6 @@ private:
         return dt.norm() > kKeyframeDistanceM;
     }
 
-    // Add a single-scan keyframe using the given (ICP-corrected) pose.
     void addKeyframe(const CloudT::Ptr & scan_lidar, const Eigen::Matrix4f & T_map_lidar)
     {
         CloudT::Ptr cloud_map(new CloudT());
@@ -311,10 +301,6 @@ private:
         RCLCPP_DEBUG(this->get_logger(), "Keyframe added. Total: %zu", keyframes_.size());
     }
 
-    // Merge all keyframe clouds into one submap.
-    // For a 5x10 m environment this is fast enough to do every scan.
-    // If you ever scale to a larger space, switch to a radius filter here:
-    //   only include keyframes within N metres of the current robot position.
     CloudT::Ptr buildSubmap() const
     {
         CloudT::Ptr submap(new CloudT());
@@ -324,9 +310,6 @@ private:
         return submap;
     }
 
-    // -------------------------------------------------------------------------
-    // Periodic TF publish
-    // -------------------------------------------------------------------------
     void publishMapToOdom()
     {
         if (!is_initialized_) return;
@@ -338,9 +321,6 @@ private:
         tf_broadcaster_->sendTransform(tf_msg);
     }
 
-    // -------------------------------------------------------------------------
-    // Utility functions
-    // -------------------------------------------------------------------------
     CloudT::Ptr laserScanToCloud(const sensor_msgs::msg::LaserScan::SharedPtr msg) const
     {
         CloudT::Ptr cloud(new CloudT());
