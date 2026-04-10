@@ -3,6 +3,7 @@
 import cv2
 import numpy as np
 
+import pprint
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -78,6 +79,9 @@ class PointcloudFilter(Node):
     _SAT_THRESHOLD = 0.2  # normalized; ignore points with S below this for hue classification
     _V_PERCENTILE_LOW = 10   # ignore darkest %
     _V_PERCENTILE_HIGH = 90  # ignore brightest %
+    _S_PERCENTILE_LOW = 10   # ignore lowest % saturation for robust median (same trim as V for cubes)
+    _S_PERCENTILE_HIGH = 90  # ignore highest % saturation for robust median
+    _HUE_BOX_BLUEISH = (80, 100)  # OpenCV H (0–179); big-box branch if median hue in this band
     _MIN_COLOR_POINTS = 20   # winning color band must have at least this many points to qualify
     _MIN_CLUSTER_POINTS = 50  # cluster must have at least this many points to be classified at all
     _SAT_RB_MIN = 0.35  # minimum median saturation required for red/blue cubes
@@ -272,8 +276,8 @@ class PointcloudFilter(Node):
             # TODO: CHECK THIS
             # FLOOR GANG (cough if its not on the floor, ignore)
             if cluster_min_y > self.CAMERA_HEIGHT + 0.01:
-                # publish eliminated point cloud in red
-                eliminated_rgb = np.full((cluster_points.shape[0], 3), [1.0, 0.0, 0.0], dtype=np.float32)
+                # publish eliminated point cloud in cyan
+                eliminated_rgb = np.full((cluster_points.shape[0], 3), [0.0, 1.0, 1.0], dtype=np.float32)
                 r = (eliminated_rgb[:, 0] * 255).astype(np.uint32)
                 g = (eliminated_rgb[:, 1] * 255).astype(np.uint32)
                 b = (eliminated_rgb[:, 2] * 255).astype(np.uint32)
@@ -285,7 +289,7 @@ class PointcloudFilter(Node):
                 continue
             
             # cube detection
-            if cluster_size_x < self.YOU_THREE_MAKE_A_CUBE:
+            if False and cluster_size_x < self.YOU_THREE_MAKE_A_CUBE:
 
                 # Check if its too TALL
                 if cluster_min_y < -0.03 + self.CAMERA_HEIGHT:
@@ -325,8 +329,18 @@ class PointcloudFilter(Node):
 
             # WARNING: THIS IS NOT USED YET
             # check HSV values to verify if box is big and beautiful (aka it should be bigger than 0 yet lower than 18-22, novinhas moment)
-            if cluster_size_x > self.BIG_BEAUTIFUL_BOX_potential:
-                continue
+            if 0.35 > cluster_size_x > self.BIG_BEAUTIFUL_BOX_potential:
+                # DEBUG: big-box path — show cluster on /eliminated in yellow
+                eliminated_rgb = np.full((cluster_points.shape[0], 3), [1.0, 1.0, 0.0], dtype=np.float32)
+                er = (eliminated_rgb[:, 0] * 255).astype(np.uint32)
+                eg = (eliminated_rgb[:, 1] * 255).astype(np.uint32)
+                eb = (eliminated_rgb[:, 2] * 255).astype(np.uint32)
+                packed_dbg = (er << 16) | (eg << 8) | eb
+                rgb_float_dbg = packed_dbg.view(np.float32)
+                cloud_dbg = np.column_stack([cluster_points, rgb_float_dbg])
+                eliminated_msg_dbg = pc2.create_cloud(msg.header, msg.fields, cloud_dbg)
+                self._eliminated_pub.publish(eliminated_msg_dbg)
+
                 # Get RGB from point cloud (x,y,z,rgb packed as float32)
                 rgb_packed = cluster_full[:, 3].view(np.uint32)
                 r = (rgb_packed >> 16) & 255
@@ -337,15 +351,35 @@ class PointcloudFilter(Node):
                 hsv_points = cv2.cvtColor(rgb_for_cv2, cv2.COLOR_RGB2HSV).reshape(-1, 3)
 
                 # HSV channels: H = [:,0], S = [:,1], V = [:,2]. S, V are in [0,255]
-                average_saturation = np.mean(hsv_points[:, 1] / 255.0)
-                max_saturation = np.max(hsv_points[:, 1] / 255.0)
-                min_saturation = np.min(hsv_points[:, 1] / 255.0)
-                mean_saturation = np.mean(hsv_points[:, 1] / 255.0)
-                intensity = np.mean(hsv_points[:, 2] / 255.0)
-                self.get_logger().info(f'Max saturation: {max_saturation} | Min saturation: {min_saturation} | Mean saturation: {mean_saturation} | Intensity: {intensity}')
+                s = hsv_points[:, 1].astype(np.float64)
+                s_lo = np.percentile(s, self._S_PERCENTILE_LOW)
+                s_hi = np.percentile(s, self._S_PERCENTILE_HIGH)
+                mask_s_mid = (s >= s_lo) & (s <= s_hi)
+                s_trimmed = s[mask_s_mid]
+                if s_trimmed.size == 0:
+                    median_saturation = float(np.median(s) / 255.0)
+                else:
+                    median_saturation = float(np.median(s_trimmed) / 255.0)
+                h = hsv_points[:, 0].astype(np.float64)
+                h_trimmed = h[mask_s_mid]
+                if h_trimmed.size == 0:
+                    median_hue = float(np.median(h))
+                else:
+                    median_hue = float(np.median(h_trimmed))
+                max_saturation = float(np.max(s) / 255.0)
+                min_saturation = float(np.min(s) / 255.0)
+                intensity = float(np.mean(hsv_points[:, 2] / 255.0))
+                blueish = self._HUE_BOX_BLUEISH[0] <= median_hue <= self._HUE_BOX_BLUEISH[1]
+                woodish = self._HUE_WOOD[0] <= median_hue < self._HUE_WOOD[1]
+                debug = (
+                    f'Max saturation: {max_saturation} | Min saturation: {min_saturation} \n '+
+                    f'Median saturation: {median_saturation} | Median hue: {median_hue} \n '+
+                    f'Intensity: {intensity}'
+                )
 
-                if mean_saturation < 0.25:
-                    # Wood box (low saturation) -> CUBE_W
+                if ((median_saturation < 0.40 and intensity < 0.42) or blueish) and not woodish:
+                    
+                    self.get_logger().info("BOX\n"+debug)
                     centroid = np.mean(cluster_points, axis=0)
                     self._publish_detection(centroid, "BOX", 0.7, msg.header.frame_id, received_stamp, detections_list)
                     eliminated_rgb = np.full((cluster_points.shape[0], 3), [1.0, 0.5, 0.0], dtype=np.float32)
@@ -357,12 +391,15 @@ class PointcloudFilter(Node):
                     cloud_with_rgb = np.column_stack([cluster_points, rgb_float])
                     eliminated_msg = pc2.create_cloud(msg.header, msg.fields, cloud_with_rgb)
                     self._eliminated_pub.publish(eliminated_msg)
-                    continue
                 else:
-                    # Box detection (high saturation)
+                    # Box detection (high saturation
                     centroid = np.mean(cluster_points, axis=0)
                     #self._publish_detection(centroid, "BOX", 0.8, msg.header.frame_id, received_stamp, detections_list)
                     # publish eliminated point cloud in green
+                    debug+=(f"is woodish: {woodish}, is blueish: {blueish}, is saturation: {median_saturation}")
+                    
+                    self.get_logger().warn("NOT BOX\n" +(debug))
+               
                     eliminated_rgb = np.full((cluster_points.shape[0], 3), [0.0, 1.0, 0.0], dtype=np.float32)
                     r = (eliminated_rgb[:, 0] * 255).astype(np.uint32)
                     g = (eliminated_rgb[:, 1] * 255).astype(np.uint32)
