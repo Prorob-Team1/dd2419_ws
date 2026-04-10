@@ -121,6 +121,8 @@ class ArmGraspingServer(Node):
         self.stable_count = 0
         self.STABLE_LIMIT = 6
         self.lost_target_count = 0
+
+        self.in_position = False
         
         # Current arm position 
         self.init_pos = [0.06, 0.0, 0.12] 
@@ -201,6 +203,8 @@ class ArmGraspingServer(Node):
         self.grasp_success = False
         self.state = "SEARCHING"
         self.lost_target_count = 0
+        
+        self.in_position = False
 
         self.get_logger().info("Executing task... waiting for result...")
 
@@ -615,25 +619,27 @@ class ArmGraspingServer(Node):
                 # Reset lost counter because we see the object
                 self.lost_target_count = 0
                 
+                # --- State 0: fine(r) control --- 
+                if cy > 480//3 and not self.in_position:
+                    # if the center of the object is within the lower 2 thirds of the image, it should be reachable
+                    self.in_position = True
+                    continue
+                if not self.in_position:
+                    # Send motor commands and sleep to allow for them to complete
+                    x_distance = -e_y * 2.5e-4
+                    y_distance = -e_x * 2.5e-4 
+                    msg = Point()
+                    msg.x = x_distance
+                    msg.y = y_distance
+                    self.move_publisher.publish(msg)
+                    time.sleep(3)
+                    continue
+
                 # --- State 1: Search and Control ---
 
                 if abs(e_x) > self.DEADZONE or abs(e_y) > self.DEADZONE:
                     self.stable_count = 0 
                     self.state = "TRACKING"
-                
-                    # Check if we are stuck reaching for an object that's too far away
-                    near_z_limit = self.curr_pos[2] > (self.Z_MAX - 0.003) or self.curr_pos[2] < (self.Z_MIN + 0.003)
-                    still_far_in_image = e_y < -self.DEADZONE
-
-                    if near_z_limit and still_far_in_image:
-                        # Send motor commands and sleep to allow for them to complete
-                        x_distance = -e_y * 1e-3
-                        y_distance = -e_x * 1e-5 
-                        msg = Point()
-                        msg.x = x_distance
-                        msg.y = y_distance
-                        self.move_publisher.publish(msg)
-                        time.sleep(1.5)
                     
                     # === PID Calculation ===
                     self.pid_lateral.update(cx)
