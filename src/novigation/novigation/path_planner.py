@@ -1,4 +1,5 @@
 import threading
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -207,6 +208,7 @@ class PathPlannerNode(Node):
                 if self._needs_replan:
                     self._needs_replan = False
                     self.cancel_pub.publish(Empty())
+                    time.sleep(0.3)
                     current_pose = self.get_pose_from_tf()
                     if current_pose is not None:
                         start_grid = self.world_to_grid(current_pose)
