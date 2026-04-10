@@ -2,7 +2,6 @@
 
 import numpy as np
 import time
-import copy
 
 import rclpy
 from rclpy.node import Node
@@ -315,6 +314,7 @@ class Brain(Node):
 
         # Track grasp attempts
         self.grasp_attempts = dict()
+        self.target_cube_arm = None
 
         # Map / object tracking
         self.map = None
@@ -440,7 +440,7 @@ class Brain(Node):
         if self.start_pose is not None:
             return self.start_pose
         if self.map is None:
-            self.get_logger().error("Cannot compute pose without map timestamp")
+            self.get_logger().error("Cannot compute pose without map")
             return None
         #stamp = self.map.header.stamp
         from_frame_rel = "odom"
@@ -978,7 +978,6 @@ class ArmB(Behaviour):
         self.node = node
         self.current_status = Status.RUNNING
         self.grabbing = grabbing
-        self.target_cube = None
 
 
     def terminate(self, new_status):
@@ -1004,7 +1003,7 @@ class ArmB(Behaviour):
         
         # Update grasp attempts if grabbing
         if self.grabbing:
-            self.target_cube = copy.deepcopy(self.node.goal_provider.target_obj)
+            self.node.target_cube_arm = self.node.goal_provider.target_obj
             if self.node.goal_provider.target_obj.id in self.node.grasp_attempts.keys():
                 self.node.grasp_attempts[self.node.goal_provider.target_obj.id] += 1
             else:
@@ -1022,7 +1021,7 @@ class ArmB(Behaviour):
             self.current_status = Status.FAILURE
             self.node.get_logger().warning("Never got a valid response from the arm.")
             return
-        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_obj)
+        goal_msg = format_goal_text(CUBE_GOAL, self.node.target_cube_arm)
 
         message = ""
         if response.success:
