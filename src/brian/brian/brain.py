@@ -2,6 +2,7 @@
 
 import numpy as np
 import time
+import copy
 
 import rclpy
 from rclpy.node import Node
@@ -302,7 +303,7 @@ class Brain(Node):
 
         # Mission info
         self.start_time = self.get_clock().now()
-        self.mission_duration = Duration(seconds=300) # 5 minutes, then it's over :(
+        self.mission_duration = Duration(seconds=3000) # 5 minutes, then it's over :(
 
         # Conditions
         self.cube_found = False
@@ -1003,7 +1004,7 @@ class ArmB(Behaviour):
         
         # Update grasp attempts if grabbing
         if self.grabbing:
-            self.target_cube = self.node.goal_provider.target_obj
+            self.target_cube = copy.deepcopy(self.node.goal_provider.target_obj)
             if self.node.goal_provider.target_obj.id in self.node.grasp_attempts.keys():
                 self.node.grasp_attempts[self.node.goal_provider.target_obj.id] += 1
             else:
@@ -1021,7 +1022,7 @@ class ArmB(Behaviour):
             self.current_status = Status.FAILURE
             self.node.get_logger().warning("Never got a valid response from the arm.")
             return
-        goal_msg = format_goal_text(CUBE_GOAL, self.target_cube)
+        goal_msg = format_goal_text(CUBE_GOAL, self.node.goal_provider.target_obj)
 
         message = ""
         if response.success:
