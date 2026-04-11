@@ -211,6 +211,11 @@ class PathPlannerNode(Node):
                     time.sleep(0.3)
                     current_pose = self.get_pose_from_tf()
                     if current_pose is not None:
+                        new_snapped = self.find_nearest_free_cell(plan_grid)
+                        if new_snapped is not None:
+                            plan_grid = new_snapped
+                            if goal_label == "":  # update explore target if re-snapped
+                                goal_x, goal_y = self.grid_to_world(*plan_grid)
                         start_grid = self.world_to_grid(current_pose)
                         path_grid = self.astar_search(start_grid, plan_grid)
                         if path_grid is not None:
