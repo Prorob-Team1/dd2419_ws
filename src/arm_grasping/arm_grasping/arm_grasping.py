@@ -148,6 +148,8 @@ class ArmGraspingServer(Node):
         self.create_subscription(ArmFeedback, 'arm/feedback', self.jointstate_callback, 10)
         self.current_gripper_angle = 20.0
 
+        self.move_publisher = self.create_publisher(Point, "/move_dist", 10)
+
         self.grasp_success = False
         self.grasp_Event = threading.Event()
 
