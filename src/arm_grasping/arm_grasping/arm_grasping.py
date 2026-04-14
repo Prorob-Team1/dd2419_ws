@@ -328,17 +328,17 @@ class ArmGraspingServer(Node):
         
         
         self.get_logger().info("2. Closing Gripper...")
-        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, 108.0, angle, time_ms=1000)
+        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, 110.0, angle, time_ms=1000)
         time.sleep(2.0)
         
         
         self.get_logger().info("3. Lifting Up vertically...")
-        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 108.0, angle, time_ms=2000)
+        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 110.0, angle, time_ms=2000)
         time.sleep(2.5)
 
         
         self.get_logger().info("4. Centering claw in the air...")
-        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 108.0, 0.0, time_ms=1000)
+        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 110.0, 0.0, time_ms=1000)
         time.sleep(6.5)
 
 
@@ -346,10 +346,9 @@ class ArmGraspingServer(Node):
         # Check if the cube is picked up
         # =======================================================
         actual_angle = self.current_gripper_angle
-        self.get_logger().info(f"Gripper target: 108.0, Actual reached: {actual_angle:.1f}")
+        self.get_logger().info(f"Gripper target: 110.0, Actual reached: {actual_angle:.1f}")
         
-        
-        if actual_angle < 99.5:
+        if actual_angle < 100:
             self.get_logger().info(">>> 🎯 GRASP CONFIRMED! (Object detected) <<<")
             self.grasp_success = True
             self.state = "HOLDING"
@@ -363,7 +362,7 @@ class ArmGraspingServer(Node):
             time.sleep(2.0)
             self.curr_pos = list(self.init_pos)
         ##############################################################
-        
+
         self.grasp_Event.set()
 
 
@@ -374,8 +373,8 @@ class ArmGraspingServer(Node):
         base_angle = np.clip(-box_center * 1.5 * 50, -50, 50)
         self.get_logger().info(f"Start Dropping at angle {base_angle}...")
 
-        #self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 108.0, 0.0, time_ms=2000, log=True)
-        self.send_dropoff_arm_cmd(gripper_angle=108.0, base=base_angle, time_ms=2000)
+        #self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 110.0, 0.0, time_ms=2000, log=True)
+        self.send_dropoff_arm_cmd(gripper_angle=110.0, base=base_angle, time_ms=2000)
         time.sleep(2.0)
 
         # self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 30.0, 0.0, time_ms=2000)
