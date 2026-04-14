@@ -495,7 +495,7 @@ class ArmGraspingServer(Node):
                         'rect': rect
                     })
 
-        cv2.imshow("Pure HSV Mask (Solid White = Perfect)", debug_mask_all)
+        #cv2.imshow("Pure HSV Mask (Solid White = Perfect)", debug_mask_all)
 
         if valid_objects:
             valid_objects.sort(key=lambda x: x['dist'])
@@ -510,23 +510,25 @@ class ArmGraspingServer(Node):
             err_x = best_obj['cx'] - self.TARGET_CENTER_X
             err_y = best_obj['cy'] - self.TARGET_CENTER_Y
             
+            #cv2.putText(img, f"Cube center: cx={best_obj['cx']}, cy={best_obj['cy']}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            #cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-    
-            cv2.imshow("Smart Vision", img)
-            cv2.waitKey(1)
+
+            #cv2.imshow("Smart Vision", img)
+            #cv2.waitKey(1)
             
             self._publish_debug_image(img)
             return (best_obj['cx'], best_obj['cy'], best_obj['angle'], err_x, err_y)
         
 
-        cv2.namedWindow("Smart Vision")
-        cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
+        #cv2.namedWindow("Smart Vision")
+        #cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
         cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
         cv2.putText(img, "Target: NONE", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.imshow("Smart Vision", img)
+        #cv2.imshow("Smart Vision", img)
         
-        cv2.waitKey(1)
+        #cv2.waitKey(1)
         
         self._publish_debug_image(img)
         return None
@@ -622,19 +624,16 @@ class ArmGraspingServer(Node):
                 self.lost_target_count = 0
                 
                 # --- State 0: fine(r) control --- 
-                if cy > 480//3 and not self.in_position:
-                    # if the center of the object is within the lower 2 thirds of the image, it should be reachable
-                    self.in_position = True
-                    continue
                 if not self.in_position:
                     # Send motor commands and sleep to allow for them to complete
-                    x_distance = -e_y * 2.5e-4
-                    y_distance = -e_x * 2.5e-4 
+                    x_distance = self.x_dist_from_px(cy) - 0.15 # tune this number
+                    y_distance = -e_x * 1e-3 
                     msg = Point()
                     msg.x = x_distance
                     msg.y = y_distance
                     self.move_publisher.publish(msg)
                     time.sleep(3)
+                    self.in_position = True
                     continue
 
                 # --- State 1: Search and Control ---
@@ -702,6 +701,23 @@ class ArmGraspingServer(Node):
                     self.pid_depth.SetPoint = self.TARGET_CENTER_Y
      
             time.sleep(0.05) 
+
+    def x_dist_from_px(self, cy):
+        dist = 0
+        if cy >= 0 and cy < 54:
+            dist = 0.33
+        elif cy >= 54 and cy < 126:
+            dist = 0.28
+        elif cy >= 126 and cy < 227:
+            dist = 0.23
+        elif cy >= 227 and cy < 347:
+            dist = 0.18
+        elif cy >= 347 and cy < 430:
+            dist = 0.13 
+        elif cy >= 430:
+            dist = 0.08
+
+        return dist
 
 def main():
 
