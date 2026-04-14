@@ -318,7 +318,7 @@ class ArmGraspingServer(Node):
         self.get_logger().info(">>> STARTING GRASP SEQUENCE <<<")
         
         OFFSET_Z = 0.018
-        GRASP_HEIGHT = -0.0400
+        GRASP_HEIGHT = -0.0400 + 0.01
         target_z = self.curr_pos[2] + OFFSET_Z
         target_z = max(target_z, self.Z_MIN) # Safety
 
@@ -339,7 +339,7 @@ class ArmGraspingServer(Node):
         
         self.get_logger().info("4. Centering claw in the air...")
         self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 110.0, 0.0, time_ms=1000)
-        time.sleep(6.5)
+        time.sleep(1.5)
 
 
         # =======================================================
@@ -348,7 +348,7 @@ class ArmGraspingServer(Node):
         actual_angle = self.current_gripper_angle
         self.get_logger().info(f"Gripper target: 110.0, Actual reached: {actual_angle:.1f}")
         
-        if actual_angle < 100:
+        if actual_angle < 101:
             self.get_logger().info(">>> 🎯 GRASP CONFIRMED! (Object detected) <<<")
             self.grasp_success = True
             self.state = "HOLDING"
@@ -626,12 +626,12 @@ class ArmGraspingServer(Node):
                 if not self.in_position:
                     # Send motor commands and sleep to allow for them to complete
                     x_distance = self.x_dist_from_px(cy) - 0.15 # tune this number
-                    y_distance = -e_x * 1e-3 
+                    y_distance = 0#-e_x * 1e-2
                     msg = Point()
                     msg.x = x_distance
                     msg.y = y_distance
                     self.move_publisher.publish(msg)
-                    time.sleep(3)
+                    time.sleep(5)
                     self.in_position = True
                     continue
 
@@ -714,7 +714,7 @@ class ArmGraspingServer(Node):
         elif cy >= 347 and cy < 430:
             dist = 0.13 
         elif cy >= 430:
-            dist = 0.08
+            dist = 0.03
 
         return dist
 
