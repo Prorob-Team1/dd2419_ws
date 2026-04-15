@@ -13,6 +13,7 @@ import threading
 from std_srvs.srv import Trigger
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from pathlib import Path
 from geometry_msgs.msg import Point
 
 
@@ -179,6 +180,12 @@ class ArmGraspingServer(Node):
             ]
         }
         
+        data = np.load(Path("calibration/calibration_fisheye.npz"))
+        K = data["K"]
+        D = data["D"]
+        self.map1 = data["map1"]
+        self.map2 = data["map2"]
+        
         threading.Thread(target=self.main_loop, daemon=True).start()
         self.get_logger().info("Arm Grasping Service is ready....")
 
@@ -265,7 +272,15 @@ class ArmGraspingServer(Node):
         
         
       
-
+    def undistort_image(self, img):
+        img = cv2.remap(
+        img,
+        self.map1,
+        self.map2,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT,
+    )
+        return img
 
 
 
