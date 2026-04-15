@@ -102,8 +102,8 @@ class ArmGraspingServer(Node):
         super().__init__('ArmGraspingServer_node')
         
         # === Target Center ===
-        self.TARGET_CENTER_X = 320   
-        self.TARGET_CENTER_Y = 430
+        self.TARGET_CENTER_X = 330   
+        self.TARGET_CENTER_Y = 400
         
         # === PID params ===
         # Y-axis (lateral) Left-Right
@@ -134,6 +134,8 @@ class ArmGraspingServer(Node):
         self.Y_LIMIT = 0.15 
         self.Z_MIN = 0.14
         self.Z_MAX = 0.22
+
+        self.CLOSE_GRIPPER_ANGLE = 100.0
 
         self.state = "IDLE"
 
@@ -278,7 +280,7 @@ class ArmGraspingServer(Node):
         self.map1,
         self.map2,
         interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_REFLECT,
+        borderMode=cv2.BORDER_TRANSPARENT,
     )
         return img
 
@@ -343,17 +345,17 @@ class ArmGraspingServer(Node):
         
         
         self.get_logger().info("2. Closing Gripper...")
-        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, 110.0, angle, time_ms=1000)
+        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, self.CLOSE_GRIPPER_ANGLE, angle, time_ms=1000)
         time.sleep(2.0)
         
         
         self.get_logger().info("3. Lifting Up vertically...")
-        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 110.0, angle, time_ms=2000)
+        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], self.CLOSE_GRIPPER_ANGLE+3, angle, time_ms=2000)
         time.sleep(2.5)
 
         
         self.get_logger().info("4. Centering claw in the air...")
-        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 110.0, 0.0, time_ms=1000)
+        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], self.CLOSE_GRIPPER_ANGLE+5, 0.0, time_ms=1000)
         time.sleep(1.5)
 
 
@@ -429,6 +431,8 @@ class ArmGraspingServer(Node):
         if self.cv_image is None: return None
         img = self.cv_image.copy()
         
+        img = self.undistort_image(img)
+
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         
         LOCAL_HSV_RANGES = { 
@@ -524,10 +528,10 @@ class ArmGraspingServer(Node):
             err_x = best_obj['cx'] - self.TARGET_CENTER_X
             err_y = best_obj['cy'] - self.TARGET_CENTER_Y
             
-            #cv2.putText(img, f"Cube center: cx={best_obj['cx']}, cy={best_obj['cy']}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            #cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(img, f"Cube center: cx={best_obj['cx']}, cy={best_obj['cy']}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            #cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            #cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             #cv2.imshow("Smart Vision", img)
             #cv2.waitKey(1)
@@ -551,6 +555,7 @@ class ArmGraspingServer(Node):
         if self.cv_image is None: return None
         
         img = self.cv_image.copy()
+        img = self.undistort_image(img)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         thresh = cv2.adaptiveThreshold(
@@ -609,6 +614,8 @@ class ArmGraspingServer(Node):
 
         while rclpy.ok():
 
+            #vision_result = self.process_vision()
+
             if self.state == "IDLE" or self.state == "HOLDING":
                 time.sleep(0.5)
                 continue
@@ -626,10 +633,10 @@ class ArmGraspingServer(Node):
 
                 OFFSET_Y = 0.0
 
-                if abs(angle)<35:
+                if abs(angle)<20:
                     angle = 0
-                else:
-                    angle = -25.0 * np.sign(angle)
+                #else:
+                #    angle = -25.0 * np.sign(angle)
 
                 #if angle>0:
                 #    OFFSET_Y = 0.01
@@ -640,13 +647,13 @@ class ArmGraspingServer(Node):
                 # --- State 0: fine(r) control --- 
                 if not self.in_position:
                     # Send motor commands and sleep to allow for them to complete
-                    x_distance = self.x_dist_from_px(cy) - 0.15 # tune this number
+                    x_distance = self.x_dist_from_px(cy)
                     y_distance = 0#-e_x * 1e-2
                     msg = Point()
                     msg.x = x_distance
                     msg.y = y_distance
                     self.move_publisher.publish(msg)
-                    time.sleep(5)
+                    time.sleep(3)
                     self.in_position = True
                     continue
 
@@ -717,7 +724,8 @@ class ArmGraspingServer(Node):
             time.sleep(0.05) 
 
     def x_dist_from_px(self, cy):
-        dist = 0
+        dist = (-0.0537*cy + 33.88)/100 - 0.2
+        """
         if cy >= 0 and cy < 54:
             dist = 0.33
         elif cy >= 54 and cy < 126:
@@ -730,7 +738,7 @@ class ArmGraspingServer(Node):
             dist = 0.13 
         elif cy >= 430:
             dist = 0.03
-
+        """
         return dist
 
 def main():
