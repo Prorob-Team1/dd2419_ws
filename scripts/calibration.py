@@ -102,13 +102,36 @@ rms, _, _, _, _ = cv2.fisheye.calibrate(
     (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-6),
 )
 
+scale = 1.0  # increase to preserve more content (try 1.2 → 2.0)
+balance = 1.0  # 1.0 = keep all pixels
+
+h, w = 480, 640
+new_size = (int(w * scale), int(h * scale))
+new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(
+    K, D, (w, h), np.eye(3), balance=balance, new_size=new_size
+)
+
+# ==============================
+# CREATE REMAP
+# ==============================
+
+map1, map2 = cv2.fisheye.initUndistortRectifyMap(
+    K, D, np.eye(3), new_K, new_size, cv2.CV_16SC2
+)
+
 print("\nCalibration done!")
 print("RMS error:", rms)
 print("K (camera matrix):\n", K)
 print("D (distortion):\n", D)
 
 # Save parameters
-np.savez("calibration_fisheye.npz", K=K, D=D)
+np.savez(
+    "calibration_fisheye.npz",
+    K=K,
+    D=D,
+    map1=map1,
+    map2=map2,
+)
 
 # ==============================
 # UNDISTORT TEST IMAGE
@@ -131,27 +154,20 @@ np.savez("calibration_fisheye.npz", K=K, D=D)
 # cv2.destroyAllWindows()
 
 img = cv2.imread(test_image_path)
-h, w = img.shape[:2]
-scale = 1.0  # increase to preserve more content (try 1.2 → 2.0)
-balance = 1.0  # 1.0 = keep all pixels
+# h, w = img.shape[:2]
 
-new_size = (int(w * scale), int(h * scale))
+# load K, D, map1, map2 from file
+data = np.load("calibration_fisheye.npz")
+K = data["K"]
+D = data["D"]
+map1 = data["map1"]
+map2 = data["map2"]
+
 
 # ==============================
 # COMPUTE NEW CAMERA MATRIX
 # ==============================
 
-new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(
-    K, D, (w, h), np.eye(3), balance=balance, new_size=new_size
-)
-
-# ==============================
-# CREATE REMAP
-# ==============================
-
-map1, map2 = cv2.fisheye.initUndistortRectifyMap(
-    K, D, np.eye(3), new_K, new_size, cv2.CV_16SC2
-)
 
 # ==============================
 # UNDISTORT
@@ -162,7 +178,7 @@ undistorted = cv2.remap(
     map1,
     map2,
     interpolation=cv2.INTER_LINEAR,
-    borderMode=cv2.BORDER_REFLECT_101,  # <-- fills missing with mirrored pixels
+    borderMode=cv2.BORDER_REFLECT,  # <-- fills missing with mirrored pixels
 )
 
 # ==============================
