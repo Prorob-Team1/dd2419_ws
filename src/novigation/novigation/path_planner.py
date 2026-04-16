@@ -211,7 +211,7 @@ class PathPlannerNode(Node):
                     time.sleep(0.3)
                     current_pose = self.get_pose_from_tf()
                     if current_pose is not None:
-                        new_snapped = self.find_nearest_free_cell(plan_grid)
+                        new_snapped = self.find_nearest_free_cell(goal_grid)
                         if new_snapped is not None:
                             plan_grid = new_snapped
                             if goal_label == "":  # update explore target if re-snapped
@@ -221,6 +221,7 @@ class PathPlannerNode(Node):
                         if path_grid is not None:
                             self.path_world = self.grid_path_to_world(path_grid)
                             self.publish_path(self.path_world, goal_pose.header.frame_id)
+                            self.parking_pub.publish(Bool(data=use_parking))
                             self.get_logger().info(f'Replanned path with {len(path_grid)} cells')
                         else:
                             self.get_logger().warn('Replan failed, no path found')
