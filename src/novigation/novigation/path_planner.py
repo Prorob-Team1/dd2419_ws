@@ -60,7 +60,7 @@ class PathPlannerNode(Node):
         self.cancel_pub = self.create_publisher(Empty, '/cancel_navigation', 10)
         self.parking_pub = self.create_publisher(Bool, '/use_parking', 10)
 
-        self.create_timer(1.0, self.replan_callback)
+        self.create_timer(0.5, self.replan_callback)
 
         self._action_server = ActionServer(
             self,
