@@ -124,6 +124,8 @@ class ArmGraspingServer(Node):
         self.lost_target_count = 0
 
         self.in_position = False
+
+        self.locked_angle = 0.0
         
         # Current arm position 
         self.init_pos = [0.06, 0.0, 0.12] 
@@ -135,7 +137,7 @@ class ArmGraspingServer(Node):
         self.Z_MIN = 0.14
         self.Z_MAX = 0.22
 
-        self.CLOSE_GRIPPER_ANGLE = 100.0
+        self.CLOSE_GRIPPER_ANGLE = 108.0
 
         self.state = "IDLE"
 
@@ -334,8 +336,8 @@ class ArmGraspingServer(Node):
     def execute_grasp(self, angle):
         self.get_logger().info(">>> STARTING GRASP SEQUENCE <<<")
         
-        OFFSET_Z = 0.018
-        GRASP_HEIGHT = -0.0400 + 0.01
+        OFFSET_Z = 0.014
+        GRASP_HEIGHT = -0.034
         target_z = self.curr_pos[2] + OFFSET_Z
         target_z = max(target_z, self.Z_MIN) # Safety
 
@@ -345,27 +347,31 @@ class ArmGraspingServer(Node):
         
         
         self.get_logger().info("2. Closing Gripper...")
-        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, self.CLOSE_GRIPPER_ANGLE, angle, time_ms=1000)
-        time.sleep(2.0)
+        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, self.CLOSE_GRIPPER_ANGLE, angle, time_ms=1500)
+        time.sleep(2.5)
+
+        if angle != 0.0:
+            self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, self.CLOSE_GRIPPER_ANGLE, 0.0, time_ms=1500)
+            time.sleep(2.5)
         
         
         self.get_logger().info("3. Lifting Up vertically...")
-        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], self.CLOSE_GRIPPER_ANGLE+3, angle, time_ms=2000)
-        time.sleep(2.5)
+        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], self.CLOSE_GRIPPER_ANGLE+3, 0.0, time_ms=3000)
+        time.sleep(3.5)
 
         
         self.get_logger().info("4. Centering claw in the air...")
         self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], self.CLOSE_GRIPPER_ANGLE+5, 0.0, time_ms=1000)
-        time.sleep(1.5)
+        time.sleep(2.5)
 
 
         # =======================================================
         # Check if the cube is picked up
         # =======================================================
         actual_angle = self.current_gripper_angle
-        self.get_logger().info(f"Gripper target: 110.0, Actual reached: {actual_angle:.1f}")
+        self.get_logger().info(f"Gripper target: 108.0, Actual reached: {actual_angle:.1f}")
         
-        if actual_angle < 101:
+        if actual_angle < 102.0:
             self.get_logger().info(">>> 🎯 GRASP CONFIRMED! (Object detected) <<<")
             self.grasp_success = True
             self.state = "HOLDING"
@@ -463,21 +469,15 @@ class ArmGraspingServer(Node):
                 curr_mask = cv2.inRange(hsv, np.array(lower), np.array(upper))
                 mask = cv2.bitwise_or(mask, curr_mask)
             
-            # =========================================================
-            # 🛡️ 核心修复：边界防火墙 (Boundary Firewall)
-            # 强行把底部 15 个像素涂黑。
-            # 这阻断了 MORPH_CLOSE 膨胀时“撞墙摊平”的物理条件，
-            # 同时也屏蔽了底部机械臂底座的反光干扰。
-            # =========================================================
+            
             h_img, w_img = mask.shape
             cv2.rectangle(mask, (0, h_img - 15), (w_img, h_img), 0, -1) 
 
-            # 1. 橡皮擦 (抹除星点噪点)
+            
             kernel_open = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
             mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open)
 
-            # 2. 灌浆机 (填补高光)
-            # 因为底部已经有了 15 像素的黑边，这里的 25x25 膨胀再也不会和边界粘连了！
+            
             kernel_close = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 25))
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
             
@@ -530,23 +530,23 @@ class ArmGraspingServer(Node):
             
             cv2.putText(img, f"Cube center: cx={best_obj['cx']}, cy={best_obj['cy']}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
             cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            #cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            #cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            #cv2.imshow("Smart Vision", img)
-            #cv2.waitKey(1)
+            cv2.imshow("Smart Vision", img)
+            cv2.waitKey(1)
             
             self._publish_debug_image(img)
             return (best_obj['cx'], best_obj['cy'], best_obj['angle'], err_x, err_y)
         
 
-        #cv2.namedWindow("Smart Vision")
-        #cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
+        cv2.namedWindow("Smart Vision")
+        cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
         cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
         cv2.putText(img, "Target: NONE", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        #cv2.imshow("Smart Vision", img)
+        cv2.imshow("Smart Vision", img)
         
-        #cv2.waitKey(1)
+        cv2.waitKey(1)
         
         self._publish_debug_image(img)
         return None
@@ -633,8 +633,8 @@ class ArmGraspingServer(Node):
 
                 OFFSET_Y = 0.0
 
-                if abs(angle)<20:
-                    angle = 0
+                #if abs(angle)<20:
+                #    angle = 0
                 #else:
                 #    angle = -25.0 * np.sign(angle)
 
@@ -658,29 +658,29 @@ class ArmGraspingServer(Node):
                     continue
 
                 # --- State 1: Search and Control ---
-
                 if abs(e_x) > self.DEADZONE or abs(e_y) > self.DEADZONE:
                     self.stable_count = 0 
                     self.state = "TRACKING"
+                    
+                    # 🎯 核心逻辑 1：只有在稳定追踪（高空）时，才更新目标角度
+                    # 只过滤 3 度以内的微小像素抖动，保留真实角度
+                    #if abs(angle) < 3:
+                    #    angle = 0.0
+                    self.locked_angle = angle  # <--- 把准确的角度存进“保险箱”
                     
                     # === PID Calculation ===
                     self.pid_lateral.update(cx)
                     self.pid_depth.update(cy)
                     
-                    # PID Output Interpretation: Step size for Y and Z axes
-                    # Note: We negate the PID output because if the object is to the right (cx > TARGET_CENTER_X), we want to move left (negative Y direction), and if it's below (cy > TARGET_CENTER_Y), we want to move back (negative Z direction).
                     dx = -self.pid_lateral.output
                     dy = -self.pid_depth.output 
                     
-                    # Deadzone check
                     if abs(cx - self.TARGET_CENTER_X) < self.DEADZONE: dx = 0
                     if abs(cy - self.TARGET_CENTER_Y) < self.DEADZONE: dy = 0
                     
-                    # Limit step size to prevent overshooting and ensure smooth movement
                     step_y = np.clip(dx, -self.MAX_STEP, self.MAX_STEP)
                     step_z = np.clip(dy, -self.MAX_STEP, self.MAX_STEP)
                     
-                    # Send command only if there's a significant movement needed (outside of deadzone)
                     if step_y != 0 or step_z != 0:
                         pred_y = np.clip(self.curr_pos[1] + step_y, -self.Y_LIMIT, self.Y_LIMIT)
                         pred_z = np.clip(self.curr_pos[2] + step_z, self.Z_MIN, self.Z_MAX)
@@ -689,18 +689,35 @@ class ArmGraspingServer(Node):
                             self.curr_pos[1] = pred_y
                             self.curr_pos[2] = pred_z
 
-                # --- State 2: STABLE ---
+                # --- State 2: VISUAL DESCENT & STABLE ---
                 else:
-                    self.stable_count += 1
-                    self.state = "STABLE"
-                    print(f"Stabilizing... {self.stable_count}/{self.STABLE_LIMIT}")
-                    print(f"Claw angle... {angle}")
+                    SAFE_VISUAL_HEIGHT = 0.01  
                     
-                    if self.stable_count > self.STABLE_LIMIT:
-                        self.state = "GRASPING"
-                        self.send_arm_cmd(self.curr_pos[0], self.curr_pos[1], self.curr_pos[2], 20.0, angle, time_ms=500)
-                        time.sleep(1.5)
-                        self.execute_grasp(angle)
+                    if self.curr_pos[0] > SAFE_VISUAL_HEIGHT:
+                        self.state = "DESCENDING"
+                        self.get_logger().info(f"Descending... Using LOCKED angle: {self.locked_angle:.1f}")
+                        
+                        new_height = self.curr_pos[0] - 0.008
+                        
+                        # 🎯 核心逻辑 2：下降时，使用高空存下来的 locked_angle，无视当前的瞎眼视觉
+                        self.send_arm_cmd(new_height, self.curr_pos[1], self.curr_pos[2], 20.0, 0.0, time_ms=300)
+                        self.curr_pos[0] = new_height
+                        time.sleep(0.3) 
+                        continue 
+                        
+                    else:
+                        self.stable_count += 1
+                        self.state = "STABLE"
+                        self.get_logger().info(f"At Safe Height. Stabilizing... {self.stable_count}/{self.STABLE_LIMIT}")
+                        
+                        if self.stable_count > self.STABLE_LIMIT:
+                            self.state = "GRASPING"
+                            if abs(self.locked_angle) < 20:
+                                self.locked_angle = 0
+                            # 🎯 核心逻辑 3：抓取前夕，同样使用 locked_angle
+                            self.send_arm_cmd(self.curr_pos[0], self.curr_pos[1], self.curr_pos[2], 20.0, self.locked_angle, time_ms=500)
+                            time.sleep(0.5)
+                            self.execute_grasp(self.locked_angle) # 传递锁死的角度给夹取动作
 
             # === IF Object NOT Detected ===
             else:
