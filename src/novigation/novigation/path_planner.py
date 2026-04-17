@@ -1,4 +1,5 @@
 import threading
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -42,6 +43,8 @@ class PathPlannerNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.prev_tail = None
+        self.path_world = []
+        self._needs_replan = False
 
         self.map_data = None
 
@@ -56,6 +59,8 @@ class PathPlannerNode(Node):
         self.tail_pub = self.create_publisher(Path, '/tail_path', 10)
         self.cancel_pub = self.create_publisher(Empty, '/cancel_navigation', 10)
         self.parking_pub = self.create_publisher(Bool, '/use_parking', 10)
+
+        self.create_timer(0.5, self.replan_callback)
 
         self._action_server = ActionServer(
             self,
@@ -163,14 +168,10 @@ class PathPlannerNode(Node):
                 return self._make_result(False)
 
             self.get_logger().info(f'Path found with {len(path_grid)} grid cells in {dt_ms:.1f} ms')
-            path_world = self.grid_path_to_world(path_grid)
-            self.publish_path(path_world, goal_pose.header.frame_id)
+            self.path_world = self.grid_path_to_world(path_grid)
+            self.publish_path(self.path_world, goal_pose.header.frame_id)
 
-            #if use_tail:
-            #   tail_path_world = self.grid_path_to_world(tail_path)
-            #   self.publish_path(tail_path_world, goal_pose.header.frame_id, pub=self.tail_pub)
-            #else:
-            #    self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
+           
             self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
             feedback_msg.feedback = 'Navigating...'
             goal_handle.publish_feedback(feedback_msg)
@@ -180,7 +181,7 @@ class PathPlannerNode(Node):
 
             if goal_label == ObjectClassification.BOX.value:
                 goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y
-                goal_tolerance = 0.3
+                goal_tolerance = 0.2
                 use_parking = True
             elif goal_label == "":  # explore goal
                 goal_x, goal_y = self.grid_to_world(*snapped)
@@ -203,6 +204,28 @@ class PathPlannerNode(Node):
                     self._clear_active_handle(goal_handle)
                     self.get_logger().info('Goal cancelled')
                     return self._make_result(False)
+
+                if self._needs_replan:
+                    self._needs_replan = False
+                    self.cancel_pub.publish(Empty())
+                    time.sleep(0.3)
+                    current_pose = self.get_pose_from_tf()
+                    if current_pose is not None:
+                        new_snapped = self.find_nearest_free_cell(goal_grid)
+                        if new_snapped is not None:
+                            plan_grid = new_snapped
+                            if goal_label == "":  # update explore target if re-snapped
+                                goal_x, goal_y = self.grid_to_world(*plan_grid)
+                        start_grid = self.world_to_grid(current_pose)
+                        path_grid = self.astar_search(start_grid, plan_grid)
+                        if path_grid is not None:
+                            self.path_world = self.grid_path_to_world(path_grid)
+                            self.publish_path(self.path_world, goal_pose.header.frame_id)
+                            self.parking_pub.publish(Bool(data=use_parking))
+                            self.get_logger().info(f'Replanned path with {len(path_grid)} cells')
+                        else:
+                            self.get_logger().warn('Replan failed, no path found')
+                    continue
 
                 current = self.get_pose_from_tf()
                 if current is not None:
@@ -229,6 +252,37 @@ class PathPlannerNode(Node):
 
         return self._make_result(False)
 
+    def replan_callback(self):
+        if self._active_goal_handle is None or not self._active_goal_handle.is_active:
+            return
+        if not self.is_path_valid(self.path_world):
+            self.get_logger().info('Path blocked, triggering replan...')
+            self._needs_replan = True
+
+
+
+    def is_path_valid(self, path_world: list) -> bool:
+        if self.map_data is None or not path_world:
+            return False
+
+        width = self.map_data.info.width
+        height = self.map_data.info.height
+        map_data = self.map_data.data
+        resolution = self.map_data.info.resolution
+        origin_x = self.map_data.info.origin.position.x
+        origin_y = self.map_data.info.origin.position.y
+
+        for x, y in path_world:
+            col = int((x - origin_x) / resolution)
+            row = int((y - origin_y) / resolution)
+            if row < 0 or row >= height or col < 0 or col >= width:
+                return False
+            if map_data[row * width + col] == 100:
+                return False
+
+        return True
+    
+    
     def _make_result(self, success):
         result = Navigation.Result()
         result.result = success

@@ -16,7 +16,7 @@ class MapInflator(Node):
     def __init__(self):
         super().__init__('map_inflator')
 
-        self.inflation_radius_m = 0.25
+        self.inflation_radius_m = 0.22
         self.cost_inflation_radius_m = 0.4
         self.box_cost_radius_m = 1
 
@@ -88,7 +88,7 @@ class MapInflator(Node):
         region_inflated = inflated_mask[r_lo:r_hi + 1, c_lo:c_hi + 1]
         free = (~region_inflated) & (dist <= max_dist) & (dist > 1e-6)
 
-        corridor_half_length = BOX_HALF_X
+        corridor_half_length = BOX_HALF_X/2
         fade_width = 0.2
 
         abs_local_x = np.abs(local_x)
