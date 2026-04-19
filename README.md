@@ -65,3 +65,7 @@ Static transform for the lidar:
     pixi run brian
 
 For debugging, comment out the specific part you want to debug in the launch file (MS3_launch.yaml)
+
+If you're running localization on a rosbag, make sure to use the sim time, so that the tfs have the correct timestamps:
+
+    pixi run ros2 run localization localization --ros-args -p use_sim_time:=true
