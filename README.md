@@ -1,3 +1,8 @@
+# DD2419 Project Course in Robotics and Autonomous Systems
+Robotics project at KTH building autonomous systems on a mobile robot with an arm, RGB-D camera, and 2D laser scanner using ROS2.
+![image](docs/robot.png)
+
+
 ## Milestone 0
 
 For the joystick (turn it on first!), you can run the following inside the pixi shell:
