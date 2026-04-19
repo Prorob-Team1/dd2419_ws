@@ -9,12 +9,10 @@ from tf2_ros.transform_listener import TransformListener
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Point
-from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import Point, PoseWithCovarianceStamped
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from nav_msgs.msg import OccupancyGrid
-from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
+from rclpy.qos import QoSHistoryPolicy, QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
 from robp_interfaces.msg import (
     ObjectCandidateMsg,
@@ -86,7 +84,6 @@ class Mapper(Node):
         self.occupancy_callback_group = MutuallyExclusiveCallbackGroup()
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.tf_broadcaster = StaticTransformBroadcaster(self)
         self.detection_sub = self.create_subscription(
             ObjectDetectionArrayMsg,
             "/object_detections",
@@ -121,6 +118,16 @@ class Mapper(Node):
         )
         self.object_marker_pub = self.create_publisher(
             Marker, "/object_candidate_markers", 10
+        )
+        self.initial_pose_pub = self.create_publisher(
+            PoseWithCovarianceStamped,
+            "/initial_pose",
+            QoSProfile(
+                history=QoSHistoryPolicy.KEEP_LAST,
+                depth=1,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            ),
         )
 
         # Periodic timer for simulating dynamic transform publishing
@@ -169,7 +176,7 @@ class Mapper(Node):
             f"Parsed workspace with {len(self.workspace)} points, {len(self.given_boxes)} boxes, {len(self.given_objects)} objects, start pose {self.start_pose}"
         )
         self.publish_workspace_perimeter_marker()
-        self.publish_tf_map2odom()
+        self.publish_initial_pose()
         self.create_inital_object_candidates()
         self.occupancy_grid = self.create_occupancy_grid()
         self.publish_occupancy_map()
@@ -235,21 +242,24 @@ class Mapper(Node):
         marker.points = points
         self.workspace_pub.publish(marker)
 
-    def publish_tf_map2odom(self):
-        # TODO: will be dynamic with proper localization
-        t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = "map"
-        t.child_frame_id = "odom"
-        t.transform.translation.x = self.start_pose.x
-        t.transform.translation.y = self.start_pose.y
-        t.transform.translation.z = 0.0
+    def publish_initial_pose(self):
+        msg = PoseWithCovarianceStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "map"
+        msg.pose.pose.position.x = self.start_pose.x
+        msg.pose.pose.position.y = self.start_pose.y
+        msg.pose.pose.position.z = 0.0
+
         q = quaternion_from_euler(0, 0, self.start_pose.angle)
-        t.transform.rotation.x = q[0]
-        t.transform.rotation.y = q[1]
-        t.transform.rotation.z = q[2]
-        t.transform.rotation.w = q[3]
-        self.tf_broadcaster.sendTransform(t)
+        msg.pose.pose.orientation.x = q[0]
+        msg.pose.pose.orientation.y = q[1]
+        msg.pose.pose.orientation.z = q[2]
+        msg.pose.pose.orientation.w = q[3]
+
+        self.initial_pose_pub.publish(msg)
+        self.get_logger().info(
+            f"Published initial pose on /initialpose: x={self.start_pose.x:.2f}, y={self.start_pose.y:.2f}, yaw={self.start_pose.angle:.2f}"
+        )
 
     def point_in_polygon(self, x, y, polygon):
         """
