@@ -38,3 +38,10 @@ launch:
       exec: "pointcloud_filter"
       name: "pointcloud_filter"
       output: "screen"
+
+  # Localization
+  - node:
+      pkg: "localization"
+      exec: "localization"
+      name: "localization"
+      output: "screen"
