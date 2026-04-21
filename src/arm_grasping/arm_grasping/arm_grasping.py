@@ -115,12 +115,12 @@ class ArmGraspingServer(Node):
         self.pid_depth.SetPoint   = self.TARGET_CENTER_Y
 
         # Movement constraints
-        self.MAX_STEP = 0.005      
-        self.DEADZONE = 3        
+        self.MAX_STEP = 0.01      
+        self.DEADZONE = 4        
 
         # State management
         self.stable_count = 0
-        self.STABLE_LIMIT = 6
+        self.STABLE_LIMIT = 4
         self.lost_target_count = 0
 
         self.in_position = False
@@ -337,7 +337,7 @@ class ArmGraspingServer(Node):
         self.get_logger().info(">>> STARTING GRASP SEQUENCE <<<")
         
         OFFSET_Z = 0.014
-        GRASP_HEIGHT = -0.034
+        GRASP_HEIGHT = -0.034 + 0.005
         target_z = self.curr_pos[2] + OFFSET_Z
         target_z = max(target_z, self.Z_MIN) # Safety
 
@@ -533,8 +533,8 @@ class ArmGraspingServer(Node):
             cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            cv2.imshow("Smart Vision", img)
-            cv2.waitKey(1)
+            # cv2.imshow("Smart Vision", img)
+            # cv2.waitKey(1)
             
             self._publish_debug_image(img)
             return (best_obj['cx'], best_obj['cy'], best_obj['angle'], err_x, err_y)
@@ -544,9 +544,9 @@ class ArmGraspingServer(Node):
         cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
         cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
         cv2.putText(img, "Target: NONE", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.imshow("Smart Vision", img)
+        # cv2.imshow("Smart Vision", img)
         
-        cv2.waitKey(1)
+        # cv2.waitKey(1)
         
         self._publish_debug_image(img)
         return None
@@ -653,7 +653,7 @@ class ArmGraspingServer(Node):
                     msg.x = x_distance
                     msg.y = y_distance
                     self.move_publisher.publish(msg)
-                    time.sleep(3)
+                    time.sleep(1)
                     self.in_position = True
                     continue
 
@@ -741,6 +741,8 @@ class ArmGraspingServer(Node):
             time.sleep(0.05) 
 
     def x_dist_from_px(self, cy):
+        dist = (3.74e-7)*(cy**2) - (7.07e-4)*cy + 0.352
+        dist -= 0.2
         dist = (-0.0537*cy + 33.88)/100 - 0.2
         """
         if cy >= 0 and cy < 54:
@@ -756,6 +758,7 @@ class ArmGraspingServer(Node):
         elif cy >= 430:
             dist = 0.03
         """
+        self.get_logger().info(f"Dist to travel in x: {dist} (from px={cy})" )
         return dist
 
 def main():

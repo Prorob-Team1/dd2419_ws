@@ -8,6 +8,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from tf2_ros import TransformListener, Buffer
 from tf_transformations import euler_from_quaternion
@@ -16,6 +17,7 @@ from robp_interfaces.msg import DutyCycles
 from nav_msgs.msg import Path
 from std_msgs.msg import Empty, Bool
 from geometry_msgs.msg import Point
+import numpy as np
 
 class Navigator(Node):
 
@@ -45,7 +47,7 @@ class Navigator(Node):
         self.create_subscription(Path, '/planned_path', self.path_callback, 10)
         self.create_subscription(Bool, '/use_parking', self.parking_callback, 10)
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
-        self.create_subscription(Point, '/move_dist', self.move_dist_callback, 10)
+        self.create_subscription(Point, '/move_dist', self.move_dist_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
@@ -77,16 +79,18 @@ class Navigator(Node):
         self._parking_enabled = True
         self.control_wheels(0.0, 0.0)
 
-    def get_robot_pose(self):
+    def get_robot_pose(self, from_frame="map"):
         try:
             t = self.tf_buffer.lookup_transform(
-                "map", "base_link",
+                from_frame, "base_link",
                 Time(seconds=0),
                 timeout=Duration(seconds=0.1),
             )
 
             transform_time = Time.from_msg(t.header.stamp)
-            if self.get_clock().now() - transform_time > Duration(seconds=0.5):
+            diff = self.get_clock().now() - transform_time
+            if diff > Duration(seconds=0.5):
+                self.get_logger().warning(f"Time diff: {diff}")
                 return None
 
             x = t.transform.translation.x
@@ -100,25 +104,50 @@ class Navigator(Node):
             theta = euler_from_quaternion(q)[2]
             return (x, y, theta)
         except Exception as e:
-            self.get_logger().debug(f"TF lookup failed: {e}")
+            self.get_logger().info(f"TF lookup failed: {e}")
             return None
 
     def move_dist_callback(self, msg: Point):
         self.get_logger().info(f"Received request to move x={msg.x}, y={msg.y}")
-        v = 0.2 if msg.x >= 0 else -0.2
-        linear_dist = msg.x
-        if msg.y != 0 and msg.x >= 0:
-            angle_diff = math.atan2(msg.y, msg.x)
-            w = 0.1 if angle_diff >= 0 else -0.1
-            angular_command_duration = angle_diff / w
-            self.control_wheels(0.0, w)
-            time.sleep(angular_command_duration)
-            linear_dist = math.sqrt(msg.x**2 + msg.y**2)
+        start_pose = self.get_robot_pose(from_frame="odom")
+        if start_pose is not None:
+            s_x, s_y, s_yaw = start_pose
+            # this code might fail if the map->odom TF shifts a LOT
+            v = 0.2 if msg.x >= 0 else -0.2
+            linear_dist = msg.x
+            if msg.y != 0 and msg.x >= 0:
+                angle_diff = math.atan2(msg.y, msg.x)
+                w = 0.1 if angle_diff >= 0 else -0.1
+                #angular_command_duration = angle_diff / w
+                self.control_wheels(0.0, w)
+                current_pose = start_pose
+                while angle_diff > 0.05: # this will not work, fix it please and thank you
+                    current_pose = self.get_robot_pose(from_frame="odom")
+                    if current_pose is not None:
+                        # calculate angle diff
+                        angle_diff = 0
+                    time.sleep(0.02)
+                linear_dist = math.sqrt(msg.x**2 + msg.y**2)
 
-        linear_command_duration = linear_dist / v
-        self.control_wheels(v, 0.0)
-        time.sleep(linear_command_duration)
-        self.control_wheels(0.0, 0.0)
+            #linear_command_duration = linear_dist / v
+            self.control_wheels(v, 0.0)
+            traversed_dist = 0
+            target_dist = abs(linear_dist)
+            start_time = time.time()
+            while traversed_dist < target_dist:
+                current_pose = self.get_robot_pose(from_frame="odom")
+                if current_pose is not None:
+                    c_x, c_y, c_yaw = current_pose
+                    traversed_dist = np.sqrt((c_x - s_x)**2 + (c_y - s_y)**2)
+                    self.get_logger().info(f"{traversed_dist=}")
+                else:
+                    self.get_logger().warning("Failed to lookup TF :((((((")
+                if time.time() - start_time > 2: # safety first
+                    self.get_logger().warning("Drove straight for too long, stopping...")
+                    break
+                time.sleep(0.02)
+            #time.sleep(linear_command_duration)
+            self.control_wheels(0.0, 0.0)
 
     def _advance_path_idx(self, path, rx, ry):
         # Find the closest segment on the remaining path (never go backward).
