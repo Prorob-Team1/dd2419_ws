@@ -741,6 +741,16 @@ class ArmGraspingServer(Node):
             # === IF Object NOT Detected ===
             else:
                 self.lost_target_count += 1
+
+                if self.lost_target_count > 5 and self.is_aligned and not self.in_position:
+                        # if we lost the target after aligning, drive forward a bit
+                        msg = Point()
+                        msg.x = 0.1
+                        msg.y = 0.0
+                        self.get_logger().info(f"Lost the cube. Sent request to move x={msg.x}m")
+                        self.move_publisher.publish(msg)
+                        time.sleep(2.0)
+                        continue
                 
                 # If object lost for > 30 frames (approx 1 second), return Preparing Position
                 if self.lost_target_count > 30:
