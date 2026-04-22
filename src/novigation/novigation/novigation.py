@@ -115,38 +115,52 @@ class Navigator(Node):
             # this code might fail if the map->odom TF shifts a LOT
             v = 0.2 if msg.x >= 0 else -0.2
             linear_dist = msg.x
-            if msg.y != 0 and msg.x >= 0:
+            if msg.y != 0:
+                # If y is provided, only align
                 angle_diff = math.atan2(msg.y, msg.x)
-                w = 0.1 if angle_diff >= 0 else -0.1
+                w = 1.0 if angle_diff >= 0 else -1
                 #angular_command_duration = angle_diff / w
                 self.control_wheels(0.0, w)
-                current_pose = start_pose
-                while angle_diff > 0.05: # this will not work, fix it please and thank you
+                rotated = 0
+                prev_yaw = s_yaw
+                start_time = time.time()
+                while abs(rotated) < abs(angle_diff):
                     current_pose = self.get_robot_pose(from_frame="odom")
                     if current_pose is not None:
+                        c_x, c_y, c_yaw = current_pose
                         # calculate angle diff
-                        angle_diff = 0
-                    time.sleep(0.02)
-                linear_dist = math.sqrt(msg.x**2 + msg.y**2)
+                        delta = c_yaw - prev_yaw
+                        delta = (delta + np.pi) % (2 * np.pi) - np.pi  # normalize small step
 
-            #linear_command_duration = linear_dist / v
-            self.control_wheels(v, 0.0)
-            traversed_dist = 0
-            target_dist = abs(linear_dist)
-            start_time = time.time()
-            while traversed_dist < target_dist:
-                current_pose = self.get_robot_pose(from_frame="odom")
-                if current_pose is not None:
-                    c_x, c_y, c_yaw = current_pose
-                    traversed_dist = np.sqrt((c_x - s_x)**2 + (c_y - s_y)**2)
-                    self.get_logger().info(f"{traversed_dist=}")
-                else:
-                    self.get_logger().warning("Failed to lookup TF :((((((")
-                if time.time() - start_time > 2: # safety first
-                    self.get_logger().warning("Drove straight for too long, stopping...")
-                    break
-                time.sleep(0.02)
-            #time.sleep(linear_command_duration)
+                        rotated += delta
+                        prev_yaw = c_yaw
+                    else:
+                        self.get_logger().warning("Failed to lookup TF :((((((")
+                    if time.time() - start_time > 2: # safety first
+                        self.get_logger().warning("Rotated for too long, stopping...")
+                        break
+                    time.sleep(0.02)
+                    #self.get_logger().info(f"{rotated=}, {angle_diff=}")
+            else:
+                # If y is not provided, DRIVE
+                #linear_command_duration = linear_dist / v
+                self.control_wheels(v, 0.0)
+                traversed_dist = 0
+                target_dist = abs(linear_dist)
+                start_time = time.time()
+                while traversed_dist < target_dist:
+                    current_pose = self.get_robot_pose(from_frame="odom")
+                    if current_pose is not None:
+                        c_x, c_y, c_yaw = current_pose
+                        traversed_dist = np.sqrt((c_x - s_x)**2 + (c_y - s_y)**2)
+                        self.get_logger().info(f"{traversed_dist=}")
+                    else:
+                        self.get_logger().warning("Failed to lookup TF :((((((")
+                    if time.time() - start_time > 2: # safety first
+                        self.get_logger().warning("Drove straight for too long, stopping...")
+                        break
+                    time.sleep(0.02)
+                #time.sleep(linear_command_duration)
             self.control_wheels(0.0, 0.0)
 
     def _advance_path_idx(self, path, rx, ry):

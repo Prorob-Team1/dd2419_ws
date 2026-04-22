@@ -124,6 +124,7 @@ class ArmGraspingServer(Node):
         self.lost_target_count = 0
 
         self.in_position = False
+        self.is_aligned = False
 
         self.locked_angle = 0.0
         
@@ -218,6 +219,7 @@ class ArmGraspingServer(Node):
         self.lost_target_count = 0
         
         self.in_position = False
+        self.is_aligned = False
 
         self.get_logger().info("Executing task... waiting for result...")
 
@@ -530,8 +532,8 @@ class ArmGraspingServer(Node):
             
             cv2.putText(img, f"Cube center: cx={best_obj['cx']}, cy={best_obj['cy']}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
             cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            #cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            #cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             # cv2.imshow("Smart Vision", img)
             # cv2.waitKey(1)
@@ -540,8 +542,8 @@ class ArmGraspingServer(Node):
             return (best_obj['cx'], best_obj['cy'], best_obj['angle'], err_x, err_y)
         
 
-        cv2.namedWindow("Smart Vision")
-        cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
+        #cv2.namedWindow("Smart Vision")
+        #cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
         cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
         cv2.putText(img, "Target: NONE", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
         # cv2.imshow("Smart Vision", img)
@@ -645,15 +647,32 @@ class ArmGraspingServer(Node):
                 self.lost_target_count = 0
                 
                 # --- State 0: fine(r) control --- 
+
+                if not self.is_aligned:
+                    # Send motor commands and sleep to allow for them to complete
+                    x_distance = self.x_dist_from_px(cy)
+                    y_distance = self.y_dist_from_py(e_x)
+                    if abs(y_distance) > 0.01:
+                        msg = Point()
+                        msg.x = x_distance + 0.2
+                        msg.y = y_distance
+                        self.get_logger().info(f"Sent request to rotate towards (x={x_distance}, y={y_distance})")
+                        self.move_publisher.publish(msg)
+                        time.sleep(2)
+                    self.is_aligned = True
+                    continue
+
+
                 if not self.in_position:
                     # Send motor commands and sleep to allow for them to complete
                     x_distance = self.x_dist_from_px(cy)
-                    y_distance = 0#-e_x * 1e-2
-                    msg = Point()
-                    msg.x = x_distance
-                    msg.y = y_distance
-                    self.move_publisher.publish(msg)
-                    time.sleep(1)
+                    if abs(x_distance) > 0.01:
+                        msg = Point()
+                        msg.x = x_distance
+                        msg.y = 0.0
+                        self.get_logger().info(f"Sent request to move x={x_distance}m")
+                        self.move_publisher.publish(msg)
+                        time.sleep(1.5)
                     self.in_position = True
                     continue
 
@@ -740,24 +759,13 @@ class ArmGraspingServer(Node):
      
             time.sleep(0.05) 
 
+    def y_dist_from_py(self, cx):
+        dist = -(0.00053195*cx + 0.00206521)
+        self.get_logger().info(f"Dist to travel in y: {dist} (from px={cx})" )
+        return dist
+
     def x_dist_from_px(self, cy):
-        dist = (3.74e-7)*(cy**2) - (7.07e-4)*cy + 0.352
-        dist -= 0.2
         dist = (-0.0537*cy + 33.88)/100 - 0.2
-        """
-        if cy >= 0 and cy < 54:
-            dist = 0.33
-        elif cy >= 54 and cy < 126:
-            dist = 0.28
-        elif cy >= 126 and cy < 227:
-            dist = 0.23
-        elif cy >= 227 and cy < 347:
-            dist = 0.18
-        elif cy >= 347 and cy < 430:
-            dist = 0.13 
-        elif cy >= 430:
-            dist = 0.03
-        """
         self.get_logger().info(f"Dist to travel in x: {dist} (from px={cy})" )
         return dist
 
