@@ -26,9 +26,13 @@ public:
         tf_listener_    = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
+		rclcpp::SubscriptionOptions scan_subscription_options;
+		scan_subscription_options.callback_group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);;
+
         scan_subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/lidar/scan", 10,
-            std::bind(&Localization::scanCallback, this, std::placeholders::_1));
+            std::bind(&Localization::scanCallback, this, std::placeholders::_1), 
+			scan_subscription_options);
         imu_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
 			"/phidgets/imu/data_raw", 1, 
 			std::bind(&Localization::imuCallback, this, std::placeholders::_1));
@@ -393,7 +397,11 @@ private:
 int main(int argc, char ** argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<Localization>());
+	auto node = std::make_shared<Localization>();
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node);
+    executor.spin();
     rclcpp::shutdown();
+
     return 0;
 }
