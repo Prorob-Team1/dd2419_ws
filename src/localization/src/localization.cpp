@@ -90,12 +90,16 @@ private:
     CloudT::Ptr     reference_cloud_;
     Eigen::Matrix4f T_map_lidar_0_;  // true lidar pose in map at t=0
     Eigen::Matrix4f T_map_odom_;     // the correction we own and publish
+	Eigen::Matrix4f T_odom_base_;
+	Eigen::Matrix4f T_odom_base_last_ = Eigen::Matrix4f::Identity();
 
 	// save the last time stamp we took a scan
     rclcpp::Time last_scan_time_;
 
 	rclcpp::Time last_driving_time_ = this->get_clock()->now() - rclcpp::Duration::from_seconds(1000);
 	bool is_stationary_ = true;
+	float distance_travelled_ = 0.0f;
+	float distance_travelled_last_icp_ = 0.0f;
 
     // Stored so the retry timer can use it
     geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pending_initial_pose_;
@@ -111,6 +115,7 @@ private:
     const float icpInterpolationAlpha = 0.05f;
     const float icpCorrectionDistanceFromStart = 1.5f;
 	const float stationaryTimeThreshold = 1.0f;
+	const float accurateOdomDistance = 7.5f;
 
 
 	double ang_vel_{0};
@@ -226,11 +231,12 @@ private:
 
 
 		// Step 3: Look up current odom-based lidar pose as ICP initial guess
-		Eigen::Matrix4f T_odom_base;
 		try {
 			auto tf_odom_base = tf_buffer_->lookupTransform(
 				"odom", "base_link", tf2::TimePointZero);
-			T_odom_base = transformToMatrix(tf_odom_base);
+			T_odom_base_ = transformToMatrix(tf_odom_base);
+			addDistanceTraveled();
+			T_odom_base_last_ = T_odom_base_;
 		} catch (const tf2::TransformException & e) {
 			RCLCPP_WARN(this->get_logger(), "Could not get odom->base_link: %s", e.what());
 			return;
@@ -238,7 +244,7 @@ private:
 
 
 		// T_map_lidar_1_odom = T_map_odom * T_odom_base * T_base_lidar
-		Eigen::Matrix4f T_map_lidar_1_guess = T_map_odom_ * T_odom_base * T_base_lidar_;
+		Eigen::Matrix4f T_map_lidar_1_guess = T_map_odom_ * T_odom_base_ * T_base_lidar_;
 
 		// if the robot is far away from the reference pose, then skip ICP
 		float initial_distance = (T_map_lidar_1_guess.block<3,1>(0,3) - T_map_lidar_0_.block<3,1>(0,3)).norm();
@@ -285,7 +291,7 @@ private:
 
 		Eigen::Matrix4f T_map_base_1_icp = T_map_lidar_1_icp * T_base_lidar_.inverse();
 
-		Eigen::Matrix4f T_map_odom_icp = T_map_base_1_icp * T_odom_base.inverse();
+		Eigen::Matrix4f T_map_odom_icp = T_map_base_1_icp * T_odom_base_.inverse();
 		T_map_odom_ = interpolateTransform(T_map_odom_, T_map_odom_icp, icpInterpolationAlpha);
 
 		CloudT::Ptr aligned_ptr(new CloudT(aligned));
@@ -418,6 +424,17 @@ private:
 	{
 		auto msg = cloudToROSMsg(*cloud, frame, this->get_clock()->now());
 		pub->publish(msg);
+	}
+
+	void addDistanceTraveled()
+	{
+		if (T_odom_base_last_ == Eigen::Matrix4f::Identity()) {
+			return;
+		}
+		Eigen::Vector3f dt = T_odom_base_.block<3,1>(0,3)
+							- T_odom_base_last_.block<3,1>(0,3);
+		distance_travelled_ += dt.norm();
+		distance_travelled_last_icp_ += dt.norm();
 	}
 };
 
