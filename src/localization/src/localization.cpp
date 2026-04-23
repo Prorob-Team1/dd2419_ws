@@ -124,11 +124,11 @@ private:
     const float icpFitnessThreshold = 0.1f;
     const float maxAngularVelForGoodScan = 0.3f;
     const float icpInterpolationAlpha = 0.05f;
-    const float icpCorrectionDistanceFromStart = 1.5f;
 	const float stationaryTimeThreshold = 1.0f;
 	const float accurateOdomDistance = 7.5f;
     const int   nAnchordScans = 5;
-	const float keyFrameDistance = 0.2f;
+	const float keyFrameCaptureDistance = 0.2f;
+    const float icpCorrectionDistanceThreshold = 1.5f;
 
 
 	double ang_vel_{0};
@@ -249,9 +249,13 @@ private:
 		// T_map_lidar_1_odom = T_map_odom * T_odom_base * T_base_lidar
 		Eigen::Matrix4f T_map_lidar_1_guess = T_map_odom_ * T_odom_base_ * T_base_lidar_;
 
-		// if the robot is far away from the reference pose, then skip ICP
-		float initial_distance = (T_map_lidar_1_guess.block<3,1>(0,3) - T_map_lidar_0_.block<3,1>(0,3)).norm();
-		if (initial_distance > icpCorrectionDistanceFromStart) return;  // tune this threshold for your environment
+		// if the robot is far away from the reference poses, then skip ICP
+		bool near_keyframe = false;
+		for (const auto & kf : keyframes_) {
+			 if ((T_map_lidar_1_guess.block<3,1>(0,3) - kf.T_map_lidar.block<3,1>(0,3)).norm() < icpCorrectionDistanceThreshold) near_keyframe = true;
+		}
+
+		if (!near_keyframe) return;
 			
 		if (std::abs(ang_vel_) > maxAngularVelForGoodScan) return;
 
@@ -470,7 +474,7 @@ private:
 			return false;
 		}
 		for (const auto & kf : keyframes_) {
-			if ((T_map_lidar_now.block<3,1>(0,3) - kf.T_map_lidar.block<3,1>(0,3)).norm() < keyFrameDistance) {
+			if ((T_map_lidar_now.block<3,1>(0,3) - kf.T_map_lidar.block<3,1>(0,3)).norm() < keyFrameCaptureDistance) {
 				return false;
 			}
 		}
