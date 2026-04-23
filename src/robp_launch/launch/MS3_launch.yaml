@@ -26,11 +26,11 @@ launch:
       file: "$(find-pkg-share robp_launch)/launch/navigation_launch.yaml"
 
   # Arm
- # - node:
- #     pkg: "arm_grasping"
- #     exec: "arm_grasping"
- #     name: "arm_grasping"
- #     output: "screen"
+  - node:
+      pkg: "arm_grasping"
+      exec: "arm_grasping"
+      name: "arm_grasping"
+      output: "screen"
 
   # Detection
   - node:
