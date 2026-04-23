@@ -125,13 +125,15 @@ class ArmGraspingServer(Node):
 
         self.in_position = False
         self.is_aligned = False
+        self.i_tried_once = False
+
+        self.reset_flag = False
 
         self.locked_angle = 0.0
         
         # Current arm position 
         self.init_pos = [0.06, 0.0, 0.12] 
         self.curr_pos = [0.06, 0.0, 0.12] 
-        self.prepare_pos = [0.06, 0.0, 0.14]
         self.hold_pos = [0.14, 0.0, 0.12] 
         self.drop_pos = [0.08, 0.0, 0.22]
         self.Y_LIMIT = 0.15 
@@ -220,17 +222,18 @@ class ArmGraspingServer(Node):
         
         self.in_position = False
         self.is_aligned = False
+        self.i_tried_once = False
 
         self.get_logger().info("Executing task... waiting for result...")
 
-        finished_in_time = self.grasp_Event.wait(timeout=60.0)
+        finished_in_time = self.grasp_Event.wait(timeout=45.0)
         
         
         if not finished_in_time:
-            self.state = "IDLE" 
             response.success = False
-            response.message = "Timeout: Failed to grasp within 60 seconds."
+            response.message = "Timeout: Failed to drop within 20 seconds."
             self.get_logger().warn(response.message)
+            self.reset_flag = True
         else:
             response.success = self.grasp_success
             if self.grasp_success:
@@ -383,7 +386,7 @@ class ArmGraspingServer(Node):
             self.state = "IDLE"
 
         if not self.grasp_success:
-            self.send_arm_cmd(self.prepare_pos[0],self.prepare_pos[1],self.prepare_pos[2],20.0,0.0,time_ms=1500)
+            self.send_arm_cmd(self.init_pos[0],self.init_pos[1],self.init_pos[2],20.0,0.0,time_ms=1500)
             time.sleep(2.0)
             self.curr_pos = list(self.init_pos)
         ##############################################################
@@ -443,6 +446,7 @@ class ArmGraspingServer(Node):
 
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         
+        # REFLECTION_RANGE = ((10, 0, 253), (255, 255, 255))
         LOCAL_HSV_RANGES = { 
             'red': [
                 # 核心改变：把 V（第三个数字）的下限从 80 暴力拉高到 120 或 130！
@@ -463,6 +467,10 @@ class ArmGraspingServer(Node):
 
         valid_objects = []
         debug_mask_all = np.zeros(img.shape[:2], dtype=np.uint8)
+        # reflection_mask = cv2.inRange(hsv, np.array(REFLECTION_RANGE[0]), np.array(REFLECTION_RANGE[1]))
+        # if cv2.countNonZero(reflection_mask) > 0.15 * reflection_mask.size:
+        #     # self.get_logger().warn("Too many reflections!")
+        #     reflection_mask = np.zeros_like(reflection_mask)
         
         for target_color, ranges in LOCAL_HSV_RANGES.items():
             mask = np.zeros(img.shape[:2], dtype=np.uint8)
@@ -470,8 +478,8 @@ class ArmGraspingServer(Node):
             for (lower, upper) in ranges:
                 curr_mask = cv2.inRange(hsv, np.array(lower), np.array(upper))
                 mask = cv2.bitwise_or(mask, curr_mask)
-            
-            
+
+            # mask = cv2.bitwise_or(mask, reflection_mask)
             h_img, w_img = mask.shape
             cv2.rectangle(mask, (0, h_img - 15), (w_img, h_img), 0, -1) 
 
@@ -608,6 +616,12 @@ class ArmGraspingServer(Node):
         msg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
         self.debug_img_pub.publish(msg)
     
+    def reset_position(self):
+        self.state = "IDLE"
+        self.send_arm_cmd(self.init_pos[0], self.init_pos[1], self.init_pos[2], 20.0, 0, time_ms=1000)
+        time.sleep(1.5)
+        self.curr_pos = list(self.init_pos)
+        self.reset_flag = False
 
     def main_loop(self):
         time.sleep(2)
@@ -617,6 +631,9 @@ class ArmGraspingServer(Node):
         while rclpy.ok():
 
             #vision_result = self.process_vision()
+            if self.reset_flag:
+                self.reset_position()
+
 
             if self.state == "IDLE" or self.state == "HOLDING":
                 time.sleep(0.5)
@@ -716,12 +733,12 @@ class ArmGraspingServer(Node):
                         self.state = "DESCENDING"
                         self.get_logger().info(f"Descending... Using LOCKED angle: {self.locked_angle:.1f}")
                         
-                        new_height = self.curr_pos[0] - 0.008
+                        new_height = SAFE_VISUAL_HEIGHT - 0.001 # self.curr_pos[0] - 0.008
                         
                         # 🎯 核心逻辑 2：下降时，使用高空存下来的 locked_angle，无视当前的瞎眼视觉
-                        self.send_arm_cmd(new_height, self.curr_pos[1], self.curr_pos[2], 20.0, 0.0, time_ms=300)
+                        self.send_arm_cmd(new_height, self.curr_pos[1], self.curr_pos[2], 20.0, 0.0, time_ms=1300)
                         self.curr_pos[0] = new_height
-                        time.sleep(0.3) 
+                        time.sleep(2.3) 
                         continue 
                         
                     else:
@@ -742,8 +759,9 @@ class ArmGraspingServer(Node):
             else:
                 self.lost_target_count += 1
 
-                if self.lost_target_count > 5 and self.is_aligned and not self.in_position:
+                if self.lost_target_count > 5 and self.is_aligned and not self.in_position and not self.i_tried_once:
                         # if we lost the target after aligning, drive forward a bit
+                        self.i_tried_once = True
                         msg = Point()
                         msg.x = 0.1
                         msg.y = 0.0
@@ -756,11 +774,11 @@ class ArmGraspingServer(Node):
                 if self.lost_target_count > 30:
                     
                     print("Target Lost... Returning Preparing Position.")
-                    self.send_arm_cmd(self.prepare_pos[0], self.prepare_pos[1], self.prepare_pos[2], 20.0, 0, time_ms=1000)
+                    self.send_arm_cmd(self.init_pos[0], self.init_pos[1], self.init_pos[2], 20.0, 0, time_ms=1000)
                     time.sleep(1.5)
 
-                    self.curr_pos = list(self.prepare_pos)
-                          
+                    self.curr_pos = list(self.init_pos)
+                           
                     # Reset PID to prevent "jump" when object is found again
                     self.pid_lateral.clear()
                     self.pid_depth.clear()

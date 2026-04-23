@@ -304,12 +304,13 @@ class PointcloudFilter(Node):
                 # Publish eliminated point cloud in Yellow (valid cube detection)
                 debug_info = {}
                 cube_class = self._infer_cube_color_from_rgb(cluster_full, debug_info)
-                self.get_logger().info(f'Detected color: {cube_class}')
+                # self.get_logger().info(f'Detected color: {cube_class}')
                 centroid = np.median(cluster_points, axis=0)
 
                 # push centroid 1.5 cm back in z (depth)
                 centroid[2] = centroid[2] + self.CUBE_SIZE / 2
-                self._publish_detection(centroid, cube_class, 0.7, msg.header.frame_id, received_stamp, detections_list)
+                if cube_class != "CUBE_W":
+                    self._publish_detection(centroid, cube_class, 0.7, msg.header.frame_id, received_stamp, detections_list)
 
                 # publish in the cube color
                 eliminated_rgb = np.full((cluster_points.shape[0], 3), [1.0, 1.0, 0.0], dtype=np.float32)
