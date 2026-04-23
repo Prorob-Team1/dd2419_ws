@@ -5,6 +5,8 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 #include <Eigen/Dense>
 #include <pcl/point_types.h>
 #include <pcl/registration/icp.h>
@@ -63,9 +65,14 @@ public:
             std::chrono::milliseconds(10),
             std::bind(&Localization::publishMapToOdom, this));
 
+		marker_timer_ = this->create_wall_timer(
+			std::chrono::seconds(1),
+			std::bind(&Localization::publishKeyframeMarkers, this));
+
 		pub_ref_cloud_    = this->create_publisher<sensor_msgs::msg::PointCloud2>("/icp/reference", 1);
 		pub_scan_guess_   = this->create_publisher<sensor_msgs::msg::PointCloud2>("/icp/guess", 1);
 		pub_scan_aligned_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/icp/aligned", 1);
+		pub_keyframe_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/icp/keyframe_markers", 1);
 
 
         RCLCPP_INFO(this->get_logger(), "Localization node started. Waiting for initial pose on /initialpose...");
@@ -83,12 +90,14 @@ private:
 	rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_ref_cloud_;
 	rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_scan_guess_;
 	rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_scan_aligned_;
+	rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_keyframe_markers_;
 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
 	rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription_;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_subscription_;
 	rclcpp::Subscription<robp_interfaces::msg::DutyCycles>::SharedPtr duty_cycle_subscription_;
     rclcpp::TimerBase::SharedPtr tf_timer_;
+	rclcpp::TimerBase::SharedPtr marker_timer_;
     rclcpp::TimerBase::SharedPtr init_retry_timer_;  // fires until TF becomes available
 
 	// state
@@ -478,6 +487,44 @@ private:
         kf.cloud_in_map = cloud_map;
         kf.is_anchor    = false;
         keyframes_.push_back(kf);
+    }
+
+    void publishKeyframeMarkers()
+    {
+        visualization_msgs::msg::MarkerArray marker_array;
+        
+        int id = 0;
+        for (const auto & kf : keyframes_) {
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "map";
+            marker.header.stamp = this->get_clock()->now();
+            marker.ns = "keyframes";
+            marker.id = id++;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.type = visualization_msgs::msg::Marker::CYLINDER;
+
+			marker.pose.position.x = kf.T_map_lidar(0, 3);
+			marker.pose.position.y = kf.T_map_lidar(1, 3);
+			marker.pose.position.z = kf.T_map_lidar(2, 3);
+
+			marker.pose.orientation.w = 1.0;
+			marker.pose.orientation.x = 0.0;
+			marker.pose.orientation.y = 0.0;
+			marker.pose.orientation.z = 0.0;
+
+			marker.scale.x = 0.02;
+			marker.scale.y = 0.02;
+			marker.scale.z = 0.3;
+            
+            marker.color.r = 0.0;
+            marker.color.g = 1.0;
+            marker.color.b = 1.0;
+            marker.color.a = 0.5;
+            
+            marker_array.markers.push_back(marker);
+        }
+        
+        pub_keyframe_markers_->publish(marker_array);
     }
 
 };
