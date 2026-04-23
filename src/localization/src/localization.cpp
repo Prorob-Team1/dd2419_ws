@@ -113,7 +113,7 @@ private:
 	rclcpp::Time last_driving_time_ = this->get_clock()->now() - rclcpp::Duration::from_seconds(1000);
 	bool is_stationary_ = true;
 	float distance_travelled_ = 0.0f;
-	float distance_travelled_last_icp_ = 0.0f;
+	float distance_travelled_last_icp_ = 0.0f; // not used for now
 
     // Stored so the retry timer can use it
     geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pending_initial_pose_;
@@ -125,10 +125,11 @@ private:
     const float maxAngularVelForGoodScan = 0.3f;
     const float icpInterpolationAlpha = 0.05f;
 	const float stationaryTimeThreshold = 1.0f;
-	const float accurateOdomDistance = 7.5f;
+	const float accurateOdomDistance = 7.5f; //7.5f;
     const int   nAnchordScans = 5;
-	const float keyFrameCaptureDistance = 0.2f;
-    const float icpCorrectionDistanceThreshold = 1.5f;
+	const int	nMaxKeyframes = 20;
+	const float keyFrameCaptureDistance = 0.33f;
+    const float icpCorrectionDistanceThreshold = 1.0f;
 
 
 	double ang_vel_{0};
@@ -258,7 +259,13 @@ private:
 		if (!near_keyframe) return;
 			
 		if (std::abs(ang_vel_) > maxAngularVelForGoodScan) return;
-
+		
+		if (distance_travelled_ < accurateOdomDistance) // odometry still accurate, no need to make it worse with ICP
+		{
+			if (shouldAddKeyframe(T_map_lidar_1_guess)) addKeyframe(scan_cloud, T_map_lidar_1_guess);
+			return;
+		}
+		
 		CloudT::Ptr cloud_at_guess(new CloudT());
 		pcl::transformPointCloud(*scan_cloud, *cloud_at_guess, T_map_lidar_1_guess);
 		scan_cloud = filterCloud(scan_cloud);
@@ -273,7 +280,7 @@ private:
 		icp.setInputSource(scan_cloud);
 		icp.setMaximumIterations(50);
 		icp.setTransformationEpsilon(1e-6);
-		icp.setMaxCorrespondenceDistance(0.4);  // tune this for your environment
+		icp.setMaxCorrespondenceDistance(0.3);
 
 		CloudT aligned;
 		icp.align(aligned, T_map_lidar_1_guess);
@@ -290,8 +297,6 @@ private:
 				// 			score, kIcpFitnessThreshold);
 				return;
         }
-
-		// RCLCPP_DEBUG(this->get_logger(), "ICP converged, score: %.4f", icp.getFitnessScore());
 
 		// Step 5: Update T_map_odom
 		Eigen::Matrix4f T_map_lidar_1_icp = icp.getFinalTransformation();
@@ -470,7 +475,7 @@ private:
 
     bool shouldAddKeyframe(const Eigen::Matrix4f & T_map_lidar_now) const
     {
-		if (!is_stationary_) {
+		if (!is_stationary_ || keyframes_.size() >= nMaxKeyframes) {
 			return false;
 		}
 		for (const auto & kf : keyframes_) {
