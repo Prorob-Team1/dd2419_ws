@@ -14,6 +14,8 @@
 #include <pcl/filters/radius_outlier_removal.h>
 #include <sensor_msgs/msg/imu.hpp>
 #include <robp_interfaces/msg/duty_cycles.hpp>
+#include <atomic>
+#include <mutex>
 
 
 using PointT = pcl::PointXYZ;
@@ -101,7 +103,7 @@ private:
     rclcpp::TimerBase::SharedPtr init_retry_timer_;  // fires until TF becomes available
 
 	// state
-    bool            is_initialized_;
+	std::atomic<bool> is_initialized_;
     Eigen::Matrix4f T_map_lidar_0_;  // true lidar pose in map at t=0
     Eigen::Matrix4f T_map_odom_;     // the correction we own and publish
 	Eigen::Matrix4f T_odom_base_;
@@ -111,7 +113,7 @@ private:
     rclcpp::Time last_scan_time_;
 
 	rclcpp::Time last_driving_time_ = this->get_clock()->now() - rclcpp::Duration::from_seconds(1000);
-	bool is_stationary_ = true;
+	std::atomic<bool> is_stationary_{true};
 	float distance_travelled_ = 0.0f;
 	float distance_travelled_last_icp_ = 0.0f; // not used for now
 
@@ -132,15 +134,17 @@ private:
     const float icpCorrectionDistanceThreshold = 1.0f;
 
 
-	double ang_vel_{0};
+	std::atomic<double> ang_vel_{0.0};
 	std::vector<Keyframe> keyframes_;
     int anchor_scan_count_ = 0;
+	mutable std::mutex keyframes_mutex_;
+	mutable std::mutex map_pose_mutex_;
 
 
 
     void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
     {
-        if (is_initialized_) return;
+		if (is_initialized_.load()) return;
 
         pending_initial_pose_ = msg;
         tryInitialize();
@@ -170,14 +174,14 @@ private:
             return;
         }
 
-        // T_map_lidar_0 = T_map_base * T_base_lidar
-        T_map_lidar_0_ = T_map_base * T_base_lidar;
+        {
+			std::lock_guard<std::mutex> lock(map_pose_mutex_);
+			T_map_lidar_0_ = T_map_base * T_base_lidar;
+			T_map_odom_ = T_map_base;
+			T_base_lidar_ = T_base_lidar;
+		}
 
-        // T_map_odom = T_map_base
-        T_map_odom_ = T_map_base;
-		T_base_lidar_ = T_base_lidar;
-
-        is_initialized_ = true;
+        is_initialized_.store(true);
         if (init_retry_timer_) {
             init_retry_timer_->cancel();
             init_retry_timer_ = nullptr;
@@ -197,20 +201,20 @@ private:
     }
 
     void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {
-		ang_vel_ = msg->angular_velocity.z;
+		ang_vel_.store(msg->angular_velocity.z);
 	}
 
 	void dutyCycleCallback(const robp_interfaces::msg::DutyCycles::SharedPtr msg) {
 		bool isDriving = std::abs(msg->duty_cycle_left) > 0.01 || std::abs(msg->duty_cycle_right) > 0.01;
 		auto now = this->get_clock()->now();
 		if (isDriving) last_driving_time_ = now;
-		is_stationary_ = last_driving_time_ + rclcpp::Duration::from_seconds(stationaryTimeThreshold) < now;
+		is_stationary_.store(last_driving_time_ + rclcpp::Duration::from_seconds(stationaryTimeThreshold) < now);
 	}
 
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
 	{
 		if (!use_icp_) return;
-		if (!is_initialized_) {
+		if (!is_initialized_.load()) {
 			RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
 								"Not initialized yet, skipping scan.");
 			return;
@@ -225,7 +229,12 @@ private:
 
 		// --- Step 2: accumulate anchor keyframe at the known start pose -----
         if (anchor_scan_count_ < nAnchordScans) {
-            accumulateAnchor(scan_cloud, T_map_lidar_0_);
+			Eigen::Matrix4f T_map_lidar_0_copy;
+			{
+				std::lock_guard<std::mutex> lock(map_pose_mutex_);
+				T_map_lidar_0_copy = T_map_lidar_0_;
+			}
+			accumulateAnchor(scan_cloud, T_map_lidar_0_copy);
             anchor_scan_count_++;
             return;
         }
@@ -248,17 +257,27 @@ private:
 
 
 		// T_map_lidar_1_odom = T_map_odom * T_odom_base * T_base_lidar
-		Eigen::Matrix4f T_map_lidar_1_guess = T_map_odom_ * T_odom_base_ * T_base_lidar_;
+		Eigen::Matrix4f T_map_odom_copy;
+		Eigen::Matrix4f T_base_lidar_copy;
+		{
+			std::lock_guard<std::mutex> lock(map_pose_mutex_);
+			T_map_odom_copy = T_map_odom_;
+			T_base_lidar_copy = T_base_lidar_;
+		}
+		Eigen::Matrix4f T_map_lidar_1_guess = T_map_odom_copy * T_odom_base_ * T_base_lidar_copy;
 
 		// if the robot is far away from the reference poses, then skip ICP
 		bool near_keyframe = false;
-		for (const auto & kf : keyframes_) {
-			 if ((T_map_lidar_1_guess.block<3,1>(0,3) - kf.T_map_lidar.block<3,1>(0,3)).norm() < icpCorrectionDistanceThreshold) near_keyframe = true;
+		{
+			std::lock_guard<std::mutex> lock(keyframes_mutex_);
+			for (const auto & kf : keyframes_) {
+				if ((T_map_lidar_1_guess.block<3,1>(0,3) - kf.T_map_lidar.block<3,1>(0,3)).norm() < icpCorrectionDistanceThreshold) near_keyframe = true;
+			}
 		}
 
 		if (!near_keyframe) return;
 			
-		if (std::abs(ang_vel_) > maxAngularVelForGoodScan) return;
+		if (std::abs(ang_vel_.load()) > maxAngularVelForGoodScan) return;
 		
 		if (distance_travelled_ < accurateOdomDistance) // odometry still accurate, no need to make it worse with ICP
 		{
@@ -301,10 +320,13 @@ private:
 		// Step 5: Update T_map_odom
 		Eigen::Matrix4f T_map_lidar_1_icp = icp.getFinalTransformation();
 
-		Eigen::Matrix4f T_map_base_1_icp = T_map_lidar_1_icp * T_base_lidar_.inverse();
+		Eigen::Matrix4f T_map_base_1_icp = T_map_lidar_1_icp * T_base_lidar_copy.inverse();
 
 		Eigen::Matrix4f T_map_odom_icp = T_map_base_1_icp * T_odom_base_.inverse();
-		T_map_odom_ = interpolateTransform(T_map_odom_, T_map_odom_icp, icpInterpolationAlpha);
+		{
+			std::lock_guard<std::mutex> lock(map_pose_mutex_);
+			T_map_odom_ = interpolateTransform(T_map_odom_, T_map_odom_icp, icpInterpolationAlpha);
+		}
 
 		CloudT::Ptr aligned_ptr(new CloudT(aligned));
 		publishCloud(aligned_ptr, "map", pub_scan_aligned_);
@@ -343,9 +365,15 @@ private:
 
     void publishMapToOdom()
     {
-        if (!is_initialized_) return;
+        if (!is_initialized_.load()) return;
 
-        auto tf_msg = matrixToTransform(T_map_odom_);
+		Eigen::Matrix4f T_map_odom_copy;
+		{
+			std::lock_guard<std::mutex> lock(map_pose_mutex_);
+			T_map_odom_copy = T_map_odom_;
+		}
+
+        auto tf_msg = matrixToTransform(T_map_odom_copy);
 		tf_msg.header.stamp    = this->get_clock()->now();
 		tf_msg.header.frame_id = "map";
 		tf_msg.child_frame_id  = "odom";
@@ -452,6 +480,7 @@ private:
 	CloudT::Ptr buildSubmap() const
     {
         CloudT::Ptr submap(new CloudT());
+		std::lock_guard<std::mutex> lock(keyframes_mutex_);
         for (const auto & kf : keyframes_) {
             *submap += *kf.cloud_in_map;
         }
@@ -460,6 +489,7 @@ private:
 
 	void accumulateAnchor(const CloudT::Ptr & scan_lidar, const Eigen::Matrix4f & T_map_lidar)
     {
+		std::lock_guard<std::mutex> lock(keyframes_mutex_);
         if (keyframes_.empty()) {
             Keyframe kf;
             kf.T_map_lidar  = T_map_lidar;
@@ -475,7 +505,11 @@ private:
 
     bool shouldAddKeyframe(const Eigen::Matrix4f & T_map_lidar_now) const
     {
-		if (!is_stationary_ || keyframes_.size() >= nMaxKeyframes) {
+		if (!is_stationary_.load()) {
+			return false;
+		}
+		std::lock_guard<std::mutex> lock(keyframes_mutex_);
+		if (keyframes_.size() >= nMaxKeyframes) {
 			return false;
 		}
 		for (const auto & kf : keyframes_) {
@@ -495,12 +529,14 @@ private:
         kf.T_map_lidar  = T_map_lidar;
         kf.cloud_in_map = cloud_map;
         kf.is_anchor    = false;
+		std::lock_guard<std::mutex> lock(keyframes_mutex_);
         keyframes_.push_back(kf);
     }
 
     void publishKeyframeMarkers()
     {
         visualization_msgs::msg::MarkerArray marker_array;
+		std::lock_guard<std::mutex> lock(keyframes_mutex_);
         
         int id = 0;
         for (const auto & kf : keyframes_) {
@@ -542,7 +578,7 @@ int main(int argc, char ** argv)
 {
     rclcpp::init(argc, argv);
 	auto node = std::make_shared<Localization>();
-    rclcpp::executors::MultiThreadedExecutor executor;
+	rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 2);
     executor.add_node(node);
     executor.spin();
     rclcpp::shutdown();
