@@ -17,6 +17,12 @@
 using PointT = pcl::PointXYZ;
 using CloudT = pcl::PointCloud<PointT>;
 
+struct Keyframe {
+	Eigen::Matrix4f T_map_lidar;    // lidar pose in map when keyframe was taken
+	CloudT::Ptr     cloud_in_map;   // points in map frame
+	bool            is_anchor = false;
+};
+
 class Localization : public rclcpp::Node
 {
 public:
@@ -87,7 +93,6 @@ private:
 
 	// state
     bool            is_initialized_;
-    CloudT::Ptr     reference_cloud_;
     Eigen::Matrix4f T_map_lidar_0_;  // true lidar pose in map at t=0
     Eigen::Matrix4f T_map_odom_;     // the correction we own and publish
 	Eigen::Matrix4f T_odom_base_;
@@ -104,11 +109,8 @@ private:
     // Stored so the retry timer can use it
     geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pending_initial_pose_;
 
-	bool has_reference_cloud_ = false;
 	Eigen::Matrix4f T_base_lidar_ = Eigen::Matrix4f::Identity(); 
 
-	int reference_scan_count_ = 0;
-	const int kReferenceScanTarget = 5;
     
     const float icpFitnessThreshold = 0.1f;
     const float maxAngularVelForGoodScan = 0.3f;
@@ -116,9 +118,13 @@ private:
     const float icpCorrectionDistanceFromStart = 1.5f;
 	const float stationaryTimeThreshold = 1.0f;
 	const float accurateOdomDistance = 7.5f;
+    const int   nAnchordScans = 5;
+	const float keyFrameDistance = 0.2f;
 
 
 	double ang_vel_{0};
+	std::vector<Keyframe> keyframes_;
+    int anchor_scan_count_ = 0;
 
 
 
@@ -207,27 +213,15 @@ private:
 			return;
 		}
 
-		// Step 2: First scan after init -> transform into map frame, store as reference
-		if (!has_reference_cloud_) {
-			if (!reference_cloud_) {
-				reference_cloud_ = CloudT::Ptr(new CloudT());
-			}
+		// --- Step 2: accumulate anchor keyframe at the known start pose -----
+        if (anchor_scan_count_ < nAnchordScans) {
+            accumulateAnchor(scan_cloud, T_map_lidar_0_);
+            anchor_scan_count_++;
+            return;
+        }
 
-			CloudT transformed;
-			pcl::transformPointCloud(*scan_cloud, transformed, T_map_lidar_0_);
-			*reference_cloud_ += transformed;  // append points
-			reference_scan_count_++;
-
-			if (reference_scan_count_ >= kReferenceScanTarget) {
-				// filter the reference cloud to remove outliers
-				reference_cloud_ = filterCloud(reference_cloud_);
-				has_reference_cloud_ = true;
-				RCLCPP_INFO(this->get_logger(), "Reference cloud ready with %zu points.", reference_cloud_->size());
-			}
-			return;
-		}
-
-		publishCloud(reference_cloud_, "map", pub_ref_cloud_);
+		CloudT::Ptr submap = buildSubmap();
+        publishCloud(submap, "map", pub_ref_cloud_);
 
 
 		// Step 3: Look up current odom-based lidar pose as ICP initial guess
@@ -262,7 +256,7 @@ private:
 		// Target: reference cloud (in map frame)
 		// Source: current scan (in lidar frame), seeded with initial guess
 		pcl::IterativeClosestPoint<PointT, PointT> icp;
-		icp.setInputTarget(reference_cloud_);
+		icp.setInputTarget(submap);
 		icp.setInputSource(scan_cloud);
 		icp.setMaximumIterations(50);
 		icp.setTransformationEpsilon(1e-6);
@@ -436,6 +430,56 @@ private:
 		distance_travelled_ += dt.norm();
 		distance_travelled_last_icp_ += dt.norm();
 	}
+
+	CloudT::Ptr buildSubmap() const
+    {
+        CloudT::Ptr submap(new CloudT());
+        for (const auto & kf : keyframes_) {
+            *submap += *kf.cloud_in_map;
+        }
+        return submap;
+    }
+
+	void accumulateAnchor(const CloudT::Ptr & scan_lidar, const Eigen::Matrix4f & T_map_lidar)
+    {
+        if (keyframes_.empty()) {
+            Keyframe kf;
+            kf.T_map_lidar  = T_map_lidar;
+            kf.cloud_in_map = CloudT::Ptr(new CloudT());
+            kf.is_anchor    = true;
+            keyframes_.push_back(kf);
+        }
+
+        CloudT transformed;
+        pcl::transformPointCloud(*scan_lidar, transformed, T_map_lidar);
+        *keyframes_[0].cloud_in_map += transformed;
+    }
+
+    bool shouldAddKeyframe(const Eigen::Matrix4f & T_map_lidar_now) const
+    {
+		if (!is_stationary_) {
+			return false;
+		}
+		for (const auto & kf : keyframes_) {
+			if ((T_map_lidar_now.block<3,1>(0,3) - kf.T_map_lidar.block<3,1>(0,3)).norm() < keyFrameDistance) {
+				return false;
+			}
+		}
+		return true;
+    }
+
+    void addKeyframe(const CloudT::Ptr & scan_lidar, const Eigen::Matrix4f & T_map_lidar)
+    {
+        CloudT::Ptr cloud_map(new CloudT());
+        pcl::transformPointCloud(*scan_lidar, *cloud_map, T_map_lidar);
+
+        Keyframe kf;
+        kf.T_map_lidar  = T_map_lidar;
+        kf.cloud_in_map = cloud_map;
+        kf.is_anchor    = false;
+        keyframes_.push_back(kf);
+    }
+
 };
 
 int main(int argc, char ** argv)
