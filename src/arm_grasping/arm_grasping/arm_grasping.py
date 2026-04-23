@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from robp_interfaces.msg import ArmControl 
+from robp_interfaces.msg import ArmControl, ArmFeedback
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
@@ -13,6 +13,10 @@ import threading
 from std_srvs.srv import Trigger
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from pathlib import Path
+from geometry_msgs.msg import Point
+
+
 
 # ==========================================
 # PID Controller Class
@@ -98,8 +102,8 @@ class ArmGraspingServer(Node):
         super().__init__('ArmGraspingServer_node')
         
         # === Target Center ===
-        self.TARGET_CENTER_X = 320   
-        self.TARGET_CENTER_Y = 450  
+        self.TARGET_CENTER_X = 330   
+        self.TARGET_CENTER_Y = 400
         
         # === PID params ===
         # Y-axis (lateral) Left-Right
@@ -111,23 +115,32 @@ class ArmGraspingServer(Node):
         self.pid_depth.SetPoint   = self.TARGET_CENTER_Y
 
         # Movement constraints
-        self.MAX_STEP = 0.005      
-        self.DEADZONE = 3        
+        self.MAX_STEP = 0.01      
+        self.DEADZONE = 4        
 
         # State management
         self.stable_count = 0
-        self.STABLE_LIMIT = 18
+        self.STABLE_LIMIT = 4
         self.lost_target_count = 0
+
+        self.in_position = False
+        self.is_aligned = False
+        self.i_tried_once = False
+
+        self.reset_flag = False
+
+        self.locked_angle = 0.0
         
         # Current arm position 
         self.init_pos = [0.06, 0.0, 0.12] 
         self.curr_pos = [0.06, 0.0, 0.12] 
-        self.prepare_pos = [0.06, 0.0, 0.14]
         self.hold_pos = [0.14, 0.0, 0.12] 
         self.drop_pos = [0.08, 0.0, 0.22]
         self.Y_LIMIT = 0.15 
-        self.Z_MIN = 0.12
+        self.Z_MIN = 0.14
         self.Z_MAX = 0.22
+
+        self.CLOSE_GRIPPER_ANGLE = 108.0
 
         self.state = "IDLE"
 
@@ -139,6 +152,11 @@ class ArmGraspingServer(Node):
         self.CallbackGroup = MutuallyExclusiveCallbackGroup()
         self.grasp_srv = self.create_service(Trigger,'Start_Grasping',self.grasp_service_callback, callback_group = self.CallbackGroup)
         self.drop_srv = self.create_service(Trigger,'Start_Dropping',self.drop_service_callback, callback_group = self.CallbackGroup)
+
+        self.create_subscription(ArmFeedback, 'arm/feedback', self.jointstate_callback, 10)
+        self.current_gripper_angle = 20.0
+
+        self.move_publisher = self.create_publisher(Point, "/move_dist", 10)
 
         self.grasp_success = False
         self.grasp_Event = threading.Event()
@@ -157,25 +175,36 @@ class ArmGraspingServer(Node):
 
         self.HSV_RANGES = { 
             'red': [
-                ((0, 140, 100), (2, 255, 255)),       
-                ((175, 140, 100), (180, 255, 255)),
-                ((165, 92, 80), (180, 255, 255)),
-                ((0, 92, 80), (6, 255, 255))
+                ((160, 10, 90), (180, 255, 255))       
             ],
             
             'green': [
-                ((50, 80, 46), (85, 255, 255)),
-                ((75, 100, 80), (98, 255, 255)),       
+                ((65, 25, 90), (98, 255, 255))      
             ],
             
             'blue': [
-                ((100, 80, 46), (124, 255, 255)),
-                ((80, 20, 190), (150, 255, 255)),       
+                ((100, 35, 90), (98, 255, 255))      
             ]
         }
         
+        data = np.load(Path("calibration/calibration_fisheye.npz"))
+        K = data["K"]
+        D = data["D"]
+        self.map1 = data["map1"]
+        self.map2 = data["map2"]
+        
         threading.Thread(target=self.main_loop, daemon=True).start()
         self.get_logger().info("Arm Grasping Service is ready....")
+
+
+    def jointstate_callback(self,msg):
+
+        try:
+            self.current_gripper_angle = msg.position[0]
+
+        except Exception:
+            pass
+
 
     def grasp_service_callback(self,request,response):
 
@@ -190,17 +219,21 @@ class ArmGraspingServer(Node):
         self.grasp_success = False
         self.state = "SEARCHING"
         self.lost_target_count = 0
+        
+        self.in_position = False
+        self.is_aligned = False
+        self.i_tried_once = False
 
         self.get_logger().info("Executing task... waiting for result...")
 
-        finished_in_time = self.grasp_Event.wait(timeout=60.0)
+        finished_in_time = self.grasp_Event.wait(timeout=45.0)
         
         
         if not finished_in_time:
-            self.state = "IDLE" 
             response.success = False
-            response.message = "Timeout: Failed to grasp within 60 seconds."
+            response.message = "Timeout: Failed to drop within 20 seconds."
             self.get_logger().warn(response.message)
+            self.reset_flag = True
         else:
             response.success = self.grasp_success
             if self.grasp_success:
@@ -248,7 +281,15 @@ class ArmGraspingServer(Node):
         
         
       
-
+    def undistort_image(self, img):
+        img = cv2.remap(
+        img,
+        self.map1,
+        self.map2,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_TRANSPARENT,
+    )
+        return img
 
 
 
@@ -297,41 +338,59 @@ class ArmGraspingServer(Node):
         self.control_pub.publish(msg)
     
     
-    def execute_grasp(self,angle):
+    def execute_grasp(self, angle):
         self.get_logger().info(">>> STARTING GRASP SEQUENCE <<<")
         
-        # Optimized: Z-Offset Compensation for better grasping reliability
-        OFFSET_Z = 0.01476
-        OFFSET_Y = 0.0
-        
-        # 1. Lower arm 
-        # Note: If your calibration is perfect, you might not need OFFSET_Z
-        # But usually, it helps to pull back slightly when going down.
-        GRASP_HEIGHT = -0.0402
+        OFFSET_Z = 0.014
+        GRASP_HEIGHT = -0.034 + 0.005
         target_z = self.curr_pos[2] + OFFSET_Z
         target_z = max(target_z, self.Z_MIN) # Safety
-
-        if abs(angle)>0:
-            OFFSET_Z += 0.01
 
         self.get_logger().info(f"1. Going Down to {GRASP_HEIGHT}...")
         self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, 20.0, angle, time_ms=1500)
         time.sleep(2.0) 
         
-        # 2. Close Gripper
+        
         self.get_logger().info("2. Closing Gripper...")
-        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, 108.0, angle, time_ms=1000)
-        time.sleep(1.5)
-        
-        # 3. Lift Up
-        self.get_logger().info("3. Lifting Up...")
-        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], 108.0, 0.0, time_ms=2000)
+        self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, self.CLOSE_GRIPPER_ANGLE, angle, time_ms=1500)
         time.sleep(2.5)
-        
-        self.get_logger().info(">>> GRASP COMPLETE <<<")
-        self.state = "HOLDING"
 
-        self.grasp_success = True
+        if angle != 0.0:
+            self.send_arm_cmd(GRASP_HEIGHT, self.curr_pos[1] , target_z, self.CLOSE_GRIPPER_ANGLE, 0.0, time_ms=1500)
+            time.sleep(2.5)
+        
+        
+        self.get_logger().info("3. Lifting Up vertically...")
+        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], self.CLOSE_GRIPPER_ANGLE+3, 0.0, time_ms=3000)
+        time.sleep(3.5)
+
+        
+        self.get_logger().info("4. Centering claw in the air...")
+        self.send_arm_cmd(self.hold_pos[0], self.hold_pos[1], self.hold_pos[2], self.CLOSE_GRIPPER_ANGLE+5, 0.0, time_ms=1000)
+        time.sleep(2.5)
+
+
+        # =======================================================
+        # Check if the cube is picked up
+        # =======================================================
+        actual_angle = self.current_gripper_angle
+        self.get_logger().info(f"Gripper target: 108.0, Actual reached: {actual_angle:.1f}")
+        
+        if actual_angle < 102.0:
+            self.get_logger().info(">>> 🎯 GRASP CONFIRMED! (Object detected) <<<")
+            self.grasp_success = True
+            self.state = "HOLDING"
+        else:
+            self.get_logger().warn(">>> ❌ GRASP FAILED! (Grabbed air) <<<")
+            self.grasp_success = False
+            self.state = "IDLE"
+
+        if not self.grasp_success:
+            self.send_arm_cmd(self.init_pos[0],self.init_pos[1],self.init_pos[2],20.0,0.0,time_ms=1500)
+            time.sleep(2.0)
+            self.curr_pos = list(self.init_pos)
+        ##############################################################
+
         self.grasp_Event.set()
 
 
@@ -342,8 +401,8 @@ class ArmGraspingServer(Node):
         base_angle = np.clip(-box_center * 1.5 * 50, -50, 50)
         self.get_logger().info(f"Start Dropping at angle {base_angle}...")
 
-        #self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 108.0, 0.0, time_ms=2000, log=True)
-        self.send_dropoff_arm_cmd(gripper_angle=108.0, base=base_angle, time_ms=2000)
+        #self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 110.0, 0.0, time_ms=2000, log=True)
+        self.send_dropoff_arm_cmd(gripper_angle=110.0, base=base_angle, time_ms=2000)
         time.sleep(2.0)
 
         # self.send_arm_cmd(self.drop_pos[0], self.drop_pos[1], self.drop_pos[2], 30.0, 0.0, time_ms=2000)
@@ -367,54 +426,94 @@ class ArmGraspingServer(Node):
         self.dropping_success = True
         self.dropping_Event.set()
 
+
+
+
+    def on_mouse_click(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            if self.cv_image is not None:
+                hsv_img = cv2.cvtColor(self.cv_image.copy(), cv2.COLOR_BGR2HSV)
+                pixel = hsv_img[y, x]
+                self.get_logger().info(f"🎯 点击坐标({x},{y}) - 真实HSV: H={pixel[0]}, S={pixel[1]}, V={pixel[2]}")
+
+
     def process_vision(self):
         
         if self.cv_image is None: return None
-        
         img = self.cv_image.copy()
         
-        # Preprocessing: Convert image to HSV color space
+        img = self.undistort_image(img)
+
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         
-        # === 1. Create a list to store all valid candidate blocks found ===
-        valid_objects = []
-        
-        # Iterate through all target colors defined in the dictionary
-        for target_color, ranges in self.HSV_RANGES.items():
-            mask = None
-            for (lower, upper) in ranges:
-                curr = cv2.inRange(hsv, np.array(lower), np.array(upper))
-                mask = curr if mask is None else cv2.bitwise_or(mask, curr)
-                
-            # Morphological operations to clean up noise (erode then dilate)
-            eroded = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
-            dilated = cv2.dilate(eroded, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
+        # REFLECTION_RANGE = ((10, 0, 253), (255, 255, 255))
+        LOCAL_HSV_RANGES = { 
+            'red': [
+                # 核心改变：把 V（第三个数字）的下限从 80 暴力拉高到 120 或 130！
+                # 这样可以一刀切掉所有暗沉的地板反光。
+                # 把 S（第二个数字）设为 90，处于不过于严格也不过于宽松的甜区。
+                ((0, 90, 130), (8, 255, 255)),       
+                ((165, 90, 130), (180, 255, 255))
+            ],
             
-            # Find contours on the cleaned mask
-            cnts, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            'green': [
+                ((65, 25, 90), (98, 255, 255))      
+            ],
+            
+            'blue': [
+                ((100, 35, 90), (130, 255, 255))      
+            ]
+        }
+
+        valid_objects = []
+        debug_mask_all = np.zeros(img.shape[:2], dtype=np.uint8)
+        # reflection_mask = cv2.inRange(hsv, np.array(REFLECTION_RANGE[0]), np.array(REFLECTION_RANGE[1]))
+        # if cv2.countNonZero(reflection_mask) > 0.15 * reflection_mask.size:
+        #     # self.get_logger().warn("Too many reflections!")
+        #     reflection_mask = np.zeros_like(reflection_mask)
+        
+        for target_color, ranges in LOCAL_HSV_RANGES.items():
+            mask = np.zeros(img.shape[:2], dtype=np.uint8)
+            
+            for (lower, upper) in ranges:
+                curr_mask = cv2.inRange(hsv, np.array(lower), np.array(upper))
+                mask = cv2.bitwise_or(mask, curr_mask)
+
+            # mask = cv2.bitwise_or(mask, reflection_mask)
+            h_img, w_img = mask.shape
+            cv2.rectangle(mask, (0, h_img - 15), (w_img, h_img), 0, -1) 
+
+            
+            kernel_open = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open)
+
+            
+            kernel_close = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 25))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
+            
+            debug_mask_all = cv2.bitwise_or(debug_mask_all, mask)
+
+            cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
             if cnts:
-                # Find the largest contour by area for the current color
                 c = max(cnts, key=cv2.contourArea)
                 area = cv2.contourArea(c)
                 
-                if area > 500:
-                    rect = cv2.minAreaRect(c)
+                if area > 400:
+                    hull = cv2.convexHull(c)
+                    rect = cv2.minAreaRect(hull)
+                    
                     raw_cx = int(rect[0][0])
                     raw_cy = int(rect[0][1])
                     angle = rect[2]
 
-                    # Angle correction to align the gripper with the longest edge
                     w, h = rect[1]
-                    if w < h:
-                        angle += 90
+                    if w < h: angle += 90
                     while angle > 45: angle -= 90
                     while angle < -45: angle += 90
                     
-                    # === 2. Calculate distance: Euclidean distance from the block to TARGET_CENTER ===
                     dist = math.hypot(raw_cx - self.TARGET_CENTER_X, raw_cy - self.TARGET_CENTER_Y)
                     
-                    # Append the current block's information to the list as a dictionary
                     valid_objects.append({
                         'color': target_color,
                         'cx': raw_cx,
@@ -424,52 +523,49 @@ class ArmGraspingServer(Node):
                         'rect': rect
                     })
 
-        # === 3. Sorting and Selection ===
+        #cv2.imshow("Pure HSV Mask (Solid White = Perfect)", debug_mask_all)
+
         if valid_objects:
-            # Sort the valid objects list in ascending order based on 'dist' (distance)
             valid_objects.sort(key=lambda x: x['dist'])
-            
-            # Extract the first item (the closest target to the center)
             best_obj = valid_objects[0]
             
-            # Visualization (draw boxes and markers only for the optimal target)
             box = cv2.boxPoints(best_obj['rect'])
             box = np.int64(box)
             cv2.drawContours(img, [box], -1, (0, 255, 255), 2)
-            
             cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
             cv2.circle(img, (best_obj['cx'], best_obj['cy']), 6, (0, 255, 0), -1)
             
-            # Calculate errors for PID control
             err_x = best_obj['cx'] - self.TARGET_CENTER_X
             err_y = best_obj['cy'] - self.TARGET_CENTER_Y
             
-            # Display tracking data and currently locked color/distance on the screen
-            cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-    
-            self._publish_debug_image(img)
-            #cv2.imshow("Smart Vision", img)
-            #cv2.waitKey(1)
+            cv2.putText(img, f"Cube center: cx={best_obj['cx']}, cy={best_obj['cy']}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            #cv2.putText(img, f"Err: {err_x}, {err_y}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            #cv2.putText(img, f"Target: {best_obj['color'].upper()} Dist: {int(best_obj['dist'])}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            # cv2.imshow("Smart Vision", img)
+            # cv2.waitKey(1)
             
-            # Finally, return only the coordinates and errors of the closest target
+            self._publish_debug_image(img)
             return (best_obj['cx'], best_obj['cy'], best_obj['angle'], err_x, err_y)
         
-        # === 4. Fallback: If no valid objects were found in the entire frame ===
+
+        #cv2.namedWindow("Smart Vision")
+        #cv2.setMouseCallback("Smart Vision", self.on_mouse_click)
         cv2.drawMarker(img, (self.TARGET_CENTER_X, self.TARGET_CENTER_Y), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
         cv2.putText(img, "Target: NONE", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-        #cv2.imshow("Smart Vision", img)
-        #cv2.waitKey(1)
-
-        self._publish_debug_image(img)
+        # cv2.imshow("Smart Vision", img)
         
+        # cv2.waitKey(1)
+        
+        self._publish_debug_image(img)
         return None
     
     def process_vision_dropoff(self):
         if self.cv_image is None: return None
         
         img = self.cv_image.copy()
+        img = self.undistort_image(img)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         thresh = cv2.adaptiveThreshold(
@@ -520,6 +616,12 @@ class ArmGraspingServer(Node):
         msg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
         self.debug_img_pub.publish(msg)
     
+    def reset_position(self):
+        self.state = "IDLE"
+        self.send_arm_cmd(self.init_pos[0], self.init_pos[1], self.init_pos[2], 20.0, 0, time_ms=1000)
+        time.sleep(1.5)
+        self.curr_pos = list(self.init_pos)
+        self.reset_flag = False
 
     def main_loop(self):
         time.sleep(2)
@@ -527,6 +629,11 @@ class ArmGraspingServer(Node):
         time.sleep(3.5)
 
         while rclpy.ok():
+
+            #vision_result = self.process_vision()
+            if self.reset_flag:
+                self.reset_position()
+
 
             if self.state == "IDLE" or self.state == "HOLDING":
                 time.sleep(0.5)
@@ -545,8 +652,10 @@ class ArmGraspingServer(Node):
 
                 OFFSET_Y = 0.0
 
-                if abs(angle)<20:
-                    angle = 0
+                #if abs(angle)<20:
+                #    angle = 0
+                #else:
+                #    angle = -25.0 * np.sign(angle)
 
                 #if angle>0:
                 #    OFFSET_Y = 0.01
@@ -554,30 +663,60 @@ class ArmGraspingServer(Node):
                 # Reset lost counter because we see the object
                 self.lost_target_count = 0
                 
-                # --- State 1: Search and Control ---
+                # --- State 0: fine(r) control --- 
 
+                if not self.is_aligned:
+                    # Send motor commands and sleep to allow for them to complete
+                    x_distance = self.x_dist_from_px(cy)
+                    y_distance = self.y_dist_from_py(e_x)
+                    if abs(y_distance) > 0.01:
+                        msg = Point()
+                        msg.x = x_distance + 0.2
+                        msg.y = y_distance
+                        self.get_logger().info(f"Sent request to rotate towards (x={x_distance}, y={y_distance})")
+                        self.move_publisher.publish(msg)
+                        time.sleep(2)
+                    self.is_aligned = True
+                    continue
+
+
+                if not self.in_position:
+                    # Send motor commands and sleep to allow for them to complete
+                    x_distance = self.x_dist_from_px(cy)
+                    if abs(x_distance) > 0.01:
+                        msg = Point()
+                        msg.x = x_distance
+                        msg.y = 0.0
+                        self.get_logger().info(f"Sent request to move x={x_distance}m")
+                        self.move_publisher.publish(msg)
+                        time.sleep(1.5)
+                    self.in_position = True
+                    continue
+
+                # --- State 1: Search and Control ---
                 if abs(e_x) > self.DEADZONE or abs(e_y) > self.DEADZONE:
                     self.stable_count = 0 
                     self.state = "TRACKING"
-                
+                    
+                    # 🎯 核心逻辑 1：只有在稳定追踪（高空）时，才更新目标角度
+                    # 只过滤 3 度以内的微小像素抖动，保留真实角度
+                    #if abs(angle) < 3:
+                    #    angle = 0.0
+                    self.locked_angle = angle  # <--- 把准确的角度存进“保险箱”
+                    
                     # === PID Calculation ===
                     self.pid_lateral.update(cx)
                     self.pid_depth.update(cy)
                     
-                    # PID Output Interpretation: Step size for Y and Z axes
-                    # Note: We negate the PID output because if the object is to the right (cx > TARGET_CENTER_X), we want to move left (negative Y direction), and if it's below (cy > TARGET_CENTER_Y), we want to move back (negative Z direction).
                     dx = -self.pid_lateral.output
                     dy = -self.pid_depth.output 
                     
-                    # Deadzone check
                     if abs(cx - self.TARGET_CENTER_X) < self.DEADZONE: dx = 0
                     if abs(cy - self.TARGET_CENTER_Y) < self.DEADZONE: dy = 0
                     
-                    # Limit step size to prevent overshooting and ensure smooth movement
                     step_y = np.clip(dx, -self.MAX_STEP, self.MAX_STEP)
                     step_z = np.clip(dy, -self.MAX_STEP, self.MAX_STEP)
                     
-                    # Send command only if there's a significant movement needed (outside of deadzone)
                     if step_y != 0 or step_z != 0:
                         pred_y = np.clip(self.curr_pos[1] + step_y, -self.Y_LIMIT, self.Y_LIMIT)
                         pred_z = np.clip(self.curr_pos[2] + step_z, self.Z_MIN, self.Z_MAX)
@@ -586,32 +725,60 @@ class ArmGraspingServer(Node):
                             self.curr_pos[1] = pred_y
                             self.curr_pos[2] = pred_z
 
-                # --- State 2: STABLE ---
+                # --- State 2: VISUAL DESCENT & STABLE ---
                 else:
-                    self.stable_count += 1
-                    self.state = "STABLE"
-                    print(f"Stabilizing... {self.stable_count}/{self.STABLE_LIMIT}")
-                    print(f"Claw angle... {angle}")
+                    SAFE_VISUAL_HEIGHT = 0.01  
                     
-                    if self.stable_count > self.STABLE_LIMIT:
-                        self.state = "GRASPING"
-                        self.send_arm_cmd(self.curr_pos[0], self.curr_pos[1], self.curr_pos[2], 20.0, angle, time_ms=500)
-                        time.sleep(1.5)
-                        self.execute_grasp(angle)
+                    if self.curr_pos[0] > SAFE_VISUAL_HEIGHT:
+                        self.state = "DESCENDING"
+                        self.get_logger().info(f"Descending... Using LOCKED angle: {self.locked_angle:.1f}")
+                        
+                        new_height = SAFE_VISUAL_HEIGHT - 0.001 # self.curr_pos[0] - 0.008
+                        
+                        # 🎯 核心逻辑 2：下降时，使用高空存下来的 locked_angle，无视当前的瞎眼视觉
+                        self.send_arm_cmd(new_height, self.curr_pos[1], self.curr_pos[2], 20.0, 0.0, time_ms=1300)
+                        self.curr_pos[0] = new_height
+                        time.sleep(2.3) 
+                        continue 
+                        
+                    else:
+                        self.stable_count += 1
+                        self.state = "STABLE"
+                        self.get_logger().info(f"At Safe Height. Stabilizing... {self.stable_count}/{self.STABLE_LIMIT}")
+                        
+                        if self.stable_count > self.STABLE_LIMIT:
+                            self.state = "GRASPING"
+                            if abs(self.locked_angle) < 20:
+                                self.locked_angle = 0
+                            # 🎯 核心逻辑 3：抓取前夕，同样使用 locked_angle
+                            self.send_arm_cmd(self.curr_pos[0], self.curr_pos[1], self.curr_pos[2], 20.0, self.locked_angle, time_ms=500)
+                            time.sleep(0.5)
+                            self.execute_grasp(self.locked_angle) # 传递锁死的角度给夹取动作
 
             # === IF Object NOT Detected ===
             else:
                 self.lost_target_count += 1
+
+                if self.lost_target_count > 5 and self.is_aligned and not self.in_position and not self.i_tried_once:
+                        # if we lost the target after aligning, drive forward a bit
+                        self.i_tried_once = True
+                        msg = Point()
+                        msg.x = 0.1
+                        msg.y = 0.0
+                        self.get_logger().info(f"Lost the cube. Sent request to move x={msg.x}m")
+                        self.move_publisher.publish(msg)
+                        time.sleep(2.0)
+                        continue
                 
                 # If object lost for > 30 frames (approx 1 second), return Preparing Position
                 if self.lost_target_count > 30:
                     
                     print("Target Lost... Returning Preparing Position.")
-                    self.send_arm_cmd(self.prepare_pos[0], self.prepare_pos[1], self.prepare_pos[2], 20.0, 0, time_ms=1000)
+                    self.send_arm_cmd(self.init_pos[0], self.init_pos[1], self.init_pos[2], 20.0, 0, time_ms=1000)
                     time.sleep(1.5)
 
-                    self.curr_pos = list(self.prepare_pos)
-                          
+                    self.curr_pos = list(self.init_pos)
+                           
                     # Reset PID to prevent "jump" when object is found again
                     self.pid_lateral.clear()
                     self.pid_depth.clear()
@@ -619,6 +786,16 @@ class ArmGraspingServer(Node):
                     self.pid_depth.SetPoint = self.TARGET_CENTER_Y
      
             time.sleep(0.05) 
+
+    def y_dist_from_py(self, cx):
+        dist = -(0.00053195*cx + 0.00206521)
+        self.get_logger().info(f"Dist to travel in y: {dist} (from px={cx})" )
+        return dist
+
+    def x_dist_from_px(self, cy):
+        dist = (-0.0537*cy + 33.88)/100 - 0.2
+        self.get_logger().info(f"Dist to travel in x: {dist} (from px={cy})" )
+        return dist
 
 def main():
 
