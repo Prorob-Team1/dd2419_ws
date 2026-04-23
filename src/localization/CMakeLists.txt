@@ -13,6 +13,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(robp_interfaces REQUIRED)
 
 #set(PCL_DIR /home/robot/dd2419_ws/.pixi/envs/default/share/pcl-1.15) # why on earth was this needed
 find_package(PCL REQUIRED COMPONENTS common registration visualization filters)
@@ -32,6 +33,7 @@ ament_target_dependencies(
   "tf2_ros"
   "sensor_msgs"
   "visualization_msgs"
+  "robp_interfaces"
 )
 target_link_libraries(localization
   Eigen3::Eigen
