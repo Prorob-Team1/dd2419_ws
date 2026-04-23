@@ -11,6 +11,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <pcl/filters/radius_outlier_removal.h>
 #include <sensor_msgs/msg/imu.hpp>
+#include <robp_interfaces/msg/duty_cycles.hpp>
 
 
 using PointT = pcl::PointXYZ;
@@ -39,7 +40,12 @@ public:
         imu_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
 			"/phidgets/imu/data_raw", 1, 
 			std::bind(&Localization::imuCallback, this, std::placeholders::_1));
-		
+
+		duty_cycle_subscription_ = this->create_subscription<robp_interfaces::msg::DutyCycles>(
+			"/phidgets/motor/duty_cycles", 1,
+			std::bind(&Localization::dutyCycleCallback, this, std::placeholders::_1));
+
+
 		rclcpp::QoS qos(rclcpp::KeepLast(1));
 		qos.reliable();
 		qos.transient_local();
@@ -75,6 +81,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
 	rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription_;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_subscription_;
+	rclcpp::Subscription<robp_interfaces::msg::DutyCycles>::SharedPtr duty_cycle_subscription_;
     rclcpp::TimerBase::SharedPtr tf_timer_;
     rclcpp::TimerBase::SharedPtr init_retry_timer_;  // fires until TF becomes available
 
@@ -86,6 +93,9 @@ private:
 
 	// save the last time stamp we took a scan
     rclcpp::Time last_scan_time_;
+
+	rclcpp::Time last_driving_time_ = this->get_clock()->now() - rclcpp::Duration::from_seconds(1000);
+	bool is_stationary_ = true;
 
     // Stored so the retry timer can use it
     geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pending_initial_pose_;
@@ -100,6 +110,7 @@ private:
     const float maxAngularVelForGoodScan = 0.3f;
     const float icpInterpolationAlpha = 0.05f;
     const float icpCorrectionDistanceFromStart = 1.5f;
+	const float stationaryTimeThreshold = 1.0f;
 
 
 	double ang_vel_{0};
@@ -168,6 +179,13 @@ private:
 		ang_vel_ = msg->angular_velocity.z;
 	}
 
+	void dutyCycleCallback(const robp_interfaces::msg::DutyCycles::SharedPtr msg) {
+		bool isDriving = std::abs(msg->duty_cycle_left) > 0.01 || std::abs(msg->duty_cycle_right) > 0.01;
+		auto now = this->get_clock()->now();
+		if (isDriving) last_driving_time_ = now;
+		is_stationary_ = last_driving_time_ + rclcpp::Duration::from_seconds(stationaryTimeThreshold) < now;
+	}
+
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
 	{
 		if (!use_icp_) return;
@@ -230,7 +248,7 @@ private:
 
 		CloudT::Ptr cloud_at_guess(new CloudT());
 		pcl::transformPointCloud(*scan_cloud, *cloud_at_guess, T_map_lidar_1_guess);
-		cloud_at_guess = filterCloud(cloud_at_guess);
+		scan_cloud = filterCloud(scan_cloud);
 
 		publishCloud(cloud_at_guess, "map", pub_scan_guess_);
 
