@@ -22,6 +22,9 @@ public:
     Localization() : Node("localization"), is_initialized_(false),
                      T_map_odom_(Eigen::Matrix4f::Identity())
     {
+		this->declare_parameter<bool>("use_icp", true);
+		this->get_parameter("use_icp", use_icp_);
+
         tf_buffer_      = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_    = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
@@ -57,6 +60,10 @@ public:
     }
 
 private:
+	// node parameters
+	bool use_icp_;
+
+	// pubs and subs
     std::unique_ptr<tf2_ros::Buffer>               tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener>    tf_listener_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
@@ -71,6 +78,7 @@ private:
     rclcpp::TimerBase::SharedPtr tf_timer_;
     rclcpp::TimerBase::SharedPtr init_retry_timer_;  // fires until TF becomes available
 
+	// state
     bool            is_initialized_;
     CloudT::Ptr     reference_cloud_;
     Eigen::Matrix4f T_map_lidar_0_;  // true lidar pose in map at t=0
@@ -162,6 +170,7 @@ private:
 
     void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
 	{
+		if (!use_icp_) return;
 		if (!is_initialized_) {
 			RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
 								"Not initialized yet, skipping scan.");
