@@ -64,7 +64,7 @@ public:
             std::bind(&Localization::initialPoseCallback, this, std::placeholders::_1));
 
         tf_timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(10),
+            std::chrono::milliseconds(20),
             std::bind(&Localization::publishMapToOdom, this));
 
 		marker_timer_ = this->create_wall_timer(
