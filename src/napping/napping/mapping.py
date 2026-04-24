@@ -487,25 +487,6 @@ class Mapper(Node):
 
                 self.object_marker_pub.publish(marker)
 
-        # Dont worry this is important and definitely belongs in this method
-        robot_marker = Marker()
-        robot_marker.header.frame_id = "base_link"
-        robot_marker.header.stamp = self.get_clock().now().to_msg()
-        robot_marker.ns = "robot_box"
-        robot_marker.id = 1337
-        robot_marker.type = Marker.CUBE
-        robot_marker.action = Marker.ADD
-        robot_marker.pose.position.x = -0.1
-        robot_marker.pose.position.y = 0
-        robot_marker.pose.position.z = 0.05
-        robot_marker.scale.x = 0.38
-        robot_marker.scale.y = 0.27
-        robot_marker.scale.z = 0.13
-        robot_marker.color.r = 0.75
-        robot_marker.color.g = 0.75
-        robot_marker.color.b = 0.75
-        robot_marker.color.a = 0.8
-        self.object_marker_pub.publish(robot_marker)
 
     def detection_callback(self, msg: ObjectDetectionArrayMsg):
         self.detection_mapper.process_object_detections(msg)
