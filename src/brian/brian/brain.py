@@ -51,7 +51,7 @@ CUBE_GOAL = 1
 BOX_GOAL = 2
 
 MAX_NAV_ATTEMPTS = 5
-MAX_GRAB_ATTEMPTS = 2
+MAX_GRAB_ATTEMPTS = 3
 
 def format_goal_text(goal_type: int, target_obj: ObjectCandidateMsg):
     # Informative and fancy message string :)))))
@@ -76,6 +76,7 @@ class GoalProvider:
         self.logger = logger
         self.start_pose = start_pose
         self.target_obj = None
+        self.known_cube_picked_up = False
 
         self.nav_attempts = dict()
 
@@ -223,7 +224,7 @@ class GoalProvider:
         self.logger.debug(f"Sending goal at ({x=},{y=},{yaw=})")
         return x, y, 0.0#yaw
 
-    def get_object_goal(self, goal_type, robot_pose, valid_candidates):
+    def get_object_goal(self, goal_type, robot_pose, valid_candidates: list[ObjectCandidateMsg]):
         if robot_pose is None:
             return None
         valid_objects: list[ObjectCandidateMsg] = []
@@ -231,7 +232,11 @@ class GoalProvider:
             if candidate.class_name == ObjectClassification.BOX.value and goal_type == BOX_GOAL:
                 valid_objects.append(candidate)
             elif candidate.class_name != ObjectClassification.BOX.value and goal_type == CUBE_GOAL:
-                valid_objects.append(candidate)
+                if self.known_cube_picked_up:
+                    valid_objects.append(candidate)
+                else:
+                    if candidate.class_name == ObjectClassification.CUBE_UNKNOWN.value or candidate.confidence == 1.0:
+                        valid_objects.append(candidate)
         closest_obj = None
         closest_pose = None
         closest_dist = np.inf
@@ -785,9 +790,13 @@ class Nav2GoalB(Behaviour):
         self.goal_type = goal_type
         self.current_status = Status.RUNNING
         self.done_status = done_status
+        self.nav_start_time = 0
 
     def update(self):
         #self.logger.info(f"{self.name}: Checking feedback")
+        # Make sure we aren't softlocked
+        if time.time() - self.nav_start_time > 20 and self.node.robot_stopped:
+            self.current_status = Status.FAILURE
         return self.current_status
 
     def terminate(self, new_status):
@@ -798,6 +807,7 @@ class Nav2GoalB(Behaviour):
 
     def initialise(self):
         
+        self.nav_start_time = time.time()
         self.current_status = Status.RUNNING
         if self.node.map is None:
             self.current_status = Status.FAILURE
@@ -919,6 +929,16 @@ class Nav2CubeB(Nav2GoalB):
         self.last_valid_candidate_count = 0
 
     def update(self):
+
+        # Make sure we aren't softlocked
+        if time.time() - self.nav_start_time > 20 and self.node.robot_stopped:
+            self.current_status = Status.FAILURE
+            return self.current_status
+        
+        # Make sure we've picked up at least ONE known cube before getting greedy
+        if not self.node.goal_provider.known_cube_picked_up:
+            return self.current_status
+
         # Make sure goal is the closest available cube
         if self.last_valid_candidate_count == len(self.node.valid_candidates):
             # only check candidate list if it has changed
@@ -1052,6 +1072,9 @@ class GrabCubeB(ArmB):
             self.node.update_caught_cubes()
             self.node.cube_in_gripper = True
             self.node.has_backed_up = False 
+            if not self.node.goal_provider.known_cube_picked_up:
+                # The first time we pick something up, it will be the known cube
+                self.node.goal_provider.known_cube_picked_up =  True
         else:
             self.node.cube_in_gripper = False
             if self.node.grasp_attempts[self.node.goal_provider.target_obj.id] > MAX_GRAB_ATTEMPTS:
@@ -1112,7 +1135,7 @@ class MoveRobotB(Behaviour):
     
 class BackUpFromObjectB(MoveRobotB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, x_distance=-0.5, y_distance=0.0)
+        super().__init__(node, __class__.__name__, x_distance=-0.35, y_distance=0.0)
     def log_action(self):
         self.node.get_logger().info("--> Backing up...")
 
