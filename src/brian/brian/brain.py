@@ -421,14 +421,15 @@ class Brain(Node):
         for candidate in msg.candidates:
             candidate: ObjectCandidateMsg
             if candidate.picked_up == False or candidate.class_name == ObjectClassification.BOX.value:
-                # Ignore cube after X failed navigation attempts
-                if candidate.id in self.goal_provider.nav_attempts.keys():
-                    if self.goal_provider.nav_attempts[candidate.id] > MAX_NAV_ATTEMPTS:
-                        continue
-                # Ignore cube after Y failed grasp attempts
-                if candidate.id in self.grasp_attempts.keys():
-                    if self.grasp_attempts[candidate.id] > MAX_GRAB_ATTEMPTS:
-                        continue
+                if candidate.confidence < 1.0:
+                    # Ignore cube after X failed navigation attempts
+                    if candidate.id in self.goal_provider.nav_attempts.keys():
+                        if self.goal_provider.nav_attempts[candidate.id] > MAX_NAV_ATTEMPTS:
+                            continue
+                    # Ignore cube after Y failed grasp attempts
+                    if candidate.id in self.grasp_attempts.keys():
+                        if self.grasp_attempts[candidate.id] > MAX_GRAB_ATTEMPTS:
+                            continue
                 valid_candidates.append(candidate)
                 if candidate.class_name != ObjectClassification.BOX.value:
                     self.cube_found = True
