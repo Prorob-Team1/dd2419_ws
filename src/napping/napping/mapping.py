@@ -485,7 +485,6 @@ class Mapper(Node):
 
                 self.object_marker_pub.publish(marker)
 
-
     def detection_callback(self, msg: ObjectDetectionArrayMsg):
         self.detection_mapper.process_object_detections(msg)
 
@@ -552,18 +551,18 @@ class Mapper(Node):
                 writer.writerow(
                     [
                         "B",
-                        f"{box.avg_pose.x:.2f}",
-                        f"{box.avg_pose.y:.2f}",
-                        f"{np.rad2deg(box.avg_pose.angle):.1f}",
+                        f"{round(box.avg_pose.x / 100.0)}",
+                        f"{round(box.avg_pose.y / 100.0)}",
+                        f"{round(np.rad2deg(box.avg_pose.angle))}",
                     ]
                 )
             for cube in cubes[: self.n_cubes]:
                 writer.writerow(
                     [
-                        cube.classification.value,
-                        f"{cube.avg_pose.x:.2f}",
-                        f"{cube.avg_pose.y:.2f}",
-                        f"{np.rad2deg(cube.avg_pose.angle):.1f}",
+                        "O",
+                        f"{round(cube.avg_pose.x / 100.0)}",
+                        f"{round(cube.avg_pose.y / 100.0)}",
+                        f"{round(np.rad2deg(cube.avg_pose.angle))}",
                     ]
                 )
 
