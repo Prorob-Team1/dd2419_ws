@@ -214,7 +214,7 @@ class Navigator(Node):
                 w = max(-self.max_w, min(w, self.max_w))
                 min_abs_w = 3.0 * math.radians(15)
                 if abs(w) < min_abs_w: #set lower limit
-                    math.copysign(min_abs_w,w)
+                    w = math.copysign(min_abs_w,w)
 
 
                 self.get_logger().info(
@@ -281,7 +281,7 @@ class Navigator(Node):
                 w = max(-self.max_w, min(w, self.max_w))
                 min_abs_w = 3.0 * math.radians(15)
                 if abs(w) < min_abs_w: #set lower limit
-                    math.copysign(min_abs_w,w)
+                    w = math.copysign(min_abs_w,w)
                 self.get_logger().info(
                     f"ALIGN_PARK err={math.degrees(heading_err):.1f}° w={w:.2f}",
                     throttle_duration_sec=0.5
