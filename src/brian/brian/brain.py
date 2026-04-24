@@ -35,6 +35,8 @@ from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg, Duty
 
 from napping.mapping import ObjectClassification
 
+import random
+
 class ANSIEscClr():
     BOLD = "\x1b[1m"
     RESET = "\x1b[0m"
@@ -79,6 +81,9 @@ class GoalProvider:
         self.known_cube_picked_up = False
 
         self.nav_attempts = dict()
+
+        # Track the uncertain objects you've explored (should never explore the same object twice) 
+        self.looked_at_ids = list()
 
     def create_goal_marker(self, x: float, y: float, yaw: float, goal_type: int):
         goal_marker = Marker()
@@ -191,16 +196,18 @@ class GoalProvider:
             if len(candidates) > 0:
                 idx = np.random.choice(len(candidates))
                 candidate = candidates[idx]
-                x = candidate.pose.position.x
-                y = candidate.pose.position.y
-                yaw = euler_from_quaternion([
-                    candidate.pose.orientation.x,
-                    candidate.pose.orientation.y,
-                    candidate.pose.orientation.z,
-                    candidate.pose.orientation.w,
-                ])[2]
-                self.logger.debug(f"Sending goal at ({x=},{y=},{yaw=})")
-                return x, y, 0.0 #yaw
+                if candidate.id not in self.looked_at_ids:
+                    self.looked_at_ids.append(candidate.id)
+                    x = candidate.pose.position.x
+                    y = candidate.pose.position.y
+                    yaw = euler_from_quaternion([
+                        candidate.pose.orientation.x,
+                        candidate.pose.orientation.y,
+                        candidate.pose.orientation.z,
+                        candidate.pose.orientation.w,
+                    ])[2]
+                    self.logger.debug(f"Sending goal at ({x=},{y=},{yaw=})")
+                    return x, y, 0.0 #yaw
 
         # Go to a new frontier
         robot_x, robot_y, robot_yaw = robot_pose
@@ -232,15 +239,16 @@ class GoalProvider:
             if candidate.class_name == ObjectClassification.BOX.value and goal_type == BOX_GOAL:
                 valid_objects.append(candidate)
             elif candidate.class_name != ObjectClassification.BOX.value and goal_type == CUBE_GOAL:
-                if self.known_cube_picked_up:
-                    valid_objects.append(candidate)
-                else:
-                    if candidate.class_name == ObjectClassification.CUBE_UNKNOWN.value or candidate.confidence == 1.0:
-                        valid_objects.append(candidate)
+                valid_objects.append(candidate)
         closest_obj = None
         closest_pose = None
         closest_dist = np.inf
+        random.shuffle(valid_objects)
         for obj in valid_objects:
+            if obj.confidence == 1.0 and goal_type == CUBE_GOAL:
+                # Always go for known cubes first as we a required to pick these up within the time limit!
+                closest_obj = obj
+                break
             q = [
                 obj.pose.orientation.x,
                 obj.pose.orientation.y,
@@ -265,6 +273,7 @@ class GoalProvider:
         if closest_obj is None:
             self.logger.warning("No valid object available, returning fallback goal")
             return robot_pose
+        
         x, y, _ = closest_pose
         robot_x, robot_y, robot_yaw = robot_pose
         yaw = np.atan2(y - robot_y, x - robot_x)
