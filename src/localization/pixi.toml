@@ -14,7 +14,9 @@ extra-input-globs = [
 
 [package.host-dependencies]
 ros2-distro-mutex = ">=0.13,<0.14"
+ros-jazzy-robp-interfaces = { path = "../robp_interfaces" }
 pcl = "*"
+
 
 [package.build-dependencies]
 ros2-distro-mutex = ">=0.13,<0.14"
