@@ -444,6 +444,8 @@ class ArmGraspingServer(Node):
         
         img = self.undistort_image(img)
 
+        img = cv2.GaussianBlur(img, (5, 5), 0)
+
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         
         # REFLECTION_RANGE = ((10, 0, 253), (255, 255, 255))
