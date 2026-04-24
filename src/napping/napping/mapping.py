@@ -551,8 +551,8 @@ class Mapper(Node):
                 writer.writerow(
                     [
                         "B",
-                        f"{round(box.avg_pose.x / 100.0)}",
-                        f"{round(box.avg_pose.y / 100.0)}",
+                        f"{round(box.avg_pose.x * 100.0)}",
+                        f"{round(box.avg_pose.y * 100.0)}",
                         f"{round(np.rad2deg(box.avg_pose.angle))}",
                     ]
                 )
@@ -560,8 +560,8 @@ class Mapper(Node):
                 writer.writerow(
                     [
                         "O",
-                        f"{round(cube.avg_pose.x / 100.0)}",
-                        f"{round(cube.avg_pose.y / 100.0)}",
+                        f"{round(cube.avg_pose.x * 100.0)}",
+                        f"{round(cube.avg_pose.y * 100.0)}",
                         f"{round(np.rad2deg(cube.avg_pose.angle))}",
                     ]
                 )
