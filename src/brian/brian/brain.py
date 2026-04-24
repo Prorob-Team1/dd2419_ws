@@ -76,6 +76,7 @@ class GoalProvider:
         self.logger = logger
         self.start_pose = start_pose
         self.target_obj = None
+        self.known_cube_picked_up = False
 
         self.nav_attempts = dict()
 
@@ -223,7 +224,7 @@ class GoalProvider:
         self.logger.debug(f"Sending goal at ({x=},{y=},{yaw=})")
         return x, y, 0.0#yaw
 
-    def get_object_goal(self, goal_type, robot_pose, valid_candidates):
+    def get_object_goal(self, goal_type, robot_pose, valid_candidates: list[ObjectCandidateMsg]):
         if robot_pose is None:
             return None
         valid_objects: list[ObjectCandidateMsg] = []
@@ -231,7 +232,11 @@ class GoalProvider:
             if candidate.class_name == ObjectClassification.BOX.value and goal_type == BOX_GOAL:
                 valid_objects.append(candidate)
             elif candidate.class_name != ObjectClassification.BOX.value and goal_type == CUBE_GOAL:
-                valid_objects.append(candidate)
+                if self.known_cube_picked_up:
+                    valid_objects.append(candidate)
+                else:
+                    if candidate.class_name == ObjectClassification.CUBE_UNKNOWN.value or candidate.confidence == 1.0:
+                        valid_objects.append(candidate)
         closest_obj = None
         closest_pose = None
         closest_dist = np.inf
@@ -311,8 +316,6 @@ class Brain(Node):
         self.in_dropoff_range = False
 
         self.has_backed_up = True
-
-        self.known_cube_picked_up = False
 
         # Track grasp attempts
         self.grasp_attempts = dict()
@@ -933,7 +936,7 @@ class Nav2CubeB(Nav2GoalB):
             return self.current_status
         
         # Make sure we've picked up at least ONE known cube before getting greedy
-        if not self.node.known_cube_picked_up:
+        if not self.node.goal_provider.known_cube_picked_up:
             return self.current_status
 
         # Make sure goal is the closest available cube
@@ -1069,9 +1072,9 @@ class GrabCubeB(ArmB):
             self.node.update_caught_cubes()
             self.node.cube_in_gripper = True
             self.node.has_backed_up = False 
-            if not self.node.known_cube_picked_up:
+            if not self.node.goal_provider.known_cube_picked_up:
                 # The first time we pick something up, it will be the known cube
-                self.node.known_cube_picked_up =  True
+                self.node.goal_provider.known_cube_picked_up =  True
         else:
             self.node.cube_in_gripper = False
             if self.node.grasp_attempts[self.node.goal_provider.target_obj.id] > MAX_GRAB_ATTEMPTS:
