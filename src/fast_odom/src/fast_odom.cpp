@@ -37,6 +37,7 @@ class FastOdom : public rclcpp::Node
 
 		void broadcast_transform(const rclcpp::Time stamp, const double x, const double y, const double yaw);
 		void publish_path(const rclcpp::Time stamp, const double x, const double y, const double yaw);
+		void publish_marker(const rclcpp::Time stamp, const double x, const double y, const double yaw);
 
 		FastOdom() : Node("fast_odom")
 		{
@@ -269,6 +270,52 @@ void FastOdom::publish_path(const rclcpp::Time stamp, const double x, const doub
 	y -- y coordinate of the 2D pose
 	yaw -- yaw of the 2D pose (in radians)
 	*/
+
+	path_.header.stamp = stamp;
+	path_.header.frame_id = "odom";
+
+	geometry_msgs::msg::PoseStamped pose{};
+	pose.header = path_.header;
+
+	pose.pose.position.x = x;
+	pose.pose.position.y = y;
+	pose.pose.position.z = 0.01;  // 1 cm up so it will be above ground level
+
+	tf2::Quaternion q = tf2::Quaternion::createFromRPY(0.0, 0.0, yaw);
+	pose.pose.orientation.x = q.getX();
+	pose.pose.orientation.y = q.getY();
+	pose.pose.orientation.z = q.getZ();
+	pose.pose.orientation.w = q.getW();
+
+	path_.poses.emplace_back(pose);
+
+	path_publisher_->publish(path_);
+}
+
+void FastOdom::publish_marker(const rclcpp::Time stamp, const double x, const double y, const double yaw) 
+{
+	/*
+	Published a giant gray marker to visualize the robot
+	*/
+
+        robot_marker = Marker()
+        robot_marker.header.frame_id = "base_link"
+        robot_marker.header.stamp = self.get_clock().now().to_msg()
+        robot_marker.ns = "robot_box"
+        robot_marker.id = 1337
+        robot_marker.type = Marker.CUBE
+        robot_marker.action = Marker.ADD
+        robot_marker.pose.position.x = -0.1
+        robot_marker.pose.position.y = 0
+        robot_marker.pose.position.z = 0.05
+        robot_marker.scale.x = 0.38
+        robot_marker.scale.y = 0.27
+        robot_marker.scale.z = 0.13
+        robot_marker.color.r = 0.75
+        robot_marker.color.g = 0.75
+        robot_marker.color.b = 0.75
+        robot_marker.color.a = 0.8
+        self.object_marker_pub.publish(robot_marker)
 
 	path_.header.stamp = stamp;
 	path_.header.frame_id = "odom";
