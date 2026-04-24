@@ -56,6 +56,7 @@ class FastOdom : public rclcpp::Node
 			);
 			
       		path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/path", 10);
+			marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/robot_marker", 10);
 
 			tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -308,7 +309,7 @@ void FastOdom::publish_marker(const rclcpp::Time stamp)
 	robot_marker.type = visualization_msgs::msg::Marker::CUBE;
 	robot_marker.action = visualization_msgs::msg::Marker::ADD;
 	robot_marker.pose.position.x = -0.1;
-	robot_marker.pose.position.y = 0;
+	robot_marker.pose.position.y = 0.0;
 	robot_marker.pose.position.z = 0.05;
 	robot_marker.scale.x = 0.38;
 	robot_marker.scale.y = 0.27;
