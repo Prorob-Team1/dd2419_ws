@@ -787,9 +787,13 @@ class Nav2GoalB(Behaviour):
         self.goal_type = goal_type
         self.current_status = Status.RUNNING
         self.done_status = done_status
+        self.nav_start_time = 0
 
     def update(self):
         #self.logger.info(f"{self.name}: Checking feedback")
+        # Make sure we aren't softlocked
+        if time.time() - self.nav_start_time > 20 and self.node.robot_stopped:
+            self.current_status = Status.FAILURE
         return self.current_status
 
     def terminate(self, new_status):
@@ -800,6 +804,7 @@ class Nav2GoalB(Behaviour):
 
     def initialise(self):
         
+        self.nav_start_time = time.time()
         self.current_status = Status.RUNNING
         if self.node.map is None:
             self.current_status = Status.FAILURE
@@ -921,6 +926,12 @@ class Nav2CubeB(Nav2GoalB):
         self.last_valid_candidate_count = 0
 
     def update(self):
+
+        # Make sure we aren't softlocked
+        if time.time() - self.nav_start_time > 20 and self.node.robot_stopped:
+            self.current_status = Status.FAILURE
+            return self.current_status
+        
         # Make sure we've picked up at least ONE known cube before getting greedy
         if not self.node.known_cube_picked_up:
             return self.current_status
