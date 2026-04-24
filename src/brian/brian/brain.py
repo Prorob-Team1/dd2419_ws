@@ -51,7 +51,7 @@ CUBE_GOAL = 1
 BOX_GOAL = 2
 
 MAX_NAV_ATTEMPTS = 5
-MAX_GRAB_ATTEMPTS = 2
+MAX_GRAB_ATTEMPTS = 3
 
 def format_goal_text(goal_type: int, target_obj: ObjectCandidateMsg):
     # Informative and fancy message string :)))))
@@ -311,6 +311,8 @@ class Brain(Node):
         self.in_dropoff_range = False
 
         self.has_backed_up = True
+
+        self.known_cube_picked_up = False
 
         # Track grasp attempts
         self.grasp_attempts = dict()
@@ -919,6 +921,10 @@ class Nav2CubeB(Nav2GoalB):
         self.last_valid_candidate_count = 0
 
     def update(self):
+        # Make sure we've picked up at least ONE known cube before getting greedy
+        if not self.node.known_cube_picked_up:
+            return self.current_status
+
         # Make sure goal is the closest available cube
         if self.last_valid_candidate_count == len(self.node.valid_candidates):
             # only check candidate list if it has changed
@@ -1052,6 +1058,9 @@ class GrabCubeB(ArmB):
             self.node.update_caught_cubes()
             self.node.cube_in_gripper = True
             self.node.has_backed_up = False 
+            if not self.node.known_cube_picked_up:
+                # The first time we pick something up, it will be the known cube
+                self.node.known_cube_picked_up =  True
         else:
             self.node.cube_in_gripper = False
             if self.node.grasp_attempts[self.node.goal_provider.target_obj.id] > MAX_GRAB_ATTEMPTS:
