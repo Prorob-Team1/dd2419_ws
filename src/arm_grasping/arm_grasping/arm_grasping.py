@@ -116,7 +116,7 @@ class ArmGraspingServer(Node):
 
         # Movement constraints
         self.MAX_STEP = 0.01      
-        self.DEADZONE = 4        
+        self.DEADZONE = 8        
 
         # State management
         self.stable_count = 0
@@ -287,7 +287,8 @@ class ArmGraspingServer(Node):
         self.map1,
         self.map2,
         interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_TRANSPARENT,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(0,0,0)
     )
         return img
 
@@ -448,31 +449,31 @@ class ArmGraspingServer(Node):
 
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         
-        # REFLECTION_RANGE = ((10, 0, 253), (255, 255, 255))
+        REFLECTION_RANGE = ((0, 20, 255), (255, 255, 255))
         LOCAL_HSV_RANGES = { 
             'red': [
                 # 核心改变：把 V（第三个数字）的下限从 80 暴力拉高到 120 或 130！
                 # 这样可以一刀切掉所有暗沉的地板反光。
                 # 把 S（第二个数字）设为 90，处于不过于严格也不过于宽松的甜区。
-                ((0, 90, 130), (8, 255, 255)),       
-                ((165, 90, 130), (180, 255, 255))
+                ((0, 120, 110), (8, 255, 255)),       
+                ((165, 120, 110), (180, 255, 255))
             ],
             
             'green': [
-                ((65, 25, 90), (98, 255, 255))      
+                ((65, 40, 90), (98, 255, 255))      
             ],
             
             'blue': [
-                ((100, 35, 90), (130, 255, 255))      
+                ((100, 60, 90), (130, 255, 255))      
             ]
         }
 
         valid_objects = []
         debug_mask_all = np.zeros(img.shape[:2], dtype=np.uint8)
-        # reflection_mask = cv2.inRange(hsv, np.array(REFLECTION_RANGE[0]), np.array(REFLECTION_RANGE[1]))
-        # if cv2.countNonZero(reflection_mask) > 0.15 * reflection_mask.size:
-        #     # self.get_logger().warn("Too many reflections!")
-        #     reflection_mask = np.zeros_like(reflection_mask)
+        reflection_mask = cv2.inRange(hsv, np.array(REFLECTION_RANGE[0]), np.array(REFLECTION_RANGE[1]))
+        if cv2.countNonZero(reflection_mask) > 0.15 * reflection_mask.size:
+            # self.get_logger().warn("Too many reflections!")
+            reflection_mask = np.zeros_like(reflection_mask)
         
         for target_color, ranges in LOCAL_HSV_RANGES.items():
             mask = np.zeros(img.shape[:2], dtype=np.uint8)
@@ -481,7 +482,7 @@ class ArmGraspingServer(Node):
                 curr_mask = cv2.inRange(hsv, np.array(lower), np.array(upper))
                 mask = cv2.bitwise_or(mask, curr_mask)
 
-            # mask = cv2.bitwise_or(mask, reflection_mask)
+            mask = cv2.bitwise_or(mask, reflection_mask)
             h_img, w_img = mask.shape
             cv2.rectangle(mask, (0, h_img - 15), (w_img, h_img), 0, -1) 
 
@@ -501,7 +502,7 @@ class ArmGraspingServer(Node):
                 c = max(cnts, key=cv2.contourArea)
                 area = cv2.contourArea(c)
                 
-                if area > 400:
+                if area > 400 and area < img.size * 0.2:
                     hull = cv2.convexHull(c)
                     rect = cv2.minAreaRect(hull)
                     

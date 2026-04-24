@@ -181,7 +181,7 @@ class PathPlannerNode(Node):
 
             if goal_label == ObjectClassification.BOX.value:
                 goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y
-                goal_tolerance = 0.2
+                goal_tolerance = 0.25
                 use_parking = True
             elif goal_label == "":  # explore goal
                 goal_x, goal_y = self.grid_to_world(*snapped)
