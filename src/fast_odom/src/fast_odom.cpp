@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <mutex>
 
 constexpr bool USE_IMU = true; // if we want to use the IMU or not 
 constexpr double TICKS_PER_REV = 48 * 64;
@@ -42,17 +43,26 @@ class FastOdom : public rclcpp::Node
 
 		FastOdom() : Node("fast_odom")
 		{
+			// Create separate callback groups for concurrent execution
+			auto imu_cg = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+			auto encoder_cg = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
+			rclcpp::SubscriptionOptions imu_opts;
+			imu_opts.callback_group = imu_cg;
 			imu_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
 				"/phidgets/imu/data_raw", 
-				10, 
-				[this](const sensor_msgs::msg::Imu::SharedPtr msg){imu_callback(msg);}
+				rclcpp::SensorDataQoS(),
+				[this](const sensor_msgs::msg::Imu::SharedPtr msg){imu_callback(msg);},
+				imu_opts
 			);
 		
+			rclcpp::SubscriptionOptions encoder_opts;
+			encoder_opts.callback_group = encoder_cg;
 			encoder_subscription_ = this->create_subscription<robp_interfaces::msg::Encoders>(
 				"/phidgets/motor/encoders", 
-				10, 
-				[this](const robp_interfaces::msg::Encoders::SharedPtr msg){encoder_callback(msg);}
+				rclcpp::SensorDataQoS(),
+				[this](const robp_interfaces::msg::Encoders::SharedPtr msg){encoder_callback(msg);},
+				encoder_opts
 			);
 			
       		path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/path", 10);
@@ -92,6 +102,9 @@ class FastOdom : public rclcpp::Node
 
 		// Path
 		nav_msgs::msg::Path path_{};
+
+		// Thread safety
+		std::mutex yaw_mutex_;
 };
 
 void FastOdom::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) 
@@ -114,10 +127,13 @@ void FastOdom::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
 	yaw_imu_ = std::atan2(std::sin(yaw), std::cos(yaw));
 	last_imu_stamp_ = msg->header.stamp;
 
-	yaw_queue_.emplace_back(yaw_imu_,last_imu_stamp_);
-	if (yaw_queue_.size() > 20) 
 	{
-		yaw_queue_.pop_front();
+		std::lock_guard<std::mutex> lock(yaw_mutex_);
+		yaw_queue_.emplace_back(yaw_imu_,last_imu_stamp_);
+		if (yaw_queue_.size() > 20) 
+		{
+			yaw_queue_.pop_front();
+		}
 	}
 }
 
@@ -182,6 +198,7 @@ void FastOdom::calibrate_imu(const sensor_msgs::msg::Imu::SharedPtr msg)
 
 const double FastOdom::get_yaw(const rclcpp::Time t_enc)
 {
+	std::lock_guard<std::mutex> lock(yaw_mutex_);
 	if (yaw_queue_.empty())
 	{
 		RCLCPP_INFO(this->get_logger(), "No gyro readings available, returning last known yaw");
@@ -325,7 +342,11 @@ int main(int argc, char ** argv)
 {
 	rclcpp::init(argc, argv);
 	auto node = std::make_shared<FastOdom>();
-	rclcpp::spin(node);
+
+	rclcpp::executors::MultiThreadedExecutor executor;
+	executor.add_node(node);
+	executor.spin();
+
 	rclcpp::shutdown();
 	return 0;
 }
