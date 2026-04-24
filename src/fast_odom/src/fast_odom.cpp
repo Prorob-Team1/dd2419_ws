@@ -9,6 +9,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <robp_interfaces/msg/encoders.hpp>
 #include <nav_msgs/msg/path.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 #include <cmath>
 #include <vector>
 #include <deque>
@@ -37,6 +38,7 @@ class FastOdom : public rclcpp::Node
 
 		void broadcast_transform(const rclcpp::Time stamp, const double x, const double y, const double yaw);
 		void publish_path(const rclcpp::Time stamp, const double x, const double y, const double yaw);
+		void publish_marker(const rclcpp::Time stamp);
 
 		FastOdom() : Node("fast_odom")
 		{
@@ -54,6 +56,7 @@ class FastOdom : public rclcpp::Node
 			);
 			
       		path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/path", 10);
+			marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/robot_marker", 10);
 
 			tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -67,6 +70,7 @@ class FastOdom : public rclcpp::Node
 		rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription_;
 		rclcpp::Subscription<robp_interfaces::msg::Encoders>::SharedPtr encoder_subscription_;
 		rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
+		rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
 
 		// IMU stuff
 		rclcpp::Time last_imu_stamp_{};
@@ -159,6 +163,7 @@ void FastOdom::encoder_callback(const robp_interfaces::msg::Encoders::SharedPtr 
 
 	broadcast_transform(stamp, x_, y_, yaw_);
 	publish_path(stamp, x_, y_, yaw_);
+	publish_marker(stamp);
 }
 
 void FastOdom::calibrate_imu(const sensor_msgs::msg::Imu::SharedPtr msg) 
@@ -289,6 +294,31 @@ void FastOdom::publish_path(const rclcpp::Time stamp, const double x, const doub
 	path_.poses.emplace_back(pose);
 
 	path_publisher_->publish(path_);
+}
+
+void FastOdom::publish_marker(const rclcpp::Time stamp) 
+{
+	/*
+	Published a giant gray marker to visualize the robot
+	*/
+	visualization_msgs::msg::Marker robot_marker;
+	robot_marker.header.frame_id = "base_link";
+	robot_marker.header.stamp = stamp;
+	robot_marker.ns = "robot_box";
+	robot_marker.id = 1337;
+	robot_marker.type = visualization_msgs::msg::Marker::CUBE;
+	robot_marker.action = visualization_msgs::msg::Marker::ADD;
+	robot_marker.pose.position.x = -0.1;
+	robot_marker.pose.position.y = 0.0;
+	robot_marker.pose.position.z = 0.05;
+	robot_marker.scale.x = 0.38;
+	robot_marker.scale.y = 0.27;
+	robot_marker.scale.z = 0.13;
+	robot_marker.color.r = 0.75;
+	robot_marker.color.g = 0.75;
+	robot_marker.color.b = 0.75;
+	robot_marker.color.a = 0.8;
+	marker_publisher_->publish(robot_marker);
 }
 
 int main(int argc, char ** argv)
