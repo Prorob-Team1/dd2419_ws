@@ -206,12 +206,17 @@ class Navigator(Node):
             heading_err = target_angle - rtheta
             heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
 
-            if abs(heading_err) < math.radians(15):
+            if abs(heading_err) < math.radians(10):
                 self.aligning = False
                 self.get_logger().info("Aligned, starting pure pursuit")
             else:
                 w = 3.0 * heading_err
                 w = max(-self.max_w, min(w, self.max_w))
+                min_abs_w = 3.0 * math.radians(15)
+                if abs(w) < min_abs_w and w != 0: #set lower limit
+                    math.copysign(min_abs_w,w)
+
+
                 self.get_logger().info(
                     f"Aligning: err={math.degrees(heading_err):.1f}° w={w:.2f}",
                     throttle_duration_sec=0.5
@@ -274,6 +279,9 @@ class Navigator(Node):
             if self._aligning_parking:
                 w = 3.0 * heading_err
                 w = max(-self.max_w, min(w, self.max_w))
+                min_abs_w = 3.0 * math.radians(15)
+                if abs(w) < min_abs_w and w != 0: #set lower limit
+                    math.copysign(min_abs_w,w)
                 self.get_logger().info(
                     f"ALIGN_PARK err={math.degrees(heading_err):.1f}° w={w:.2f}",
                     throttle_duration_sec=0.5
