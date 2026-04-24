@@ -4,21 +4,23 @@ from nav_msgs.msg import OccupancyGrid
 from robp_interfaces.msg import ObjectCandidateArrayMsg, ObjectCandidateMsg
 
 import numpy as np
+import scipy.ndimage as ndimage
 from math import sqrt
-
 
 
 BOX_HALF_X = 0.12   
 BOX_HALF_Y = 0.08   
+
 
 class MapInflator(Node):
 
     def __init__(self):
         super().__init__('map_inflator')
 
-        self.inflation_radius_m = 0.22
-        self.cost_inflation_radius_m = 0.4
-        self.box_cost_radius_m = 1
+        self.inflation_radius_m = 0.15         
+        self.pseudo_hard_radius_m = 0.19       
+        self.cost_inflation_radius_m = 0.40    
+        self.box_cost_radius_m = 1.0           
 
         self.base_grid = None
         self.candidates = []
@@ -35,11 +37,10 @@ class MapInflator(Node):
         )
 
         self.map_pub = self.create_publisher(OccupancyGrid, '/map', 10)
-
-        self.create_timer(0.2, self._rebuild_and_publish)  # rebuild at 5 Hz
+        self.create_timer(0.2, self._rebuild_and_publish)  
 
         self.get_logger().info(
-            f'Map inflator initialized, inflation_radius={self.inflation_radius_m:.3f}m'
+            f'Map inflator initialized. Hard={self.inflation_radius_m}m, Plateau={self.pseudo_hard_radius_m}m'
         )
 
     def grid_callback(self, msg: OccupancyGrid):
@@ -127,9 +128,8 @@ class MapInflator(Node):
         for candidate in self.candidates:
             if self.goal_candidate is not None:
                 if candidate.id == self.goal_candidate.id:
-                    # Do not inflate the goal, we want it nice and thin
                     if candidate.class_name == 'BOX':
-                        box_candidates.append(candidate)   #include corridor cost for box goals
+                        box_candidates.append(candidate)
                     continue
             
             if candidate.picked_up:
@@ -151,51 +151,37 @@ class MapInflator(Node):
                 if 0 <= row < height and 0 <= col < width:
                     grid[row, col] = 100
 
-        # Inflate all occupied cells by robot radius
-        radius_cells = max(1, int(self.inflation_radius_m / resolution))
-        occupied = grid == 100
-        inflated = occupied.copy()
-        for dr in range(-radius_cells, radius_cells + 1):
-            for dc in range(-radius_cells, radius_cells + 1):
-                if dr * dr + dc * dc > radius_cells * radius_cells:
-                    continue
-                shifted = np.roll(occupied, (dr, dc), axis=(0, 1))
-                # Clear wrapped edges so objects dont inflate across the opposite side of the map
-                if dr > 0:
-                    shifted[:dr, :] = False
-                elif dr < 0:
-                    shifted[dr:, :] = False
-                if dc > 0:
-                    shifted[:, :dc] = False
-                elif dc < 0:
-                    shifted[:, dc:] = False
-                inflated |= shifted
-        grid[inflated] = 100
+        base_empty_space = (grid != 100)
 
-        # cost inflation for all obstacles
-        cost_radius_cells = int(self.cost_inflation_radius_m / resolution)
-        for dr in range(-cost_radius_cells, cost_radius_cells + 1):
-            for dc in range(-cost_radius_cells, cost_radius_cells + 1):
-                dist = sqrt(dr * dr + dc * dc)
-                if dist > cost_radius_cells or dist == 0:
-                    continue
-                shifted = np.roll(inflated, (dr, dc), axis=(0, 1))
-                if dr > 0:
-                    shifted[:dr, :] = False
-                elif dr < 0:
-                    shifted[dr:, :] = False
-                if dc > 0:
-                    shifted[:, :dc] = False
-                elif dc < 0:
-                    shifted[:, dc:] = False
-                cost = int(90 * (1.0 - dist / cost_radius_cells))
-                update_mask = shifted & ~inflated & (grid >= -1) & (grid < cost)
-                grid[update_mask] = cost
+        dist_pixels = ndimage.distance_transform_edt(base_empty_space)
+        dist_m = dist_pixels * resolution
 
-        # Corridor cost for boxes
+        hard_mask = base_empty_space & (dist_m <= self.inflation_radius_m)
+        grid[hard_mask] = 100
+
+        plateau_mask = base_empty_space & (dist_m > self.inflation_radius_m) & (dist_m <= self.pseudo_hard_radius_m)
+        safe_plateau_mask = plateau_mask & (grid < 99)
+        grid[safe_plateau_mask] = 99
+
+        decay_mask = base_empty_space & (dist_m > self.pseudo_hard_radius_m) & (dist_m <= self.cost_inflation_radius_m)
+        
+        decay_dist = dist_m[decay_mask] - self.pseudo_hard_radius_m
+        decay_max = self.cost_inflation_radius_m - self.pseudo_hard_radius_m
+
+        if decay_max > 0:
+            fraction = decay_dist / decay_max
+            raw_costs = 99.0 * ((1.0 - fraction) ** 2.0)
+            
+            new_costs = np.clip(raw_costs, 1, 99).astype(np.int8)
+            existing_costs = grid[decay_mask]
+            
+            grid[decay_mask] = np.maximum(existing_costs, new_costs)
+
+        inflated_mask = (grid == 100)
+
         for candidate in box_candidates:
             self._paint_box_corridor_cost(
-                grid, candidate, resolution, origin_x, origin_y, width, height, inflated
+                grid, candidate, resolution, origin_x, origin_y, width, height, inflated_mask
             )
 
         out = OccupancyGrid()
@@ -204,6 +190,7 @@ class MapInflator(Node):
         out.info = info
         out.data = grid.flatten().tolist()
         self.map_pub.publish(out)
+        
         dt_ms = (self.get_clock().now() - t0).nanoseconds / 1e6
         self.get_logger().info(f'Map inflated and published in {dt_ms:.1f} ms', throttle_duration_sec=5.0)
 
