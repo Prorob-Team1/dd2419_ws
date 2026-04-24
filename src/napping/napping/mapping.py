@@ -165,9 +165,7 @@ class Mapper(Node):
             0.1, self.display_object_candidates
         )
         # TODO: create service in the future instead of periodic export
-        self.export_timer = self.create_timer(
-            10.0, lambda: self.export_map(self.map_dir / "map_solution.json")
-        )
+        self.export_timer = self.create_timer(10.0, self.export_map_files)
 
     def startup(self):
         self.parse_workspace_file(self.workspace_file)
@@ -191,7 +189,7 @@ class Mapper(Node):
                 obj_type = row["Type"].strip()
                 x = float(row["x"].strip()) / 100.0
                 y = float(row["y"].strip()) / 100.0
-                angle = float(row["angle"].strip())
+                angle = np.deg2rad(float(row["angle"].strip()))
                 objects.append((obj_type, Pose2D(x, y, angle)))
                 if obj_type == "S":
                     self.start_pose = Pose2D(x, y, angle)
@@ -487,7 +485,6 @@ class Mapper(Node):
 
                 self.object_marker_pub.publish(marker)
 
-
     def detection_callback(self, msg: ObjectDetectionArrayMsg):
         self.detection_mapper.process_object_detections(msg)
 
@@ -496,7 +493,12 @@ class Mapper(Node):
             for picked in msg.candidates:
                 if candidate.id == picked.id:
                     candidate.picked_up = True
-    def export_map(self, file: Path):
+
+    def export_map_files(self):
+        self.export_map_json(self.map_dir / "map_solution.json")
+        self.export_map_csv(self.map_dir / "map_solution.csv")
+
+    def export_map_json(self, file: Path):
         cubes: list[ObjectCandidate] = []
         boxes: list[ObjectCandidate] = []
         for candidate in self.object_candidates:
@@ -512,23 +514,57 @@ class Mapper(Node):
                     "class": c.classification.value,
                     "x": c.avg_pose.x,
                     "y": c.avg_pose.y,
-                    "angle": c.avg_pose.angle,
+                    "angle": np.rad2deg(c.avg_pose.angle),
                     "confidence": DetectionMapper.log_odds_to_probability(c.log_prob),
                 }
-                for c in cubes[: self.n_cubes]
+                for c in cubes
             ],
             "boxes": [
                 {
                     "x": b.avg_pose.x,
                     "y": b.avg_pose.y,
-                    "angle": b.avg_pose.angle,
+                    "angle": np.rad2deg(b.avg_pose.angle),
                     "confidence": DetectionMapper.log_odds_to_probability(b.log_prob),
                 }
-                for b in boxes[: self.n_boxes]
+                for b in boxes
             ],
         }
         with open(file, "w") as f:
             json.dump(solution, f, indent=4)
+
+    def export_map_csv(self, file: Path):
+        # find the best candidates for cubes and boxes
+        cubes: list[ObjectCandidate] = []
+        boxes: list[ObjectCandidate] = []
+        for candidate in self.object_candidates:
+            if candidate.classification == ObjectClassification.BOX:
+                boxes.append(candidate)
+            else:
+                cubes.append(candidate)
+        cubes.sort(key=lambda c: c.log_prob, reverse=True)
+        boxes.sort(key=lambda c: c.log_prob, reverse=True)
+        # take the top n candidates and write to csv
+        with open(file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Type", "x", "y", "angle"])
+            for box in boxes[: self.n_boxes]:
+                writer.writerow(
+                    [
+                        "B",
+                        f"{round(box.avg_pose.x / 100.0)}",
+                        f"{round(box.avg_pose.y / 100.0)}",
+                        f"{round(np.rad2deg(box.avg_pose.angle))}",
+                    ]
+                )
+            for cube in cubes[: self.n_cubes]:
+                writer.writerow(
+                    [
+                        "O",
+                        f"{round(cube.avg_pose.x / 100.0)}",
+                        f"{round(cube.avg_pose.y / 100.0)}",
+                        f"{round(np.rad2deg(cube.avg_pose.angle))}",
+                    ]
+                )
 
 
 class DetectionMapper:
@@ -559,7 +595,7 @@ class DetectionMapper:
             # check if close to any candidate aleady. If yes then update candidate
             if detection.class_name == "CUBE_U":
                 continue
-            
+
             for i, candidate in enumerate(self.node.object_candidates):
                 same_class = detection.class_name == candidate.classification.value
                 unknown_class = (
@@ -642,8 +678,14 @@ class DetectionMapper:
                 f"Discarding candidate {candidate.id} because it is outside of the workspace"
             )
             return
-        if np.sqrt((candidate.avg_pose.x - self.node.given_boxes[0].x)**2 + (candidate.avg_pose.y - self.node.given_boxes[0].y)**2) < 0.7:
-            return 
+        if (
+            np.sqrt(
+                (candidate.avg_pose.x - self.node.given_boxes[0].x) ** 2
+                + (candidate.avg_pose.y - self.node.given_boxes[0].y) ** 2
+            )
+            < 0.7
+        ):
+            return
         if len(self.node.object_candidates) >= self.node.object_max_candidates:
             # remove lowest confidence candidate that is more than 10 seconds old
             now = self.node.get_clock().now()
