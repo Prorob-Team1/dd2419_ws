@@ -132,6 +132,7 @@ private:
 	const int	nMaxKeyframes = 20;
 	const float keyFrameCaptureDistance = 0.33f;
     const float icpCorrectionDistanceThreshold = 1.0f;
+	const float rayDistanceThreshold = 4.5f;
 
 
 	std::atomic<double> ang_vel_{0.0};
@@ -228,6 +229,7 @@ private:
 			RCLCPP_WARN(this->get_logger(), "Empty scan, skipping.");
 			return;
 		}
+		scan_cloud = filterCloud(scan_cloud);
 
 		// --- Step 2: accumulate anchor keyframe at the known start pose -----
         if (anchor_scan_count_ < nAnchordScans) {
@@ -289,8 +291,6 @@ private:
 		
 		CloudT::Ptr cloud_at_guess(new CloudT());
 		pcl::transformPointCloud(*scan_cloud, *cloud_at_guess, T_map_lidar_1_guess);
-		scan_cloud = filterCloud(scan_cloud);
-
 		publishCloud(cloud_at_guess, "map", pub_scan_guess_);
 
 		// Step 4: Run ICP
@@ -389,7 +389,7 @@ private:
 		float angle = msg->angle_min;
 		for (size_t i = 0; i < msg->ranges.size(); ++i, angle += msg->angle_increment) {
 			float r = msg->ranges[i];
-			if (!std::isfinite(r) || r < msg->range_min || r > msg->range_max) continue;
+			if (!std::isfinite(r) || r < msg->range_min || r > msg->range_max || r > rayDistanceThreshold) continue;
 			PointT p;
 			p.x = r * std::cos(angle);
 			p.y = r * std::sin(angle);
