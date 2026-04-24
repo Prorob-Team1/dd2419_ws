@@ -13,7 +13,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <pcl/filters/radius_outlier_removal.h>
 #include <sensor_msgs/msg/imu.hpp>
-#include <robp_interfaces/msg/duty_cycles.hpp>
+#include <robp_interfaces/msg/encoders.hpp>
 #include <atomic>
 #include <mutex>
 
@@ -51,9 +51,9 @@ public:
 			"/phidgets/imu/data_raw", 1, 
 			std::bind(&Localization::imuCallback, this, std::placeholders::_1));
 
-		duty_cycle_subscription_ = this->create_subscription<robp_interfaces::msg::DutyCycles>(
-			"/phidgets/motor/duty_cycles", 1,
-			std::bind(&Localization::dutyCycleCallback, this, std::placeholders::_1));
+		encoder_subscription_ = this->create_subscription<robp_interfaces::msg::Encoders>(
+			"/phidgets/motor/encoders", 10,
+			std::bind(&Localization::encoderCallback, this, std::placeholders::_1));
 
 
 		rclcpp::QoS qos(rclcpp::KeepLast(1));
@@ -97,7 +97,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
 	rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription_;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_subscription_;
-	rclcpp::Subscription<robp_interfaces::msg::DutyCycles>::SharedPtr duty_cycle_subscription_;
+	rclcpp::Subscription<robp_interfaces::msg::Encoders>::SharedPtr encoder_subscription_;
     rclcpp::TimerBase::SharedPtr tf_timer_;
 	rclcpp::TimerBase::SharedPtr marker_timer_;
     rclcpp::TimerBase::SharedPtr init_retry_timer_;  // fires until TF becomes available
@@ -204,10 +204,12 @@ private:
 		ang_vel_.store(msg->angular_velocity.z);
 	}
 
-	void dutyCycleCallback(const robp_interfaces::msg::DutyCycles::SharedPtr msg) {
-		bool isDriving = std::abs(msg->duty_cycle_left) > 0.01 || std::abs(msg->duty_cycle_right) > 0.01;
+	void encoderCallback(const robp_interfaces::msg::Encoders::SharedPtr msg) {
+		const bool is_driving = (msg->delta_encoder_left != 0) || (msg->delta_encoder_right != 0);
 		auto now = this->get_clock()->now();
-		if (isDriving) last_driving_time_ = now;
+		if (is_driving) {
+			last_driving_time_ = now;
+		}
 		is_stationary_.store(last_driving_time_ + rclcpp::Duration::from_seconds(stationaryTimeThreshold) < now);
 	}
 
@@ -266,6 +268,15 @@ private:
 		}
 		Eigen::Matrix4f T_map_lidar_1_guess = T_map_odom_copy * T_odom_base_ * T_base_lidar_copy;
 
+		
+		if (std::abs(ang_vel_.load()) > maxAngularVelForGoodScan) return;
+		
+		if (distance_travelled_ < accurateOdomDistance) // odometry still accurate, no need to make it worse with ICP
+		{
+			if (shouldAddKeyframe(T_map_lidar_1_guess)) addKeyframe(scan_cloud, T_map_lidar_1_guess);
+			return;
+		}
+
 		// if the robot is far away from the reference poses, then skip ICP
 		bool near_keyframe = false;
 		{
@@ -274,16 +285,7 @@ private:
 				if ((T_map_lidar_1_guess.block<3,1>(0,3) - kf.T_map_lidar.block<3,1>(0,3)).norm() < icpCorrectionDistanceThreshold) near_keyframe = true;
 			}
 		}
-
 		if (!near_keyframe) return;
-			
-		if (std::abs(ang_vel_.load()) > maxAngularVelForGoodScan) return;
-		
-		if (distance_travelled_ < accurateOdomDistance) // odometry still accurate, no need to make it worse with ICP
-		{
-			if (shouldAddKeyframe(T_map_lidar_1_guess)) addKeyframe(scan_cloud, T_map_lidar_1_guess);
-			return;
-		}
 		
 		CloudT::Ptr cloud_at_guess(new CloudT());
 		pcl::transformPointCloud(*scan_cloud, *cloud_at_guess, T_map_lidar_1_guess);
@@ -531,6 +533,8 @@ private:
         kf.is_anchor    = false;
 		std::lock_guard<std::mutex> lock(keyframes_mutex_);
         keyframes_.push_back(kf);
+
+		RCLCPP_INFO(this->get_logger(), "Added keyframe %zu for ICP", keyframes_.size());
     }
 
     void publishKeyframeMarkers()
