@@ -1112,7 +1112,7 @@ class MoveRobotB(Behaviour):
     
 class BackUpFromObjectB(MoveRobotB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, x_distance=-0.5, y_distance=0.0)
+        super().__init__(node, __class__.__name__, x_distance=-0.35, y_distance=0.0)
     def log_action(self):
         self.node.get_logger().info("--> Backing up...")
 
