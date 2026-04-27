@@ -152,7 +152,7 @@ class Mapper(Node):
         self.object_max_candidates = 100
         self.n_cubes = 3
         self.n_boxes = 2
-        self.detection_mapper = DetectionMapper(self, merge_threshold=0.5)
+        self.detection_mapper = DetectionMapper(self, merge_threshold=0.35)
 
         self.startup()
 
@@ -547,24 +547,26 @@ class Mapper(Node):
         with open(file, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["Type", "x", "y", "angle"])
-            for box in boxes[: self.n_boxes]:
-                writer.writerow(
-                    [
-                        "B",
-                        f"{round(box.avg_pose.x * 100.0)}",
-                        f"{round(box.avg_pose.y * 100.0)}",
-                        f"{round(np.rad2deg(box.avg_pose.angle))}",
-                    ]
-                )
-            for cube in cubes[: self.n_cubes]:
-                writer.writerow(
-                    [
-                        "O",
-                        f"{round(cube.avg_pose.x * 100.0)}",
-                        f"{round(cube.avg_pose.y * 100.0)}",
-                        f"{round(np.rad2deg(cube.avg_pose.angle))}",
-                    ]
-                )
+            for box in boxes:
+                if self.detection_mapper.log_odds_to_probability(box.log_prob) > 0.8:
+                    writer.writerow(
+                        [
+                            "B",
+                            f"{round(box.avg_pose.x * 100.0)}",
+                            f"{round(box.avg_pose.y * 100.0)}",
+                            f"{round(np.rad2deg(box.avg_pose.angle))}",
+                        ]
+                    )
+            for cube in cubes:
+                if self.detection_mapper.log_odds_to_probability(cube.log_prob) > 0.8:
+                    writer.writerow(
+                        [
+                            "O",
+                            f"{round(cube.avg_pose.x * 100.0)}",
+                            f"{round(cube.avg_pose.y * 100.0)}",
+                            f"{round(np.rad2deg(cube.avg_pose.angle))}",
+                        ]
+                    )
 
 
 class DetectionMapper:
@@ -678,14 +680,7 @@ class DetectionMapper:
                 f"Discarding candidate {candidate.id} because it is outside of the workspace"
             )
             return
-        if (
-            np.sqrt(
-                (candidate.avg_pose.x - self.node.given_boxes[0].x) ** 2
-                + (candidate.avg_pose.y - self.node.given_boxes[0].y) ** 2
-            )
-            < 0.7
-        ):
-            return
+    
         if len(self.node.object_candidates) >= self.node.object_max_candidates:
             # remove lowest confidence candidate that is more than 10 seconds old
             now = self.node.get_clock().now()
