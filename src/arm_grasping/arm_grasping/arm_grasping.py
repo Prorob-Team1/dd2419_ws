@@ -579,6 +579,8 @@ class ArmGraspingServer(Node):
         thresh = cv2.dilate(thresh, kernel, iterations=1)
         h, w = thresh.shape
         cv2.rectangle(thresh, (0,h*3//4), (w,h), (0,0), -1)
+        cv2.rectangle(thresh, (0,0), (w,h*1//15), (0,0), -1)
+        cv2.rectangle(thresh, (w*19//20,0), (w,h), (0,0), -1)
 
         # compute the variance for each column
         col_var = np.var(thresh, axis=0)
