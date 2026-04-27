@@ -17,8 +17,8 @@ class MapInflator(Node):
     def __init__(self):
         super().__init__('map_inflator')
 
-        self.inflation_radius_m = 0.15         
-        self.pseudo_hard_radius_m = 0.19       
+        self.inflation_radius_m = 0.12         
+        self.pseudo_hard_radius_m = 0.20       
         self.cost_inflation_radius_m = 0.40    
         self.box_cost_radius_m = 1.0           
 
