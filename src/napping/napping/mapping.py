@@ -96,6 +96,12 @@ class Mapper(Node):
             self.picked_up_callback,
             10,
         )
+        self.obstacle_map_sub = self.create_subscription(
+            OccupancyGrid,
+            "/occupancy_grid",
+            self.obstacle_map_callback,
+            10,
+        )
         self.workspace_pub = self.create_publisher(
             Marker,
             "/geofence",
@@ -146,6 +152,7 @@ class Mapper(Node):
         self.resolution: float = self.get_parameter("resolution").value  # type: ignore
         self.map_padding = [1, 1, 1.3, 1.2]
         self.occupancy_grid: OccupancyGrid
+        self.obstacle_map: OccupancyGrid
 
         self.object_candidates: list[ObjectCandidate] = []
         self.object_confidence_threshold = 0.8
@@ -178,6 +185,7 @@ class Mapper(Node):
         self.create_inital_object_candidates()
         self.occupancy_grid = self.create_occupancy_grid()
         self.publish_occupancy_map()
+        self.obstacle_map = self.occupancy_grid
 
     def parse_map_file(self, file: Path):
         objects = []
@@ -568,6 +576,42 @@ class Mapper(Node):
                         ]
                     )
 
+    def obstacle_map_callback(self, msg: OccupancyGrid):
+        # Update grid with information from obstacle mapper
+        self.obstacle_map = msg
+
+
+    def point_to_grid(self, x: float, y: float):
+        info = self.obstacle_map.info
+        resolution = info.resolution
+        origin_x = info.origin.position.x
+        origin_y = info.origin.position.y
+
+        grid_x = int((x - origin_x) / resolution)
+        grid_y = int((y - origin_y) / resolution)
+
+        return grid_x, grid_y
+
+    def in_occupied_cell(self, x: float,y: float, classification: str):
+        # Checks if object is inside an obstacle.
+        # Checks in a radius for boxes
+        width = int(self.obstacle_map.info.width)
+        grid_x, grid_y = self.point_to_grid(x,y)
+        try:
+            if self.obstacle_map.data[grid_x + width*grid_y] > 0:
+                return True
+            
+            if classification == ObjectClassification.BOX.value:
+                # TODO: If it's a box, maybe check more cells around the box center
+                pass
+
+            # Base case, cell is free!
+            return False
+        except IndexError:
+            # Coordinate outside map bounds, object is uninteresting anyway
+            return True
+        
+
 
 class DetectionMapper:
     def __init__(self, node: Mapper, merge_threshold=0.1):
@@ -680,7 +724,18 @@ class DetectionMapper:
                 f"Discarding candidate {candidate.id} because it is outside of the workspace"
             )
             return
-    
+
+        # check if detected object is inside an obstacle
+        if self.node.in_occupied_cell(
+            candidate.avg_pose.x,
+            candidate.avg_pose.y,
+            candidate.classification.value
+        ):
+            self.node.get_logger().info(
+                f"Discarding candidate {candidate.id} because it is inside an obstacle"
+            )
+            return
+        
         if len(self.node.object_candidates) >= self.node.object_max_candidates:
             # remove lowest confidence candidate that is more than 10 seconds old
             now = self.node.get_clock().now()
@@ -706,7 +761,6 @@ class DetectionMapper:
             f"Added new candidate with class {candidate.classification} at ({candidate.avg_pose.x:.2f}, {candidate.avg_pose.y:.2f}, {candidate.avg_pose.angle:.2f})"
         )
         assert len(self.node.object_candidates) <= self.node.object_max_candidates
-
 
 def main():
     rclpy.init()
