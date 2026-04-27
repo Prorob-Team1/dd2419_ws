@@ -123,16 +123,16 @@ private:
 	Eigen::Matrix4f T_base_lidar_ = Eigen::Matrix4f::Identity(); 
 
     
-    const float icpFitnessThreshold = 0.1f;
+    const float icpFitnessThreshold = 0.09f;
     const float maxAngularVelForGoodScan = 0.3f;
-    const float icpInterpolationAlpha = 0.05f;
+    const float icpInterpolationAlpha = 0.03f;
 	const float stationaryTimeThreshold = 1.0f;
 	const float accurateOdomDistance = 7.5f; //7.5f;
     const int   nAnchordScans = 5;
 	const int	nMaxKeyframes = 20;
 	const float keyFrameCaptureDistance = 0.33f;
     const float icpCorrectionDistanceThreshold = 1.0f;
-	const float rayDistanceThreshold = 4.5f;
+	const float rayDistanceThreshold = 5.0f;
 
 
 	std::atomic<double> ang_vel_{0.0};
@@ -301,7 +301,7 @@ private:
 		icp.setInputSource(scan_cloud);
 		icp.setMaximumIterations(50);
 		icp.setTransformationEpsilon(1e-6);
-		icp.setMaxCorrespondenceDistance(0.3);
+		icp.setMaxCorrespondenceDistance(0.2);
 
 		CloudT aligned;
 		icp.align(aligned, T_map_lidar_1_guess);
