@@ -245,10 +245,6 @@ class GoalProvider:
         closest_dist = np.inf
         random.shuffle(valid_objects)
         for obj in valid_objects:
-            if obj.confidence == 1.0 and goal_type == CUBE_GOAL:
-                # Always go for known cubes first as we a required to pick these up within the time limit!
-                closest_obj = obj
-                break
             q = [
                 obj.pose.orientation.x,
                 obj.pose.orientation.y,
@@ -260,6 +256,11 @@ class GoalProvider:
                 obj.pose.position.y,
                 euler_from_quaternion(q)[2],
             ]
+            if obj.confidence == 1.0 and goal_type == CUBE_GOAL:
+                # Always go for known cubes first as we a required to pick these up within the time limit!
+                closest_obj = obj
+                closest_pose = pose
+                break
             new_dist = self.calc_dist(robot_pose, pose)
             if new_dist < closest_dist:
                 if self.target_obj is not None:
