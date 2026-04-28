@@ -16,7 +16,7 @@ from tf_transformations import euler_from_quaternion
 from robp_interfaces.msg import DutyCycles
 from nav_msgs.msg import Path
 from std_msgs.msg import Empty, Bool
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseStamped
 import numpy as np
 
 class Navigator(Node):
@@ -48,6 +48,7 @@ class Navigator(Node):
         self.create_subscription(Bool, '/use_parking', self.parking_callback, 10)
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
         self.create_subscription(Point, '/move_dist', self.move_dist_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.create_subscription(PoseStamped,'/parking_goal',self.parking_goal_callback,10)
 
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
@@ -59,6 +60,9 @@ class Navigator(Node):
 
     def parking_callback(self, msg: Bool):
         self._parking_enabled = msg.data
+
+    def parking_goal_callback(self, msg: PoseStamped):
+        self.parking_goal = (msg.pose.position.x, msg.pose.position.y)
 
     def path_callback(self, msg: Path):
         if len(msg.poses) < 2:

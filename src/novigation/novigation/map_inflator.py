@@ -8,8 +8,8 @@ import scipy.ndimage as ndimage
 from math import sqrt
 
 
-BOX_HALF_X = 0.12   
-BOX_HALF_Y = 0.08   
+BOX_HALF_X = 0.15   
+BOX_HALF_Y = 0.10   
 
 
 class MapInflator(Node):
