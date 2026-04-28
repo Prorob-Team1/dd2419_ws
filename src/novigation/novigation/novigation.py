@@ -81,6 +81,7 @@ class Navigator(Node):
         self.path = None
         self._parking_mode = False
         self._parking_enabled = True
+        self.parking_goal = None
         self.control_wheels(0.0, 0.0)
 
     def get_robot_pose(self, from_frame="map"):
