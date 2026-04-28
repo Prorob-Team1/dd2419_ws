@@ -49,6 +49,7 @@ class Navigator(Node):
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
         self.create_subscription(Point, '/move_dist', self.move_dist_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.create_subscription(PoseStamped,'/parking_goal',self.parking_goal_callback,10)
+        self.create_subscription(Empty,'/look_around',self.look_around_callback,10)
 
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
@@ -146,6 +147,8 @@ class Navigator(Node):
                         break
                     time.sleep(0.02)
                     #self.get_logger().info(f"{rotated=}, {angle_diff=}")
+            
+    
             else:
                 # If y is not provided, DRIVE
                 #linear_command_duration = linear_dist / v
@@ -167,6 +170,71 @@ class Navigator(Node):
                     time.sleep(0.02)
                 #time.sleep(linear_command_duration)
             self.control_wheels(0.0, 0.0)
+
+    def look_around_callback(self, msg: Empty):
+        self.get_logger().info("Starting look around sequence...")
+        start_pose = self.get_robot_pose(from_frame="odom")
+        
+        if start_pose is None:
+            self.get_logger().warn("Failed to get pose, aborting look around.")
+            return
+            
+        s_x, s_y, s_yaw = start_pose
+        
+       
+        targets = [
+            s_yaw + math.radians(45),
+            s_yaw - math.radians(45),
+            s_yaw  
+        ]
+        
+        for target_yaw in targets:
+            start_time = time.time()
+            
+            # Wait and turn until we reach the target
+            while rclpy.ok():
+                current_pose = self.get_robot_pose(from_frame="odom")
+                if current_pose is None:
+                    continue
+                    
+                c_x, c_y, c_yaw = current_pose
+                
+              
+                heading_err = target_yaw - c_yaw
+                heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
+                
+                
+                if abs(heading_err) < math.radians(10):
+                    self.control_wheels(0.0, 0.0)
+                    self.get_logger().info("Reached look target, pausing...")
+                    time.sleep(0.5)
+                    break
+                
+               
+                w = 3 * heading_err
+                w = max(-self.max_w, min(w, self.max_w))
+                
+                min_abs_w = math.radians(15)  
+                if abs(w) < min_abs_w:
+                    w = math.copysign(min_abs_w, w)
+
+                self.control_wheels(0.0, w)
+                
+                if time.time() - start_time > 4.0:
+                    self.get_logger().warn("Look around target timed out!")
+                    break
+                    
+                time.sleep(0.02)
+                
+       
+        self.control_wheels(0.0, 0.0)
+        self.get_logger().info("Look around sequence complete.")
+
+            
+            
+
+
+
 
     def _advance_path_idx(self, path, rx, ry):
         # Find the closest segment on the remaining path (never go backward).
@@ -233,7 +301,10 @@ class Navigator(Node):
 
         goal_x, goal_y = path[-1]
         
-        parking_goal_x, parking_goal_y = self.parking_goal
+        if self.parking_goal is not None:
+            parking_goal_x, parking_goal_y = self.parking_goal
+        else:
+            parking_goal_x, parking_goal_y = goal_x, goal_y
         
         dist_to_goal = math.hypot(goal_x - rx, goal_y - ry)
 
@@ -375,7 +446,7 @@ class Navigator(Node):
 def main():
     rclpy.init()
     node = Navigator()
-    executor = MultiThreadedExecutor(num_threads=2)
+    executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     try:
         executor.spin()
