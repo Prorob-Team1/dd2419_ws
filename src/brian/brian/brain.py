@@ -258,6 +258,7 @@ class GoalProvider:
             ]
             if obj.confidence == 1.0 and goal_type == CUBE_GOAL:
                 # Always go for known cubes first as we a required to pick these up within the time limit!
+                self.known_cube_picked_up = False
                 closest_obj = obj
                 closest_pose = pose
                 break
@@ -946,7 +947,7 @@ class Nav2CubeB(Nav2GoalB):
             self.current_status = Status.FAILURE
             return self.current_status
         
-        # Make sure we've picked up at least ONE known cube before getting greedy
+        # Make sure we've picked up the known cube(s) before getting greedy
         if not self.node.goal_provider.known_cube_picked_up:
             return self.current_status
 
@@ -1084,7 +1085,7 @@ class GrabCubeB(ArmB):
             self.node.cube_in_gripper = True
             self.node.has_backed_up = False 
             if not self.node.goal_provider.known_cube_picked_up:
-                # The first time we pick something up, it will be the known cube
+                # On success we have picked a known cube up, we should remember this
                 self.node.goal_provider.known_cube_picked_up =  True
         else:
             self.node.cube_in_gripper = False
