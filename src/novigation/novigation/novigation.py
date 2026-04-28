@@ -16,7 +16,7 @@ from tf_transformations import euler_from_quaternion
 from robp_interfaces.msg import DutyCycles
 from nav_msgs.msg import Path
 from std_msgs.msg import Empty, Bool
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseStamped
 import numpy as np
 
 class Navigator(Node):
@@ -40,7 +40,7 @@ class Navigator(Node):
         self._parking_mode = False
         self._aligning_parking = False
         self._parking_enabled = True
-
+        self.parking_goal = None
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
@@ -48,6 +48,7 @@ class Navigator(Node):
         self.create_subscription(Bool, '/use_parking', self.parking_callback, 10)
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
         self.create_subscription(Point, '/move_dist', self.move_dist_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
+        self.create_subscription(PoseStamped,'/parking_goal',self.parking_goal_callback,10)
 
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
@@ -59,6 +60,9 @@ class Navigator(Node):
 
     def parking_callback(self, msg: Bool):
         self._parking_enabled = msg.data
+
+    def parking_goal_callback(self, msg: PoseStamped):
+        self.parking_goal = (msg.pose.position.x, msg.pose.position.y)
 
     def path_callback(self, msg: Path):
         if len(msg.poses) < 2:
@@ -77,6 +81,7 @@ class Navigator(Node):
         self.path = None
         self._parking_mode = False
         self._parking_enabled = True
+        self.parking_goal = None
         self.control_wheels(0.0, 0.0)
 
     def get_robot_pose(self, from_frame="map"):
@@ -227,14 +232,20 @@ class Navigator(Node):
         self._advance_path_idx(path, rx, ry)
 
         goal_x, goal_y = path[-1]
+        
+        parking_goal_x, parking_goal_y = self.parking_goal
+        
         dist_to_goal = math.hypot(goal_x - rx, goal_y - ry)
 
-        if dist_to_goal < self.goal_tolerance:
-            self.get_logger().info(f"Goal reached (dist={dist_to_goal:.3f}m)")
-            self.path = None
-            self._parking_mode = False
-            self.control_wheels(0.0, 0.0)
-            return
+        #dist_to_parking_goal = math.hypot(parking_goal_x - rx, parking_goal_y)
+
+
+        #if dist_to_goal < self.goal_tolerance:
+            #self.get_logger().info(f"Goal reached (dist={dist_to_goal:.3f}m)")   **THis is probably old artefact, I commented out hope it doesnt break**
+            #self.path = None
+            #self._parking_mode = False
+            #self.control_wheels(0.0, 0.0)
+            #return
 
         # Find lookahead point
         lookahead_pt = None
@@ -257,6 +268,7 @@ class Navigator(Node):
             lookahead_pt = path[-1]
 
         # Switch to parking mode when close to goal
+        
         if not self._parking_mode and self._parking_enabled:
             if (rx - goal_x)**2 + (ry - goal_y)**2 < 0.5**2:
                 self._parking_mode = True
@@ -264,10 +276,10 @@ class Navigator(Node):
                 self.get_logger().info('Switching to parking mode')
 
         if self._parking_mode:
-            heading_to_goal = math.atan2(goal_y - ry, goal_x - rx)
+            heading_to_goal = math.atan2(parking_goal_y - ry, parking_goal_x - rx)
             heading_err = heading_to_goal - rtheta
             heading_err = (heading_err + math.pi) % (2 * math.pi) - math.pi
-            park_dist = math.hypot(goal_x - rx, goal_y - ry)
+            park_dist = math.hypot(parking_goal_x - rx, parking_goal_y - ry)
 
             if self._aligning_parking and (abs(heading_err) < math.radians(10) or park_dist < 0.08):
                 self._aligning_parking = False
@@ -288,7 +300,7 @@ class Navigator(Node):
                 )
                 self.control_wheels(0.0, w)
             else:
-                alpha_p = math.atan2(goal_y - ry, goal_x - rx) - rtheta
+                alpha_p = math.atan2(parking_goal_y - ry, parking_goal_x - rx) - rtheta
                 alpha_p = (alpha_p + math.pi) % (2 * math.pi) - math.pi
                 beta = heading_err - alpha_p
                 beta = (beta + math.pi) % (2 * math.pi) - math.pi

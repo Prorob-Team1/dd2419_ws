@@ -59,7 +59,7 @@ class PathPlannerNode(Node):
         self.tail_pub = self.create_publisher(Path, '/tail_path', 10)
         self.cancel_pub = self.create_publisher(Empty, '/cancel_navigation', 10)
         self.parking_pub = self.create_publisher(Bool, '/use_parking', 10)
-
+        self.parkinggoal_pub = self.create_publisher(PoseStamped, '/parking_goal',10)
         self.create_timer(0.5, self.replan_callback)
 
         self._action_server = ActionServer(
@@ -170,6 +170,7 @@ class PathPlannerNode(Node):
             self.get_logger().info(f'Path found with {len(path_grid)} grid cells in {dt_ms:.1f} ms')
             self.path_world = self.grid_path_to_world(path_grid)
             self.publish_path(self.path_world, goal_pose.header.frame_id)
+            self.parkinggoal_pub.publish(goal_pose) #Publishing original goal aswell to navigator.
 
            
             self.publish_path([], goal_pose.header.frame_id, pub=self.tail_pub)
@@ -181,7 +182,7 @@ class PathPlannerNode(Node):
 
             if goal_label == ObjectClassification.BOX.value:
                 goal_x, goal_y = goal_pose.pose.position.x, goal_pose.pose.position.y
-                goal_tolerance = 0.20
+                goal_tolerance = 0.23
                 use_parking = True
             elif goal_label == "":  # explore goal
                 goal_x, goal_y = self.grid_to_world(*snapped)
