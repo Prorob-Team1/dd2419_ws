@@ -93,8 +93,11 @@ class PointcloudFilter(Node):
     BOX_SLICE_HEIGHT_RATIO = 0.90
     BOX_LINE_RANSAC_ITERS = 120
     BOX_EDGE_MIN_LENGTH = 0.08
-    BOX_LINE_INLIER_THRESHOLD = 0.01
+    BOX_LINE_INLIER_THRESHOLD = 0.015
     BOX_AXIS_PROBE_LENGTH = 0.10
+    BOX_EDGE_MAX_LENGTH = 0.27
+    BOX_REAL_LENGTH = 0.24
+    BOX_REAL_WIDTH = 0.16
 
     def _infer_cube_color_from_rgb(self, cluster_full: np.ndarray, debug_info: dict | None = None) -> str:
         """Infer cube color from RGB using HSV. Optionally fill debug_info with reason, counts, medians.
@@ -465,6 +468,7 @@ class PointcloudFilter(Node):
 
                 # HSV channels: H = [:,0], S = [:,1], V = [:,2]. S, V are in [0,255]
                 s = hsv_points[:, 1].astype(np.float64)
+                v = hsv_points[:, 2].astype(np.float64)
                 s_lo = np.percentile(s, self._S_PERCENTILE_LOW)
                 s_hi = np.percentile(s, self._S_PERCENTILE_HIGH)
                 mask_s_mid = (s >= s_lo) & (s <= s_hi)
@@ -483,16 +487,34 @@ class PointcloudFilter(Node):
                 min_saturation = float(np.min(s) / 255.0)
                 intensity = float(np.mean(hsv_points[:, 2] / 255.0))
                 blueish = self._HUE_BOX_BLUEISH[0] <= median_hue <= self._HUE_BOX_BLUEISH[1]
-                woodish = self._HUE_WOOD[0] <= median_hue < self._HUE_WOOD[1]
+                mask_wood_points = (h >= self._HUE_WOOD[0]) & (h < self._HUE_WOOD[1])
+                wood_count = np.count_nonzero(mask_wood_points)
+                wood_percentage = wood_count / hsv_points.shape[0]
+                woodish = wood_percentage > 0.30
+
+                mask_grey = (s / 255.0 < 0.4) & (v / 255.0 < 0.4)
+                grey_count = np.count_nonzero(mask_grey)
+                grey_percentage = grey_count / hsv_points.shape[0]
+                greyish = grey_percentage > 0.30
+
+                mask_blue = (h >= self._HUE_BLUE[0]) & (h < self._HUE_BLUE[1])
+                blue_count = np.count_nonzero(mask_blue)
+                blue_percentage = blue_count / hsv_points.shape[0]
+                blueish = blue_percentage > 0.30
+
                 debug = (
                     f'Max saturation: {max_saturation} | Min saturation: {min_saturation} \n '+
                     f'Median saturation: {median_saturation} | Median hue: {median_hue} \n '+
-                    f'Intensity: {intensity}'
+                    f'Blueish: {blueish} | Woodish: {woodish} \n '+
+                    f'Greyish: {greyish} \n '+
+                    f'Wood count: {wood_count} | Wood percentage: {wood_percentage} \n '+
+                    f'Grey count: {grey_count} | Grey percentage: {grey_percentage} \n '+
+                    f'Blue count: {blue_count} | Blue percentage: {blue_percentage} \n '+
+                    f'Intensity: {intensity} \n'
                 )
 
-                if ((median_saturation < 0.40 and intensity < 0.42) or blueish) and not woodish:
+                if not woodish and (greyish or blueish):
                     
-                    self.get_logger().info("BOX\n"+debug)
                     centroid = np.mean(cluster_points, axis=0)
                     eliminated_rgb = np.full((cluster_points.shape[0], 3), [1.0, 0.5, 0.0], dtype=np.float32)
                     r = (eliminated_rgb[:, 0] * 255).astype(np.uint32)
@@ -521,13 +543,14 @@ class PointcloudFilter(Node):
                     line_fit1 = self._fit_dominant_line_ransac(plane_points)
                     if line_fit1 is None:
                         self.get_logger().warn("Ransac could not fit the first box edge")
-                        self._publish_detection(centroid, "BOX", 0.7, msg.header.frame_id, received_stamp, detections_list)
                         continue
 
                     direction1, inlier_mask1, span1 = line_fit1
                     if span1 < self.BOX_EDGE_MIN_LENGTH:
-                        self.get_logger().warn("Ransac first edge span too short")
-                        self._publish_detection(centroid, "BOX", 0.7, msg.header.frame_id, received_stamp, detections_list)
+                        self.get_logger().warn(debug+f"Ransac first edge span too short: {span1}")
+                        continue
+                    if span1 > self.BOX_EDGE_MAX_LENGTH:
+                        self.get_logger().warn(debug+f"Ransac first edge span too long: {span1}")
                         continue
 
                     plane_points2 = plane_points[~inlier_mask1]
@@ -538,8 +561,13 @@ class PointcloudFilter(Node):
                         span2 = 0.0
                     else:
                         direction2, inlier_mask2, span2 = line_fit2
+                        if np.allclose(direction2, direction1):
+                            direction2 = None
+                            inlier_mask2 = None
+                            span2 = 0.0
+                   
 
-                    # Publish long edge axis
+                    # Publish long edge axis This should not appply, the first edge should be the longest
                     if direction2 is not None and span2 >= span1:
                         best_direction_2d = direction2
                         best_span = span2
@@ -568,13 +596,19 @@ class PointcloudFilter(Node):
                             corner = p1 + t_u[0] * direction1
 
                             mean_plane = np.mean(plane_points, axis=0)
+                            if span1 >= span2:
+                                side_along_direction1 = self.BOX_REAL_LENGTH
+                                side_along_direction2 = self.BOX_REAL_WIDTH
+                            else:
+                                side_along_direction1 = self.BOX_REAL_WIDTH
+                                side_along_direction2 = self.BOX_REAL_LENGTH
                             center_candidates = []
                             for sign1 in (-1.0, 1.0):
                                 for sign2 in (-1.0, 1.0):
                                     candidate = (
                                         corner
-                                        + 0.5 * sign1 * span1 * direction1
-                                        + 0.5 * sign2 * span2 * direction2
+                                        + 0.5 * sign1 * side_along_direction1 * direction1
+                                        + 0.5 * sign2 * side_along_direction2 * direction2
                                     )
                                     center_candidates.append(candidate)
                             best_center_2d = min(
@@ -583,7 +617,8 @@ class PointcloudFilter(Node):
                             )
                             centroid[0] = float(best_center_2d[0])
                             centroid[2] = float(best_center_2d[1])
-
+                    debug += f"Best span: {best_span} | Other span: {span2} \n"
+                    debug += f"Best direction: {best_direction_2d} | Other direction: {direction2} \n"
                     # Rotate by 90 if its the short edge
                     if best_span < self.BIG_BEAUTIFUL_BOX_IS_LONG_SIDE:
                         rotated_direction_2d = np.array(
