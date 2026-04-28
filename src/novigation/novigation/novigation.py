@@ -40,7 +40,7 @@ class Navigator(Node):
         self._parking_mode = False
         self._aligning_parking = False
         self._parking_enabled = True
-
+        self.parking_goal = None
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
 
