@@ -28,7 +28,7 @@ from py_trees.composites import Sequence, Selector
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 from action_msgs.msg import GoalStatus
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Empty
 
 from robp_interfaces.action import DummyAction, Navigation
 from robp_interfaces.msg import ObjectCandidateMsg,ObjectCandidateArrayMsg, DutyCycles
@@ -327,6 +327,7 @@ class Brain(Node):
         self.in_dropoff_range = False
 
         self.has_backed_up = True
+        self.has_looked_around = True
 
         # Track grasp attempts
         self.grasp_attempts = dict()
@@ -375,6 +376,7 @@ class Brain(Node):
         self.detection_publisher.publish(Bool(data=True)) # turn on detection
 
         self.move_publisher = self.create_publisher(Point, "/move_dist", 10)
+        self.look_around_publisher = self.create_publisher(Empty, "/look_around", 10)
 
         # caught cubes
         self.caught_cubes: ObjectCandidateArrayMsg = ObjectCandidateArrayMsg()
@@ -589,11 +591,22 @@ class Brain(Node):
             memory = False
         )
 
+        # look around check
+        look_around_fallback = Selector(
+            name="Look Around Fallback",
+            children = [
+                LookedAroundCondition(self),
+                LookAroundB(self),
+            ],
+            memory = False
+        )
+
         # Connect both subtrees (catch and release + backed up check)
         main_sequence = Sequence(
             name="Main Sequence",
             children = [
                 backed_up_fallback,
+                look_around_fallback,
                 catch_fallback,
                 release_fallback,
             ],
@@ -935,6 +948,11 @@ class ExploreB(Nav2GoalB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, EXPLORE_GOAL, Status.FAILURE)
 
+    # Look around post condition
+    def update_postcondition(self):
+        if self.current_status == self.done_status:
+            self.node.has_looked_around = False
+
 class Nav2CubeB(Nav2GoalB):
     def __init__(self, node: Brain):
         super().__init__(node, __class__.__name__, CUBE_GOAL)
@@ -1159,6 +1177,44 @@ class BackUpFromObjectB(MoveRobotB):
             self.node.in_pickup_range = False
         else:
             self.node.has_backed_up = False
+
+# BT nodes for lookaround
+class LookedAroundCondition(Behaviour):
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+
+    def update(self):
+        if self.node.has_looked_around:
+            return Status.SUCCESS
+        else:
+            if self.node.debugging:
+                self.node.get_logger().info("fail looked around")
+            return Status.FAILURE
+
+class LookAroundB(Behaviour):
+    def __init__(self, node: Brain):
+        super().__init__(__class__.__name__)
+        self.node = node
+        self.current_status = Status.RUNNING
+        self.init_time = 0
+
+    def initialise(self):
+        self.current_status = Status.RUNNING
+        self.init_time = self.node.get_clock().now().to_msg().sec
+        self.node.get_logger().info("--> Looking around for cubes...")
+        self.node.look_around_publisher.publish(Empty())
+
+    def update(self):
+        time_diff = self.node.get_clock().now().to_msg().sec - self.init_time
+        if time_diff > 1 and self.node.robot_stopped:
+            self.current_status = Status.SUCCESS
+            self.node.has_looked_around = True
+            self.node.get_logger().info("--> Look around DONE!")
+        return self.current_status
+
+    def terminate(self, new_status):
+        pass
         
 class MakeResultsB(Behaviour):
     def __init__(self, node: Brain):
