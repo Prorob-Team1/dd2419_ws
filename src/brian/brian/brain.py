@@ -960,7 +960,7 @@ class ExploreB(Nav2GoalB):
 
     # Look around post condition
     def update_postcondition(self):
-        pass
+        self.node.has_looked_around = False
 
 class Nav2CubeB(Nav2GoalB):
     def __init__(self, node: Brain):
