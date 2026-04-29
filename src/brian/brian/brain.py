@@ -816,7 +816,7 @@ class Nav2GoalB(Behaviour):
         self.current_status = Status.RUNNING
         self.done_status = done_status
         self.nav_start_time = 0
-        self.consequtive_failed_nav_attempts = 0
+        self.consecutive_failed_nav_attempts = 0
 
     def update(self):
         #self.logger.info(f"{self.name}: Checking feedback")
@@ -930,11 +930,11 @@ class Nav2GoalB(Behaviour):
                 self.node.get_logger().error(
                     f"{self.name}: Navigation failed with status: {response.status}"
                 )
-                self.consequtive_failed_nav_attempts += 1
-                if self.consequtive_failed_nav_attempts > 3:
+                self.consecutive_failed_nav_attempts += 1
+                if self.consecutive_failed_nav_attempts > 3:
                     # force robot to back up and reset fail counter
                     self.node.has_backed_up = False
-                    self.consequtive_failed_nav_attempts = 0
+                    self.consecutive_failed_nav_attempts = 0
                 
                 self.current_status = Status.FAILURE
             
