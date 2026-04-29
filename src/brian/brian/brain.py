@@ -534,7 +534,7 @@ class Brain(Node):
                 ExploreB(self),
                 LookAroundB(self) # this always reports failure (forcing further exploration unless we've found a cube)
             ],
-            memory = False
+            memory = True # don't tick exploreB every time (this interferes with lookaround!)
         )
 
         explore_fallback = Selector(
