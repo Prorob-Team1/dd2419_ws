@@ -366,7 +366,12 @@ class Brain(Node):
             self.robot_in_motion_callback,
             10
         )
-
+        self.robot_look_around_done_sub = self.create_subscription(
+            Empty, 
+            "/has_looked_around", 
+            self.robot_look_around_callback,
+            10)
+        
         # Publishers
         self.goal_marker_publisher = self.create_publisher(Marker, "/nav_goal", 1)
         self.goal_obj_publisher = self.create_publisher(ObjectCandidateMsg, "/current_goal_obj", 10)
@@ -406,7 +411,9 @@ class Brain(Node):
         self.get_logger().info(
             f"{ANSIEscClr.GREEN}{ANSIEscClr.BOLD}I AM ALIVE!{ANSIEscClr.RESET}"
         )
-
+    def robot_look_around_callback(self,msg: Empty):
+        self.has_looked_around = True
+    
     def robot_in_motion_callback(self, msg: DutyCycles):
         if msg.duty_cycle_left == 0.0 and msg.duty_cycle_right == 0.0:
             self.robot_stopped = True
@@ -1207,9 +1214,8 @@ class LookAroundB(Behaviour):
 
     def update(self):
         time_diff = self.node.get_clock().now().to_msg().sec - self.init_time
-        if time_diff > 1 and self.node.robot_stopped:
+        if self.node.has_looked_around:
             self.current_status = Status.SUCCESS
-            self.node.has_looked_around = True
             self.node.get_logger().info("--> Look around DONE!")
         return self.current_status
 

@@ -49,16 +49,21 @@ class Navigator(Node):
         self.create_subscription(Empty, '/cancel_navigation', self.cancel_callback, 10)
         self.create_subscription(Point, '/move_dist', self.move_dist_callback, 10, callback_group=MutuallyExclusiveCallbackGroup())
         self.create_subscription(PoseStamped,'/parking_goal',self.parking_goal_callback,10)
-        self.create_subscription(Empty,'/look_around',self.look_around_callback,10)
+        self.create_subscription(Empty,'/has_looked_around',self.look_around_callback,10)
 
         self.motor_pub = self.create_publisher(
             DutyCycles, "/phidgets/motor/duty_cycles", 10
         )
+        self.look_around_done = self.create_publisher(Empty,"/look_around_done",10)
 
         self.create_timer(0.05, self.control_loop)
 
         self.get_logger().info("Pure pursuit navigator initialized")
 
+   
+
+
+    
     def parking_callback(self, msg: Bool):
         self._parking_enabled = msg.data
 
@@ -225,7 +230,7 @@ class Navigator(Node):
                     break
                     
                 time.sleep(0.02)
-                
+                self.look_around_done.publish(Empty())
        
         self.control_wheels(0.0, 0.0)
         self.get_logger().info("Look around sequence complete.")
