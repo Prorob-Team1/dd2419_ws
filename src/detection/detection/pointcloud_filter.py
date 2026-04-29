@@ -323,7 +323,26 @@ class PointcloudFilter(Node):
         if best_inlier_mask is None or best_direction is None or best_span < self.BOX_EDGE_MIN_LENGTH:
             return None
 
-        return best_direction, best_inlier_mask, best_span
+        # Final least-squares refinement on the winning inlier set to straighten the edge.
+        final_inlier_points = ground_points[best_inlier_mask]
+        if final_inlier_points.shape[0] < 2:
+            return None
+
+        final_centroid = np.mean(final_inlier_points, axis=0)
+        final_centered = final_inlier_points - final_centroid
+        _, _, final_vh = np.linalg.svd(final_centered, full_matrices=False)
+        final_direction = final_vh[0]
+        final_norm = np.linalg.norm(final_direction)
+        if final_norm < 1e-6:
+            return None
+        final_direction /= final_norm
+
+        final_projections = final_centered @ final_direction
+        final_span = float(np.max(final_projections) - np.min(final_projections))
+        if final_span < self.BOX_EDGE_MIN_LENGTH:
+            return None
+
+        return final_direction, best_inlier_mask, final_span
 
     def cloud_callback(self, msg: PointCloud2):
         # Use the received timestamp everywhere: TF lookup and all published messages
