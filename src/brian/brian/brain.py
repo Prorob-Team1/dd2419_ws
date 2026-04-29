@@ -368,7 +368,7 @@ class Brain(Node):
         )
         self.robot_look_around_done_sub = self.create_subscription(
             Empty, 
-            "/has_looked_around", 
+            "/look_around_done", 
             self.robot_look_around_callback,
             10)
         
