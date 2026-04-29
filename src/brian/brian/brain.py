@@ -1063,6 +1063,8 @@ class ArmB(Behaviour):
         # Update grasp attempts if grabbing
         if self.grabbing:
             self.node.target_cube_arm = self.node.goal_provider.target_obj
+            goal_msg = format_goal_text(CUBE_GOAL, self.node.target_cube_arm)
+            self.node.get_logger().info(f"Attempting to grab {goal_msg}")
             if self.node.goal_provider.target_obj.id in self.node.grasp_attempts.keys():
                 self.node.grasp_attempts[self.node.goal_provider.target_obj.id] += 1
             else:
