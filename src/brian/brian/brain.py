@@ -527,11 +527,21 @@ class Brain(Node):
     def make_bt(self):
 
         # Left subtree (catch cube)
+
+        explore_sequence = Sequence(
+            name = "Explore Sequence",
+            children = [
+                ExploreB(self),
+                LookAroundB(self) # this always reports failure (forcing further exploration unless we've found a cube)
+            ],
+            memory = False
+        )
+
         explore_fallback = Selector(
             name = "Explore Fallback",
             children = [
                 CubeFoundCondition(self),
-                ExploreB(self)
+                explore_sequence
             ],
             memory = False
         )
@@ -602,22 +612,11 @@ class Brain(Node):
             memory = False
         )
 
-        # look around check
-        look_around_fallback = Selector(
-            name="Look Around Fallback",
-            children = [
-                LookedAroundCondition(self),
-                LookAroundB(self),
-            ],
-            memory = False
-        )
-
         # Connect both subtrees (catch and release + backed up check)
         main_sequence = Sequence(
             name="Main Sequence",
             children = [
                 backed_up_fallback,
-                look_around_fallback,
                 catch_fallback,
                 release_fallback,
             ],
@@ -957,12 +956,11 @@ class Nav2GoalB(Behaviour):
 
 class ExploreB(Nav2GoalB):
     def __init__(self, node: Brain):
-        super().__init__(node, __class__.__name__, EXPLORE_GOAL, Status.FAILURE)
+        super().__init__(node, __class__.__name__, EXPLORE_GOAL)
 
     # Look around post condition
     def update_postcondition(self):
-        if self.current_status == self.done_status:
-            self.node.has_looked_around = False
+        pass
 
 class Nav2CubeB(Nav2GoalB):
     def __init__(self, node: Brain):
@@ -1189,20 +1187,6 @@ class BackUpFromObjectB(MoveRobotB):
         else:
             self.node.has_backed_up = False
 
-# BT nodes for lookaround
-class LookedAroundCondition(Behaviour):
-    def __init__(self, node: Brain):
-        super().__init__(__class__.__name__)
-        self.node = node
-
-    def update(self):
-        if self.node.has_looked_around:
-            return Status.SUCCESS
-        else:
-            if self.node.debugging:
-                self.node.get_logger().info("fail looked around")
-            return Status.FAILURE
-
 class LookAroundB(Behaviour):
     def __init__(self, node: Brain):
         super().__init__(__class__.__name__)
@@ -1218,7 +1202,7 @@ class LookAroundB(Behaviour):
 
     def update(self):
         if self.node.has_looked_around:
-            self.current_status = Status.SUCCESS
+            self.current_status = Status.FAILURE # this forces us to do more exploration
             self.node.get_logger().info("--> Look around DONE!")
         return self.current_status
 
