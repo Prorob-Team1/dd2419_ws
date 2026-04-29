@@ -331,7 +331,7 @@ class Brain(Node):
         self.in_dropoff_range = False
 
         self.has_backed_up = True
-        self.has_looked_around = True
+        self.has_looked_around = False
 
         # Track grasp attempts
         self.grasp_attempts = dict()
@@ -1204,6 +1204,7 @@ class LookAroundB(Behaviour):
         if self.node.has_looked_around:
             self.current_status = Status.FAILURE # this forces us to do more exploration
             self.node.get_logger().info("--> Look around DONE!")
+            self.node.has_looked_around = False
         return self.current_status
 
     def terminate(self, new_status):
