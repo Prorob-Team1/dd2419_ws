@@ -85,6 +85,9 @@ class GoalProvider:
         # Track the uncertain objects you've explored (should never explore the same object twice) 
         self.looked_at_ids = list()
 
+        # caught cube ids
+        self.caught_cube_ids: list[str] = []
+
     def create_goal_marker(self, x: float, y: float, yaw: float, goal_type: int):
         goal_marker = Marker()
         goal_marker.header.frame_id = "map"
@@ -239,7 +242,8 @@ class GoalProvider:
             if candidate.class_name == ObjectClassification.BOX.value and goal_type == BOX_GOAL:
                 valid_objects.append(candidate)
             elif candidate.class_name != ObjectClassification.BOX.value and goal_type == CUBE_GOAL:
-                valid_objects.append(candidate)
+                if candidate.id not in self.caught_cube_ids:
+                    valid_objects.append(candidate)
         closest_obj = None
         closest_pose = None
         closest_dist = np.inf
@@ -339,6 +343,8 @@ class Brain(Node):
         self.potential_candidates: list[ObjectCandidateMsg] = []
         self.start_pose = None
         self.robot_stopped = True
+        
+        self.caught_cubes: ObjectCandidateArrayMsg = ObjectCandidateArrayMsg()
 
         self.map_subscriber = self.create_subscription(
             OccupancyGrid,
@@ -382,9 +388,6 @@ class Brain(Node):
 
         self.move_publisher = self.create_publisher(Point, "/move_dist", 10)
         self.look_around_publisher = self.create_publisher(Empty, "/look_around", 10)
-
-        # caught cubes
-        self.caught_cubes: ObjectCandidateArrayMsg = ObjectCandidateArrayMsg()
 
         # TF for robot pose
         self.tf_buffer = Buffer()
@@ -460,6 +463,7 @@ class Brain(Node):
             if self.goal_provider.target_obj.class_name != ObjectClassification.BOX.value:
                 self.caught_cubes.candidates.append(self.goal_provider.target_obj)
                 self.caught_cubes.header.stamp = self.get_clock().now().to_msg()
+                self.goal_provider.caught_cube_ids.append(self.goal_provider.target_obj.id)
                 self.caught_cubes_publisher.publish(self.caught_cubes)
 
     def get_start_pose(self):
@@ -1209,11 +1213,10 @@ class LookAroundB(Behaviour):
     def initialise(self):
         self.current_status = Status.RUNNING
         self.init_time = self.node.get_clock().now().to_msg().sec
-        self.node.get_logger().info("--> Looking around for cubes...")
+        self.node.get_logger().info("--> Looking around for objects...")
         self.node.look_around_publisher.publish(Empty())
 
     def update(self):
-        time_diff = self.node.get_clock().now().to_msg().sec - self.init_time
         if self.node.has_looked_around:
             self.current_status = Status.SUCCESS
             self.node.get_logger().info("--> Look around DONE!")
