@@ -157,6 +157,7 @@ class Mapper(Node):
 
         self.object_candidates: list[ObjectCandidate] = []
         self.object_confidence_threshold = 0.8
+        self.object_confidence_threshold_box = 0.9
         self.object_max_candidates = 100
         self.n_cubes = 3
         self.n_boxes = 2
@@ -429,6 +430,12 @@ class Mapper(Node):
                 DetectionMapper.log_odds_to_probability(candidate.log_prob)
                 > self.object_confidence_threshold
             ):
+                if (
+                    candidate.classification == ObjectClassification.BOX.value and
+                    DetectionMapper.log_odds_to_probability(candidate.log_prob)
+                    < self.object_confidence_threshold_box
+                ):
+                    continue
                 arr_msg.candidates.append(obj_msg)  # type: ignore
         self.object_pub.publish(arr_msg)
         self.object_pub_all.publish(arr_msg_all)
@@ -440,6 +447,12 @@ class Mapper(Node):
                 DetectionMapper.log_odds_to_probability(candidate.log_prob)
                 > self.object_confidence_threshold
             ):
+                if (
+                    candidate.classification == ObjectClassification.BOX.value and
+                    DetectionMapper.log_odds_to_probability(candidate.log_prob)
+                    < self.object_confidence_threshold_box
+                ):
+                    continue
                 marker = Marker()
                 marker.header.frame_id = "map"
                 marker.header.stamp = self.get_clock().now().to_msg()
@@ -559,7 +572,7 @@ class Mapper(Node):
             writer = csv.writer(f)
             writer.writerow(["Type", "x", "y", "angle"])
             for box in boxes:
-                if self.detection_mapper.log_odds_to_probability(box.log_prob) > 0.8:
+                if self.detection_mapper.log_odds_to_probability(box.log_prob) > 0.9:
                     writer.writerow(
                         [
                             "B",
@@ -569,7 +582,7 @@ class Mapper(Node):
                         ]
                     )
             for cube in cubes:
-                if self.detection_mapper.log_odds_to_probability(cube.log_prob) > 0.8:
+                if self.detection_mapper.log_odds_to_probability(cube.log_prob) > 0.9:
                     writer.writerow(
                         [
                             "O",
@@ -667,6 +680,7 @@ class DetectionMapper:
                 same_class = detection.class_name == candidate.classification.value
                 unknown_class = (
                     candidate.classification == ObjectClassification.CUBE_UNKNOWN
+                    and detection.class_name != ObjectClassification.BOX.value
                 )
                 if not (same_class or unknown_class):
                     continue

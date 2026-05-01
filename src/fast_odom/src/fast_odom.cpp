@@ -90,6 +90,9 @@ class FastOdom : public rclcpp::Node
 		double y_{0.0};
 		double yaw_{0.0};
 
+		int path_cooldown = 10;
+		int path_count = 0;
+
 		// Path
 		nav_msgs::msg::Path path_{};
 };
@@ -162,7 +165,12 @@ void FastOdom::encoder_callback(const robp_interfaces::msg::Encoders::SharedPtr 
 	auto stamp = msg->header.stamp;
 
 	broadcast_transform(stamp, x_, y_, yaw_);
-	publish_path(stamp, x_, y_, yaw_);
+	if (++path_count > path_cooldown)
+	{
+		publish_path(stamp, x_, y_, yaw_);
+		path_count = 0;
+
+	}
 	publish_marker(stamp);
 }
 
