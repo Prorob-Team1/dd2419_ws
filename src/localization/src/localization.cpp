@@ -123,9 +123,9 @@ private:
 	Eigen::Matrix4f T_base_lidar_ = Eigen::Matrix4f::Identity(); 
 
     
-    const float icpFitnessThreshold = 0.09f;
+    const float icpFitnessThreshold = 0.1f;
     const float maxAngularVelForGoodScan = 0.3f;
-    const float icpInterpolationAlpha = 0.03f;
+    const float icpInterpolationAlpha = 0.05f;
 	const float stationaryTimeThreshold = 1.0f;
 	const float accurateOdomDistance = 7.5f; //7.5f;
     const int   nAnchordScans = 5;

@@ -24,7 +24,7 @@ from robp_interfaces.msg import (
 import numpy as np
 import csv
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import math
 import uuid
@@ -69,6 +69,7 @@ class ObjectCandidate:
     last_seen: Time
     id: str
     picked_up: bool
+    angle_history: list[float] = field(default_factory=list)
 
 
 BOX_SIZE = ObjectSize(x=0.24, y=0.16, z=0.1)
@@ -156,6 +157,7 @@ class Mapper(Node):
 
         self.object_candidates: list[ObjectCandidate] = []
         self.object_confidence_threshold = 0.8
+        self.object_confidence_threshold_box = 0.9
         self.object_max_candidates = 100
         self.n_cubes = 3
         self.n_boxes = 2
@@ -382,6 +384,7 @@ class Mapper(Node):
                     last_seen=self.get_clock().now(),
                     id=str(uuid.uuid4()),
                     picked_up=False,
+                    angle_history=[float(box.angle)],
                 )
             )
         for obj in self.given_objects:
@@ -394,6 +397,7 @@ class Mapper(Node):
                     last_seen=self.get_clock().now(),
                     id=str(uuid.uuid4()),
                     picked_up=False,
+                    angle_history=[float(obj.angle)],
                 )
             )
 
@@ -426,6 +430,12 @@ class Mapper(Node):
                 DetectionMapper.log_odds_to_probability(candidate.log_prob)
                 > self.object_confidence_threshold
             ):
+                if (
+                    candidate.classification == ObjectClassification.BOX.value and
+                    DetectionMapper.log_odds_to_probability(candidate.log_prob)
+                    < self.object_confidence_threshold_box
+                ):
+                    continue
                 arr_msg.candidates.append(obj_msg)  # type: ignore
         self.object_pub.publish(arr_msg)
         self.object_pub_all.publish(arr_msg_all)
@@ -437,6 +447,12 @@ class Mapper(Node):
                 DetectionMapper.log_odds_to_probability(candidate.log_prob)
                 > self.object_confidence_threshold
             ):
+                if (
+                    candidate.classification == ObjectClassification.BOX.value and
+                    DetectionMapper.log_odds_to_probability(candidate.log_prob)
+                    < self.object_confidence_threshold_box
+                ):
+                    continue
                 marker = Marker()
                 marker.header.frame_id = "map"
                 marker.header.stamp = self.get_clock().now().to_msg()
@@ -556,7 +572,7 @@ class Mapper(Node):
             writer = csv.writer(f)
             writer.writerow(["Type", "x", "y", "angle"])
             for box in boxes:
-                if self.detection_mapper.log_odds_to_probability(box.log_prob) > 0.8:
+                if self.detection_mapper.log_odds_to_probability(box.log_prob) > 0.9:
                     writer.writerow(
                         [
                             "B",
@@ -566,7 +582,7 @@ class Mapper(Node):
                         ]
                     )
             for cube in cubes:
-                if self.detection_mapper.log_odds_to_probability(cube.log_prob) > 0.8:
+                if self.detection_mapper.log_odds_to_probability(cube.log_prob) > 0.9:
                     writer.writerow(
                         [
                             "O",
@@ -620,6 +636,24 @@ class DetectionMapper:
         self.log_prob_increase = 0.2
         self.log_prob_decrease = 0.1
         self.log_prob_init = self.probability_to_log_odds(0.5)
+        self.angle_median_window = 25
+
+    @staticmethod
+    def _wrap_angle(angle: float) -> float:
+        return (angle + math.pi) % (2 * math.pi) - math.pi
+
+    # Force all angles to be within -pi and pi for median
+    def _median_angle_around_reference(
+        self, angles: list[float], reference_angle: float
+    ) -> float:
+        if not angles:
+            return self._wrap_angle(reference_angle)
+        ref = self._wrap_angle(reference_angle)
+        deltas = np.array(
+            [self._wrap_angle(a - ref) for a in angles],
+            dtype=np.float64,
+        )
+        return self._wrap_angle(ref + float(np.median(deltas)))
 
     @staticmethod
     def probability_to_log_odds(p):
@@ -646,6 +680,7 @@ class DetectionMapper:
                 same_class = detection.class_name == candidate.classification.value
                 unknown_class = (
                     candidate.classification == ObjectClassification.CUBE_UNKNOWN
+                    and detection.class_name != ObjectClassification.BOX.value
                 )
                 if not (same_class or unknown_class):
                     continue
@@ -678,10 +713,14 @@ class DetectionMapper:
                         detection.pose.position.y - best_match.avg_pose.y
                     ) / best_match.count
 
-                    angle_diff = (yaw - best_match.avg_pose.angle + math.pi) % (
-                        2 * math.pi
-                    ) - math.pi
-                    best_match.avg_pose.angle += angle_diff / best_match.count
+                    best_match.angle_history.append(float(yaw))
+                    if len(best_match.angle_history) > self.angle_median_window:
+                        best_match.angle_history = best_match.angle_history[
+                            -self.angle_median_window :
+                        ]
+                    best_match.avg_pose.angle = self._median_angle_around_reference(
+                        best_match.angle_history, best_match.avg_pose.angle
+                    )
 
                     # increase confidence (log odds) by a fixed amount (e.g. 0.5)
                     # TODO: scale with confidence of detection
@@ -710,6 +749,7 @@ class DetectionMapper:
                         last_seen=Time.from_msg(detection.header.stamp),
                         id=str(uuid.uuid4()),
                         picked_up=False,
+                        angle_history=[float(yaw)],
                     )
                 )
 
